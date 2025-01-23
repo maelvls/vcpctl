@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -96,10 +98,11 @@ type SubCaProvider struct {
 }
 
 type PKCS11 struct {
-	SigningEnabled         bool     `json:"signingEnabled"`
+	AllowedClientLibraries []string `json:"allowedClientLibraries"`
 	PartitionLabel         string   `json:"partitionLabel"`
 	PartitionSerialNumber  string   `json:"partitionSerialNumber"`
-	AllowedClientLibraries []string `json:"allowedClientLibraries"`
+	PIN                    string   `json:"pin"`
+	SigningEnabled         bool     `json:"signingEnabled"`
 }
 
 func main() {
@@ -285,22 +288,22 @@ func editConfig(apiURL, apiKey, name string) error {
 		return err
 	}
 
-	// Create temporary file
-	tmpfile, err := os.CreateTemp("", "vcp-*.json")
+	// Convert to YAML so that it is easier to edit.
+	yamlData, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+	tmpfile, err := os.CreateTemp("", "vcp-*.yaml")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmpfile.Name())
-
-	// Write config to temp file
-	encoder := json.NewEncoder(tmpfile)
-	encoder.SetIndent("", "    ")
-	if err := encoder.Encode(config); err != nil {
+	if _, err := tmpfile.Write(yamlData); err != nil {
 		return err
 	}
 	tmpfile.Close()
 
-	// Open editor
+	// Open editor to let you edit YAML.
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vim"
@@ -313,15 +316,13 @@ func editConfig(apiURL, apiKey, name string) error {
 		return err
 	}
 
-	modifiedConfig, err := os.ReadFile(tmpfile.Name())
+	// Read and parse the modified YAML.
+	modifiedYAML, err := os.ReadFile(tmpfile.Name())
 	if err != nil {
 		return err
 	}
-
-	// Parse modified configuration
 	var modified FireflyConfig
-	err = json.Unmarshal(modifiedConfig, &modified)
-	if err != nil {
+	if err := yaml.Unmarshal(modifiedYAML, &modified); err != nil {
 		return err
 	}
 
