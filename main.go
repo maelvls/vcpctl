@@ -121,17 +121,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
+	lsCmd := flag.NewFlagSet("ls", flag.ExitOnError)
 	editCmd := flag.NewFlagSet("edit", flag.ExitOnError)
 
 	if len(os.Args) < 2 {
-		fmt.Println("Expected 'list' or 'edit' subcommands")
+		fmt.Println("Expected 'ls' or 'edit' subcommands")
 		os.Exit(1)
 	}
 
 	switch os.Args[1] {
-	case "list":
-		listCmd.Parse(os.Args[2:])
+	case "ls":
+		lsCmd.Parse(os.Args[2:])
 		if err := listConfigs(apiURL, apiKey); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
