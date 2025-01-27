@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,7 +44,7 @@ type FireflyConfig struct {
 	MinTLSVersion        string                 `json:"minTlsVersion"`
 	ServiceAccountIDs    []string               `json:"serviceAccountIds"`
 	Policies             []Policy               `json:"policies"`
-	SubCaProviderID      SubCaProvider          `json:"subCaProvider"`
+	SubCaProvider        SubCaProvider          `json:"subCaProvider"`
 }
 
 type Policy struct {
@@ -81,20 +82,23 @@ type CommonName struct {
 }
 
 type SubCaProvider struct {
-	ID                string `json:"id"`
-	CompanyID         string `json:"companyId"`
-	Name              string `json:"name"`
-	CaType            string `json:"caType"`
-	CaAccountID       string `json:"caAccountId"`
-	CaProductOptionID string `json:"caProductOptionId"`
-	ValidityPeriod    string `json:"validityPeriod"`
-	CommonName        string `json:"commonName"`
-	Organization      string `json:"organization"`
-	Country           string `json:"country"`
-	KeyAlgorithm      string `json:"keyAlgorithm"`
-	PKCS11            PKCS11 `json:"pkcs11"`
-	CreationDate      string `json:"creationDate"`
-	ModificationDate  string `json:"modificationDate"`
+	ID                 string `json:"id"`
+	CompanyID          string `json:"companyId"`
+	Name               string `json:"name"`
+	CaType             string `json:"caType"`
+	CaAccountID        string `json:"caAccountId"`
+	CaProductOptionID  string `json:"caProductOptionId"`
+	ValidityPeriod     string `json:"validityPeriod"`
+	CommonName         string `json:"commonName"`
+	Organization       string `json:"organization"`
+	Country            string `json:"country"`
+	Locality           string `json:"locality"`
+	OrganizationalUnit string `json:"organizationalUnit"`
+	StateOrProvince    string `json:"stateOrProvince"`
+	KeyAlgorithm       string `json:"keyAlgorithm"`
+	PKCS11             PKCS11 `json:"pkcs11"`
+	CreationDate       string `json:"creationDate"`
+	ModificationDate   string `json:"modificationDate"`
 }
 
 type PKCS11 struct {
@@ -271,7 +275,7 @@ func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
 		MinTLSVersion:        full.MinTLSVersion,
 		ServiceAccountIDs:    full.ServiceAccountIDs,
 		PolicyIDs:            policyIDs,
-		SubCaProviderID:      full.SubCaProviderID.ID,
+		SubCaProviderID:      full.SubCaProvider.ID,
 	}
 }
 
@@ -301,14 +305,16 @@ func editConfig(apiURL, apiKey, name string) error {
 	if _, err := tmpfile.Write(yamlData); err != nil {
 		return err
 	}
-	tmpfile.Close()
+	defer tmpfile.Close()
 
+edit:
 	// Open editor to let you edit YAML.
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vim"
 	}
-	cmd := exec.Command(editor, tmpfile.Name())
+
+	cmd := exec.Command("sh", "-c", fmt.Sprintf(`%s "%s"`, editor, tmpfile.Name()))
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -327,19 +333,40 @@ func editConfig(apiURL, apiKey, name string) error {
 	}
 
 	patch := fullToPatch(&modified)
-
-	// Update configuration
 	err = patchConfig(apiURL, apiKey, id, *patch)
 	if err != nil {
 		return fmt.Errorf("while patching Firefly configuration: %w", err)
 	}
 
-	var patchSub *SubCaProviderPatch
-	if modified.SubCaProviderID.ID != "" {
-		patchSub = fullToPatchCAProvider(&modified.SubCaProviderID)
-		err = patchSubCaProvider(apiURL, apiKey, modified.SubCaProviderID.ID, *patchSub)
-		if err != nil {
-			return fmt.Errorf("while patching Firefly configuration's subCAProvider %q: %w", modified.SubCaProviderID.Name, err)
+	// The `subCaProvider.pkcs11.pin` field is never returned by the API, so we
+	// need to check if the user has changed it and patch it separately. If the
+	// user still wants to patch the subCAProvider, we need to ask them to
+	// re-edit the manifest to fill in the pin.
+	//
+	// First off, let's check if the user has changed something under the
+	// `subCaProvider`.
+	d := cmp.Diff(config.SubCaProvider, modified.SubCaProvider)
+	if d != "" {
+		if modified.SubCaProvider.PKCS11.PIN == "" {
+			// Add the notice to the top of the file.
+			notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
+				"# NOTICE: field. has been modified. Please re-edit the configuration to fill in the PKCS11 pin.\n"
+
+			// Prepend the notice to the modified YAML.
+			tmpfile.Seek(0, 0)
+			_, err = tmpfile.Write(append([]byte(notice), modifiedYAML...))
+			if err != nil {
+				return fmt.Errorf("while writing notice to file: %w", err)
+			}
+			goto edit
+		}
+		var patchSub *SubCaProviderPatch
+		if modified.SubCaProvider.ID != "" {
+			patchSub = fullToPatchCAProvider(&modified.SubCaProvider)
+			err = patchSubCaProvider(apiURL, apiKey, modified.SubCaProvider.ID, *patchSub)
+			if err != nil {
+				return fmt.Errorf("while patching Firefly configuration's subCAProvider %q: %w", modified.SubCaProvider.Name, err)
+			}
 		}
 	}
 
@@ -429,12 +456,12 @@ func fullToPatchCAProvider(full *SubCaProvider) *SubCaProviderPatch {
 		CommonName:         full.CommonName,
 		Country:            full.Country,
 		KeyAlgorithm:       full.KeyAlgorithm,
-		Locality:           "", // TODO: Not in full's JSON blob example???
+		Locality:           full.Locality,
 		Name:               full.Name,
 		Organization:       full.Organization,
-		OrganizationalUnit: "", // TODO: Not in full's JSON blob example???
+		OrganizationalUnit: full.OrganizationalUnit,
 		PKCS11:             full.PKCS11,
-		StateOrProvince:    "", // TODO: Not in full's JSON blob example???
+		StateOrProvince:    full.StateOrProvince,
 		ValidityPeriod:     full.ValidityPeriod,
 	}
 }
