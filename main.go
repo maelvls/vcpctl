@@ -309,48 +309,32 @@ func editConfig(apiURL, apiKey, name string) error {
 	}
 
 	// Find service accounts.
-	svcacctsAll, err := getServiceAccounts(apiURL, apiKey)
+	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
 
-	// Filter out service accounts that are not in the configuration.
-	var svcaccts []ServiceAccount
-	for _, sa := range svcacctsAll {
-		for _, saID := range config.ServiceAccountIDs {
-			if sa.ID == saID {
-				svcaccts = append(svcaccts, sa)
+	var comments = make(map[string][]*yaml.Comment)
+	for i, sa := range config.ServiceAccountIDs {
+		found := false
+		for _, knownSa := range knownSvcaccts {
+			if knownSa.ID == sa {
+				found = true
+				comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
+					yaml.LineComment(" " + knownSa.Name),
+				}
+				break
+			}
+		}
+		if !found {
+			comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
+				yaml.LineComment(" unknown service account"),
 			}
 		}
 	}
 
-	type fireflyConfigYAML struct {
-		ID                   string               `yaml:"id"`
-		CompanyID            string               `yaml:"companyId"`
-		Name                 string               `yaml:"name"`
-		ClientAuthentication ClientAuthentication `yaml:"clientAuthentication"`
-		ClientAuthorization  ClientAuthorization  `yaml:"clientAuthorization"`
-		CloudProviders       map[string]any       `yaml:"cloudProviders"`
-		MinTLSVersion        string               `yaml:"minTlsVersion"`
-		ServiceAccounts      []ServiceAccount     `yaml:"serviceAccounts"`
-		Policies             []Policy             `yaml:"policies"`
-		SubCaProvider        SubCaProvider        `yaml:"subCaProvider"`
-	}
-	configYAML := fireflyConfigYAML{
-		ID:                   config.ID,
-		CompanyID:            config.CompanyID,
-		Name:                 config.Name,
-		ClientAuthentication: config.ClientAuthentication,
-		ClientAuthorization:  config.ClientAuthorization,
-		CloudProviders:       config.CloudProviders,
-		MinTLSVersion:        config.MinTLSVersion,
-		ServiceAccounts:      svcaccts,
-		Policies:             config.Policies,
-		SubCaProvider:        config.SubCaProvider,
-	}
-
 	// Convert to YAML so that it is easier to edit.
-	yamlData, err := yaml.MarshalWithOptions(configYAML)
+	yamlData, err := yaml.MarshalWithOptions(config, yaml.WithComment(comments))
 	if err != nil {
 		return err
 	}
@@ -380,30 +364,13 @@ edit:
 	}
 
 	// Read and parse the modified YAML.
-	modifiedYAMLRaw, err := os.ReadFile(tmpfile.Name())
+	modifiedRaw, err := os.ReadFile(tmpfile.Name())
 	if err != nil {
 		return err
 	}
-	var modifiedYAML fireflyConfigYAML
-	if err := yaml.Unmarshal(modifiedYAMLRaw, &modifiedYAML); err != nil {
+	var modified FireflyConfig
+	if err := yaml.Unmarshal(modifiedRaw, &modified); err != nil {
 		return err
-	}
-
-	var svcacctsIds []string
-	for _, sa := range modifiedYAML.ServiceAccounts {
-		svcacctsIds = append(svcacctsIds, sa.ID)
-	}
-	modified := FireflyConfig{
-		ID:                   modifiedYAML.ID,
-		CompanyID:            modifiedYAML.CompanyID,
-		Name:                 modifiedYAML.Name,
-		ClientAuthentication: modifiedYAML.ClientAuthentication,
-		ClientAuthorization:  modifiedYAML.ClientAuthorization,
-		CloudProviders:       modifiedYAML.CloudProviders,
-		MinTLSVersion:        modifiedYAML.MinTLSVersion,
-		ServiceAccountIDs:    svcacctsIds,
-		Policies:             modifiedYAML.Policies,
-		SubCaProvider:        modifiedYAML.SubCaProvider,
 	}
 
 	patch := fullToPatch(&modified)
@@ -419,57 +386,36 @@ edit:
 	//
 	// First off, let's check if the user has changed something under the
 	// `subCaProvider`.
-	d := cmp.Diff(config.SubCaProvider, modifiedYAML.SubCaProvider)
+	d := cmp.Diff(config.SubCaProvider, modified.SubCaProvider)
 	if d != "" {
-		if modifiedYAML.SubCaProvider.PKCS11.PIN == "" {
+		if modified.SubCaProvider.PKCS11.PIN == "" {
 			// Add the notice to the top of the file.
 			notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
 				"# NOTICE: field. has been modified. Please re-edit the configuration to fill in the PKCS11 pin.\n"
 
 			// Prepend the notice to the modified YAML.
 			tmpfile.Seek(0, 0)
-			_, err = tmpfile.Write(append([]byte(notice), modifiedYAMLRaw...))
+			_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
 			if err != nil {
 				return fmt.Errorf("while writing notice to file: %w", err)
 			}
 			goto edit
 		}
 		var patchSub *SubCaProviderPatch
-		if modifiedYAML.SubCaProvider.ID != "" {
-			patchSub = fullToPatchCAProvider(&modifiedYAML.SubCaProvider)
-			err = patchSubCaProvider(apiURL, apiKey, modifiedYAML.SubCaProvider.ID, *patchSub)
+		if modified.SubCaProvider.ID != "" {
+			patchSub = fullToPatchCAProvider(&modified.SubCaProvider)
+			err = patchSubCaProvider(apiURL, apiKey, modified.SubCaProvider.ID, *patchSub)
 			if err != nil {
-				return fmt.Errorf("while patching Firefly configuration's subCAProvider %q: %w", modifiedYAML.SubCaProvider.Name, err)
+				return fmt.Errorf("while patching Firefly configuration's subCAProvider %q: %w", modified.SubCaProvider.Name, err)
 			}
 		}
 	}
 
-	for _, p := range modifiedYAML.Policies {
+	for _, p := range modified.Policies {
 		patch := fullToPatchPolicy(&p)
 		err = patchPolicy(apiURL, apiKey, p.ID, *patch)
 		if err != nil {
 			return fmt.Errorf("while patching Firefly configuration's policy %q: %w", p.Name, err)
-		}
-	}
-
-	for i := range modifiedYAML.ServiceAccounts {
-		d := cmp.Diff(configYAML.ServiceAccounts[i], modifiedYAML.ServiceAccounts[i])
-		if d == "" {
-			continue
-		}
-
-		fmt.Printf("Service account %q has been modified:\n%s", modifiedYAML.ServiceAccounts[i].Name, d)
-		fmt.Println("Do you want to apply these changes? [y/N]")
-		var ask string
-		fmt.Scanln(&ask)
-		if ask != "y" {
-			continue
-		}
-
-		sa := modifiedYAML.ServiceAccounts[i]
-		err = patchServiceAccount(apiURL, apiKey, sa.ID, *fullServiceAccountToPatch(&sa))
-		if err != nil {
-			return fmt.Errorf("while patching Firefly configuration's service account %q: %w", sa.Name, err)
 		}
 	}
 
