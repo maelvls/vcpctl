@@ -3,16 +3,18 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
+	"github.com/maelvls/undent"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -110,60 +112,197 @@ type PKCS11 struct {
 	SigningEnabled         bool     `json:"signingEnabled"`
 }
 
+// For now we aren't yet using ~/.config/vcpctl.yml.
+type ToolConf struct {
+	APIURL string `json:"apiURL"`
+	APIKey string `json:"apiKey"`
+}
+
+func getToolConfig() (ToolConf, error) {
+	token := os.Getenv("APIKEY")
+	if token == "" {
+		return ToolConf{}, fmt.Errorf("APIKEY environment variable not set")
+	}
+
+	return ToolConf{
+		APIURL: "https://api.venafi.cloud",
+		APIKey: token,
+	}, nil
+}
+
+// New cobra command for ls
+func lsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "ls",
+		Short: "List the Firefly Configurations present in Venafi Control Plane.",
+		Long: undent.Undent(`
+			List the Firefly Configurations present in Venafi Control Plane.
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Note: The following functions (GetTokenUsingFileConf and listObjects)
+			// should be implemented according to your needs.
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("ls: while getting config %w", err)
+			}
+
+			names, err := listConfigs(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("ls: while listing configurations: %w", err)
+			}
+
+			for _, name := range names {
+				fmt.Println(name)
+			}
+
+			return nil
+		},
+	}
+}
+
+func setServiceAccountCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set-service-account",
+		Short: "Set a Service Account for a given Firefly Configuration.",
+		Long: undent.Undent(`
+			Set a Service Account for a given Firefly Configuration.
+			Example:
+			  vcpctl set-service-account my-config "Service Account Name"
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 2 {
+				return fmt.Errorf("set-service-account: expected 2 arguments, got %d", len(args))
+			}
+			confName := args[0]
+			saName := args[1]
+
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("set-service-account: while getting config %w", err)
+			}
+
+			err = setServiceAccount(conf.APIURL, conf.APIKey, confName, saName)
+			if err != nil {
+				return fmt.Errorf("set-service-account: %w", err)
+			}
+
+			return nil
+		},
+	}
+}
+
+func setServiceAccount(apiURL, apiKey, confName, saName string) error {
+	// Get configuration name by ID.
+	confID, err := getConfigID(apiURL, apiKey, confName)
+	if err != nil {
+		return fmt.Errorf("while fetching Firefly configuration ID for the configuration '%s': %w", confName, err)
+	}
+
+	config, err := getConfig(apiURL, apiKey, confID)
+	if err != nil {
+		return fmt.Errorf("while fetching Firefly configuration '%s': %w", confName, err)
+	}
+
+	// Find service accounts.
+	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
+	if err != nil {
+		return fmt.Errorf("while fetching service accounts: %w", err)
+	}
+
+	var sa *ServiceAccount
+	for _, knownSa := range knownSvcaccts {
+		if knownSa.Name == saName {
+			if sa != nil {
+				return fmt.Errorf("service account %q is ambiguous, please use a UID instead", saName)
+			}
+			sa = &knownSa
+		}
+	}
+	if sa == nil {
+		return fmt.Errorf("service account %q not found", saName)
+	}
+
+	// Is this SA already in the configuration?
+	if slices.Contains(config.ServiceAccountIDs, sa.ID) {
+		fmt.Fprintf(os.Stderr, "Service account '%s' is already in the configuration '%s', doing nothing.\n", sa.Name, config.Name)
+		return nil
+	}
+
+	// Add the service account to the configuration.
+	config.ServiceAccountIDs = append(config.ServiceAccountIDs, sa.ID)
+	patch := fullToPatch(config)
+	err = patchConfig(apiURL, apiKey, confID, *patch)
+	if err != nil {
+		return fmt.Errorf("while patching Firefly configuration: %w", err)
+	}
+
+	return nil
+}
+
+func editCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "edit",
+		Short: "Edit a Firefly Configuration",
+		Long: undent.Undent(`
+			Edit a Firefly Configuration.
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("edit: expected 1 argument, got %d", len(args))
+			}
+
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("edit: while getting config %w", err)
+			}
+
+			err = editConfig(conf.APIURL, conf.APIKey, args[0])
+			if err != nil {
+				return fmt.Errorf("edit: %w", err)
+			}
+
+			return nil
+		},
+	}
+}
+
+// Replace the old flag-based main() with cobra execution.
 func main() {
-	apiURL := os.Getenv("APIURL")
-	if apiURL == "" {
-		apiURL = "https://api.venafi.cloud"
+	rootCmd := &cobra.Command{
+		Use:           "vcpctl",
+		Short:         "A CLI tool for Venafi configurations",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
+		},
 	}
 
-	apiKey := os.Getenv("APIKEY")
-	if apiKey == "" {
-		fmt.Println("APIKEY needs to be set in the environment")
-		os.Exit(1)
-	}
+	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd())
 
-	lsCmd := flag.NewFlagSet("ls", flag.ExitOnError)
-	editCmd := flag.NewFlagSet("edit", flag.ExitOnError)
-
-	if len(os.Args) < 2 {
-		fmt.Println("Expected 'ls' or 'edit' subcommands")
-		os.Exit(1)
-	}
-
-	switch os.Args[1] {
-	case "ls":
-		lsCmd.Parse(os.Args[2:])
-		if err := listConfigs(apiURL, apiKey); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "edit":
-		editCmd.Parse(os.Args[2:])
-		if editCmd.NArg() < 1 {
-			fmt.Println("Expected configuration name")
-			os.Exit(1)
-		}
-		if err := editConfig(apiURL, apiKey, editCmd.Arg(0)); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Printf("Unknown command: %s\n", os.Args[1])
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func listConfigs(apiURL, apiKey string) error {
+func listConfigs(apiURL, apiKey string) ([]string, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -174,13 +313,14 @@ func listConfigs(apiURL, apiKey string) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while decoding response: %w", err)
 	}
 
+	var names []string
 	for _, conf := range result.Configurations {
-		fmt.Println(conf.Name)
+		names = append(names, conf.Name)
 	}
-	return nil
+	return names, nil
 }
 
 func getConfigID(apiURL, apiKey, name string) (string, error) {
