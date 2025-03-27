@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -35,16 +36,16 @@ type ClientAuthorization struct {
 
 // From https://developer.venafi.com/tlsprotectcloud/reference/configurations_getbyid
 type FireflyConfig struct {
-	ID                   string                 `json:"id"`
-	CompanyID            string                 `json:"companyId"`
-	Name                 string                 `json:"name"`
-	ClientAuthentication ClientAuthentication   `json:"clientAuthentication"`
-	ClientAuthorization  ClientAuthorization    `json:"clientAuthorization"`
-	CloudProviders       map[string]interface{} `json:"cloudProviders"`
-	MinTLSVersion        string                 `json:"minTlsVersion"`
-	ServiceAccountIDs    []string               `json:"serviceAccountIds"`
-	Policies             []Policy               `json:"policies"`
-	SubCaProvider        SubCaProvider          `json:"subCaProvider"`
+	ID                   string               `json:"id"`
+	CompanyID            string               `json:"companyId"`
+	Name                 string               `json:"name"`
+	ClientAuthentication ClientAuthentication `json:"clientAuthentication"`
+	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization"`
+	CloudProviders       map[string]any       `json:"cloudProviders"`
+	MinTLSVersion        string               `json:"minTlsVersion"`
+	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
+	Policies             []Policy             `json:"policies"`
+	SubCaProvider        SubCaProvider        `json:"subCaProvider"`
 }
 
 type Policy struct {
@@ -203,8 +204,17 @@ func getConfigID(apiURL, apiKey, name string) (string, error) {
 		} `json:"configurations"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
+	body := new(bytes.Buffer)
+	if _, err := io.Copy(body, resp.Body); err != nil {
+		return "", fmt.Errorf("while reading configurations: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("returned status code %s, body: %s", resp.Status, body.String())
+	}
+
+	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
+		return "", fmt.Errorf("while decoding configurations: %w, body: %s", err, body.String())
 	}
 
 	for _, conf := range result.Configurations {
@@ -230,12 +240,18 @@ func getConfig(apiURL, apiKey, id string) (*FireflyConfig, error) {
 	}
 	defer resp.Body.Close()
 
-	var config FireflyConfig
-	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
+	if resp.StatusCode != http.StatusOK {
+		// Dump body.
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("returned status code %s, body: %s", resp.Status, body)
+	}
+
+	var fireflyConfig FireflyConfig
+	if err := json.NewDecoder(resp.Body).Decode(&fireflyConfig); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	return &fireflyConfig, nil
 }
 
 // The PATCH request body only allows for a subset of the fields in the full
@@ -251,14 +267,14 @@ func getConfig(apiURL, apiKey, id string) (*FireflyConfig, error) {
 //	policyIds: ...
 //	subCaProviderId: ...
 type FireflyConfigPatch struct {
-	Name                 string                 `json:"name"`
-	ClientAuthentication ClientAuthentication   `json:"clientAuthentication"`
-	ClientAuthorization  ClientAuthorization    `json:"clientAuthorization"`
-	CloudProviders       map[string]interface{} `json:"cloudProviders"`
-	MinTLSVersion        string                 `json:"minTlsVersion"`
-	ServiceAccountIDs    []string               `json:"serviceAccountIds"`
-	PolicyIDs            []string               `json:"policyIds"`
-	SubCaProviderID      string                 `json:"subCaProviderId"`
+	Name                 string               `json:"name"`
+	ClientAuthentication ClientAuthentication `json:"clientAuthentication"`
+	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization"`
+	CloudProviders       map[string]any       `json:"cloudProviders"`
+	MinTLSVersion        string               `json:"minTlsVersion"`
+	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
+	PolicyIDs            []string             `json:"policyIds"`
+	SubCaProviderID      string               `json:"subCaProviderId"`
 }
 
 func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
@@ -280,20 +296,61 @@ func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
 }
 
 func editConfig(apiURL, apiKey, name string) error {
-	// Get configuration ID by name
+	// Get configuration ID by name.
 	id, err := getConfigID(apiURL, apiKey, name)
 	if err != nil {
-		return err
+		return fmt.Errorf("while fetching Firefly configuration ID for the configuration '%s': %w", name, err)
 	}
 
 	// Get full configuration
 	config, err := getConfig(apiURL, apiKey, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("while fetching Firefly configuration '%s': %w", name, err)
+	}
+
+	// Find service accounts.
+	svcacctsAll, err := getServiceAccounts(apiURL, apiKey)
+	if err != nil {
+		return fmt.Errorf("while fetching service accounts: %w", err)
+	}
+
+	// Filter out service accounts that are not in the configuration.
+	var svcaccts []ServiceAccount
+	for _, sa := range svcacctsAll {
+		for _, saID := range config.ServiceAccountIDs {
+			if sa.ID == saID {
+				svcaccts = append(svcaccts, sa)
+			}
+		}
+	}
+
+	type fireflyConfigYAML struct {
+		ID                   string               `yaml:"id"`
+		CompanyID            string               `yaml:"companyId"`
+		Name                 string               `yaml:"name"`
+		ClientAuthentication ClientAuthentication `yaml:"clientAuthentication"`
+		ClientAuthorization  ClientAuthorization  `yaml:"clientAuthorization"`
+		CloudProviders       map[string]any       `yaml:"cloudProviders"`
+		MinTLSVersion        string               `yaml:"minTlsVersion"`
+		ServiceAccounts      []ServiceAccount     `yaml:"serviceAccounts"`
+		Policies             []Policy             `yaml:"policies"`
+		SubCaProvider        SubCaProvider        `yaml:"subCaProvider"`
+	}
+	configYAML := fireflyConfigYAML{
+		ID:                   config.ID,
+		CompanyID:            config.CompanyID,
+		Name:                 config.Name,
+		ClientAuthentication: config.ClientAuthentication,
+		ClientAuthorization:  config.ClientAuthorization,
+		CloudProviders:       config.CloudProviders,
+		MinTLSVersion:        config.MinTLSVersion,
+		ServiceAccounts:      svcaccts,
+		Policies:             config.Policies,
+		SubCaProvider:        config.SubCaProvider,
 	}
 
 	// Convert to YAML so that it is easier to edit.
-	yamlData, err := yaml.Marshal(config)
+	yamlData, err := yaml.MarshalWithOptions(configYAML)
 	if err != nil {
 		return err
 	}
@@ -323,13 +380,30 @@ edit:
 	}
 
 	// Read and parse the modified YAML.
-	modifiedYAML, err := os.ReadFile(tmpfile.Name())
+	modifiedYAMLRaw, err := os.ReadFile(tmpfile.Name())
 	if err != nil {
 		return err
 	}
-	var modified FireflyConfig
-	if err := yaml.Unmarshal(modifiedYAML, &modified); err != nil {
+	var modifiedYAML fireflyConfigYAML
+	if err := yaml.Unmarshal(modifiedYAMLRaw, &modifiedYAML); err != nil {
 		return err
+	}
+
+	var svcacctsIds []string
+	for _, sa := range modifiedYAML.ServiceAccounts {
+		svcacctsIds = append(svcacctsIds, sa.ID)
+	}
+	modified := FireflyConfig{
+		ID:                   modifiedYAML.ID,
+		CompanyID:            modifiedYAML.CompanyID,
+		Name:                 modifiedYAML.Name,
+		ClientAuthentication: modifiedYAML.ClientAuthentication,
+		ClientAuthorization:  modifiedYAML.ClientAuthorization,
+		CloudProviders:       modifiedYAML.CloudProviders,
+		MinTLSVersion:        modifiedYAML.MinTLSVersion,
+		ServiceAccountIDs:    svcacctsIds,
+		Policies:             modifiedYAML.Policies,
+		SubCaProvider:        modifiedYAML.SubCaProvider,
 	}
 
 	patch := fullToPatch(&modified)
@@ -345,36 +419,57 @@ edit:
 	//
 	// First off, let's check if the user has changed something under the
 	// `subCaProvider`.
-	d := cmp.Diff(config.SubCaProvider, modified.SubCaProvider)
+	d := cmp.Diff(config.SubCaProvider, modifiedYAML.SubCaProvider)
 	if d != "" {
-		if modified.SubCaProvider.PKCS11.PIN == "" {
+		if modifiedYAML.SubCaProvider.PKCS11.PIN == "" {
 			// Add the notice to the top of the file.
 			notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
 				"# NOTICE: field. has been modified. Please re-edit the configuration to fill in the PKCS11 pin.\n"
 
 			// Prepend the notice to the modified YAML.
 			tmpfile.Seek(0, 0)
-			_, err = tmpfile.Write(append([]byte(notice), modifiedYAML...))
+			_, err = tmpfile.Write(append([]byte(notice), modifiedYAMLRaw...))
 			if err != nil {
 				return fmt.Errorf("while writing notice to file: %w", err)
 			}
 			goto edit
 		}
 		var patchSub *SubCaProviderPatch
-		if modified.SubCaProvider.ID != "" {
-			patchSub = fullToPatchCAProvider(&modified.SubCaProvider)
-			err = patchSubCaProvider(apiURL, apiKey, modified.SubCaProvider.ID, *patchSub)
+		if modifiedYAML.SubCaProvider.ID != "" {
+			patchSub = fullToPatchCAProvider(&modifiedYAML.SubCaProvider)
+			err = patchSubCaProvider(apiURL, apiKey, modifiedYAML.SubCaProvider.ID, *patchSub)
 			if err != nil {
-				return fmt.Errorf("while patching Firefly configuration's subCAProvider %q: %w", modified.SubCaProvider.Name, err)
+				return fmt.Errorf("while patching Firefly configuration's subCAProvider %q: %w", modifiedYAML.SubCaProvider.Name, err)
 			}
 		}
 	}
 
-	for _, p := range modified.Policies {
+	for _, p := range modifiedYAML.Policies {
 		patch := fullToPatchPolicy(&p)
 		err = patchPolicy(apiURL, apiKey, p.ID, *patch)
 		if err != nil {
 			return fmt.Errorf("while patching Firefly configuration's policy %q: %w", p.Name, err)
+		}
+	}
+
+	for i := range modifiedYAML.ServiceAccounts {
+		d := cmp.Diff(configYAML.ServiceAccounts[i], modifiedYAML.ServiceAccounts[i])
+		if d == "" {
+			continue
+		}
+
+		fmt.Printf("Service account %q has been modified:\n%s", modifiedYAML.ServiceAccounts[i].Name, d)
+		fmt.Println("Do you want to apply these changes? [y/N]")
+		var ask string
+		fmt.Scanln(&ask)
+		if ask != "y" {
+			continue
+		}
+
+		sa := modifiedYAML.ServiceAccounts[i]
+		err = patchServiceAccount(apiURL, apiKey, sa.ID, *fullServiceAccountToPatch(&sa))
+		if err != nil {
+			return fmt.Errorf("while patching Firefly configuration's service account %q: %w", sa.Name, err)
 		}
 	}
 
@@ -520,6 +615,115 @@ func patchPolicy(apiURL, apiKey, id string, patch PolicyPatch) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("update failed: %s: %s", resp.Status, body)
+	}
+
+	return nil
+}
+
+type ServiceAccount struct {
+	AuthenticationType    string    `json:"authenticationType"`
+	CompanyID             string    `json:"companyId"`
+	CredentialLifetime    int       `json:"credentialLifetime"`
+	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn"`
+	Enabled               bool      `json:"enabled"`
+	ID                    string    `json:"id"`
+	Name                  string    `json:"name"`
+	Owner                 string    `json:"owner"`
+	Scopes                []string  `json:"scopes"`
+	UpdatedBy             string    `json:"updatedBy"`
+	UpdatedOn             time.Time `json:"updatedOn"`
+	Applications          []string  `json:"applications"`
+	Audience              string    `json:"audience"`
+	IssuerURL             string    `json:"issuerURL"`
+	JwksURI               string    `json:"jwksURI"`
+	Subject               string    `json:"subject"`
+}
+
+func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Dump body.
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("returned status code %s, body: %s", resp.Status, body)
+	}
+
+	body := new(bytes.Buffer)
+	if _, err := io.Copy(body, resp.Body); err != nil {
+		return nil, fmt.Errorf("while reading service accounts: %w", err)
+	}
+
+	var result []ServiceAccount
+	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
+		return nil, fmt.Errorf("while decoding service accounts: %w\n\nBody: %s", err, body.String())
+	}
+
+	return result, nil
+}
+
+type ServiceAccountPatch struct {
+	Applications       []string `json:"applications,omitempty"`
+	Audience           string   `json:"audience,omitempty"`
+	CredentialLifetime int      `json:"credentialLifetime,omitempty"`
+	IssuerURL          string   `json:"issuerURL,omitempty"`
+	JwksURI            string   `json:"jwksURI,omitempty"`
+	Name               string   `json:"name,omitempty"`
+	Owner              string   `json:"owner,omitempty"`
+	Scopes             []string `json:"scopes,omitempty"`
+	Subject            string   `json:"subject,omitempty"`
+	PublicKey          string   `json:"publicKey,omitempty"`
+	Enabled            bool     `json:"enabled,omitempty"`
+}
+
+func fullServiceAccountToPatch(sa *ServiceAccount) *ServiceAccountPatch {
+	return &ServiceAccountPatch{
+		Applications:       sa.Applications,
+		Audience:           sa.Audience,
+		CredentialLifetime: sa.CredentialLifetime,
+		IssuerURL:          sa.IssuerURL,
+		JwksURI:            sa.JwksURI,
+		Name:               sa.Name,
+		Owner:              sa.Owner,
+		Scopes:             sa.Scopes,
+		Subject:            sa.Subject,
+		Enabled:            sa.Enabled,
+	}
+}
+
+func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) error {
+	patchJSON, err := json.Marshal(patch)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), bytes.NewReader(patchJSON))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("update failed: %s: %s", resp.Status, body)
 	}
