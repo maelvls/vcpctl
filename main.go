@@ -118,14 +118,26 @@ type ToolConf struct {
 	APIKey string `json:"apiKey"`
 }
 
+var apiURLFlag string
+
+const defaultAPIURL = "https://api.venafi.cloud"
+
 func getToolConfig() (ToolConf, error) {
 	token := os.Getenv("APIKEY")
 	if token == "" {
 		return ToolConf{}, fmt.Errorf("APIKEY environment variable not set")
 	}
 
+	// Priority: --api-url flag > APIURL env var > https://api.venafi.cloud.
+	apiURL := defaultAPIURL
+	if apiURLFlag != "" {
+		apiURL = apiURLFlag
+	} else if envURL := os.Getenv("APIURL"); envURL != "" {
+		apiURL = envURL
+	}
+
 	return ToolConf{
-		APIURL: "https://api.venafi.cloud",
+		APIURL: apiURL,
 		APIKey: token,
 	}, nil
 }
@@ -274,6 +286,9 @@ func editCmd() *cobra.Command {
 
 // Replace the old flag-based main() with cobra execution.
 func main() {
+	var apiURLFlag string
+	const defaultAPIURL = "https://api.venafi.cloud"
+
 	rootCmd := &cobra.Command{
 		Use:           "vcpctl",
 		Short:         "A CLI tool for Venafi configurations",
@@ -283,6 +298,8 @@ func main() {
 			cmd.Help()
 		},
 	}
+
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
 
 	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd())
 
@@ -312,8 +329,22 @@ func listConfigs(apiURL, apiKey string) ([]string, error) {
 		} `json:"configurations"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while decoding response: %w", err)
+	b := new(bytes.Buffer)
+	_, err = io.Copy(b, resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while reading response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: returned status code %s, body: %s", resp.Status, b.String())
+	}
+
+	if err := json.NewDecoder(b).Decode(&result); err != nil {
+		if b.Len() > 1000 {
+			// Only show the first 1000 characters of the body in the error
+			// message.
+			b.Truncate(1000)
+		}
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while decoding response: %w, body: %s", err, b.String())
 	}
 
 	var names []string
