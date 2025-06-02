@@ -551,6 +551,7 @@ func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
 		ServiceAccountIDs:    full.ServiceAccountIDs,
 		PolicyIDs:            policyIDs,
 		SubCaProviderID:      full.SubCaProvider.ID,
+		AdvancedSettings:     full.AdvancedSettings,
 	}
 }
 
