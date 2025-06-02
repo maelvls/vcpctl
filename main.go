@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/maelvls/undent"
@@ -160,15 +162,61 @@ func lsCmd() *cobra.Command {
 				return fmt.Errorf("ls: while getting config %w", err)
 			}
 
-			names, err := listConfigs(conf.APIURL, conf.APIKey)
+			confs, err := listConfigs(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("ls: while listing configurations: %w", err)
 			}
 
-			for _, name := range names {
-				fmt.Println(name)
+			// Find service accounts so that we can show the client IDs instead of the
+			// IDs.
+			knownSvcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("ls: fetching service accounts: %w", err)
 			}
 
+			// Replace the service account ID with its name and client ID.
+			for i, m := range confs {
+				var saNames []string
+				for _, saID := range m.ServiceAccountIDs {
+					found := false
+					for _, sa := range knownSvcaccts {
+						if sa.ID == saID {
+							saNames = append(saNames, sa.ID+" ("+sa.Name+")")
+							found = true
+							break
+						}
+					}
+					if !found {
+						saNames = append(saNames, saID+" (deleted)")
+					}
+				}
+				confs[i].ServiceAccountIDs = saNames
+			}
+
+			var rows [][]string
+			for _, m := range confs {
+				rows = append(rows, []string{
+					m.Name,
+					strings.Join(m.ServiceAccountIDs, ", "),
+				})
+			}
+
+			t := table.New().
+				Headers("Firefly Policy", "Service Accounts Client IDs").
+				Rows(rows...)
+
+			fmt.Println(t.String())
+
+			rows = nil
+			for _, m := range knownSvcaccts {
+				rows = append(rows, []string{m.Name, m.ID})
+			}
+
+			t = table.New().
+				Headers("Service Account", "Client ID").
+				Rows(rows...)
+
+			fmt.Println(t.String())
 			return nil
 		},
 	}
@@ -182,6 +230,9 @@ func setServiceAccountCmd() *cobra.Command {
 			Set a Service Account for a given Firefly Configuration.
 			Example:
 			  vcpctl set-service-account my-config "Service Account Name"
+
+			You can use also use the service account's client ID:
+			  vcpctl set-service-account my-config 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
 		`),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -226,21 +277,33 @@ func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 	}
 
 	var sa *ServiceAccount
+	// First, check if saName is actually a client ID (direct match with ID).
 	for _, knownSa := range knownSvcaccts {
-		if knownSa.Name == saName {
-			if sa != nil {
-				return fmt.Errorf("service account %q is ambiguous, please use a UID instead", saName)
-			}
+		if knownSa.ID == saName {
 			sa = &knownSa
+			break
 		}
 	}
+
+	// If no client ID match, try looking up by name.
 	if sa == nil {
-		return fmt.Errorf("service account %q not found", saName)
+		for _, knownSa := range knownSvcaccts {
+			if knownSa.Name == saName {
+				if sa != nil {
+					return fmt.Errorf("service account name %q is ambiguous, please use the client ID instead", saName)
+				}
+				sa = &knownSa
+			}
+		}
+	}
+
+	if sa == nil {
+		return fmt.Errorf("service account %q not found (not a valid name or client ID)", saName)
 	}
 
 	// Is this SA already in the configuration?
 	if slices.Contains(config.ServiceAccountIDs, sa.ID) {
-		fmt.Fprintf(os.Stderr, "Service account '%s' is already in the configuration '%s', doing nothing.\n", sa.Name, config.Name)
+		fmt.Fprintf(os.Stderr, "Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.\n", sa.Name, sa.ID, config.Name)
 		return nil
 	}
 
@@ -309,7 +372,12 @@ func main() {
 	}
 }
 
-func listConfigs(apiURL, apiKey string) ([]string, error) {
+type Config struct {
+	Name              string
+	ServiceAccountIDs []string
+}
+
+func listConfigs(apiURL, apiKey string) ([]Config, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while creating request: %w", err)
@@ -325,7 +393,8 @@ func listConfigs(apiURL, apiKey string) ([]string, error) {
 
 	var result struct {
 		Configurations []struct {
-			Name string `json:"name"`
+			Name              string   `json:"name"`
+			ServiceAccountIDs []string `json:"serviceAccountIds"`
 		} `json:"configurations"`
 	}
 
@@ -347,11 +416,14 @@ func listConfigs(apiURL, apiKey string) ([]string, error) {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while decoding response: %w, body: %s", err, b.String())
 	}
 
-	var names []string
+	var confs []Config
 	for _, conf := range result.Configurations {
-		names = append(names, conf.Name)
+		confs = append(confs, Config{
+			Name:              conf.Name,
+			ServiceAccountIDs: conf.ServiceAccountIDs,
+		})
 	}
-	return names, nil
+	return confs, nil
 }
 
 func getConfigID(apiURL, apiKey, name string) (string, error) {
