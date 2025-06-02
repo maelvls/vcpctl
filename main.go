@@ -50,6 +50,10 @@ type FireflyConfig struct {
 	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
 	Policies             []Policy             `json:"policies"`
 	SubCaProvider        SubCaProvider        `json:"subCaProvider"`
+
+	// Since this is a new field, it might not be returned by the API since it
+	// isn't in prod yet. So let's keep it a pointer so that we know it.
+	AdvancedSettings *AdvancedSettings `json:"advancedSettings,omitempty"`
 }
 
 type Policy struct {
@@ -497,6 +501,12 @@ func getConfig(apiURL, apiKey, id string) (*FireflyConfig, error) {
 	return &fireflyConfig, nil
 }
 
+type AdvancedSettings struct {
+	EnableIssuanceAuditLog       bool `json:"enableIssuanceAuditLog"`
+	IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog"`
+	RequireFIPSCompliantBuild    bool `json:"requireFIPSCompliantBuild"`
+}
+
 // The PATCH request body only allows for a subset of the fields in the full
 // configuration. Here is the subset that can be modified, as per
 // https://developer.venafi.com/tlsprotectcloud/reference/configurations_update.
@@ -509,6 +519,11 @@ func getConfig(apiURL, apiKey, id string) (*FireflyConfig, error) {
 //	serviceAccountIds: ...
 //	policyIds: ...
 //	subCaProviderId: ...
+//	advancedSettings: ...
+//
+// The `advancedSettings` field is a pointer because it might not be returned by
+// the backend (since this API field is new). So we need to know when the API
+// field doesn't exist.
 type FireflyConfigPatch struct {
 	Name                 string               `json:"name"`
 	ClientAuthentication ClientAuthentication `json:"clientAuthentication"`
@@ -518,6 +533,7 @@ type FireflyConfigPatch struct {
 	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
 	PolicyIDs            []string             `json:"policyIds"`
 	SubCaProviderID      string               `json:"subCaProviderId"`
+	AdvancedSettings     *AdvancedSettings    `json:"advancedSettings,omitempty"`
 }
 
 func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
