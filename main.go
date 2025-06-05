@@ -206,7 +206,7 @@ func lsCmd() *cobra.Command {
 			}
 
 			t := table.New().
-				Headers("Firefly Policy", "Service Accounts Client IDs").
+				Headers("Firefly Configuration", "Attached Service Accounts' Client IDs").
 				Rows(rows...)
 
 			fmt.Println(t.String())
