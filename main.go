@@ -40,17 +40,17 @@ type ClientAuthorization struct {
 
 // From https://developer.venafi.com/tlsprotectcloud/reference/configurations_getbyid
 type FireflyConfig struct {
-	ID                   string               `json:"id"`
-	CompanyID            string               `json:"companyId"`
-	Name                 string               `json:"name"`
-	ClientAuthentication ClientAuthentication `json:"clientAuthentication"`
-	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization"`
-	CloudProviders       map[string]any       `json:"cloudProviders"`
-	MinTLSVersion        string               `json:"minTlsVersion"`
-	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
-	Policies             []Policy             `json:"policies"`
-	SubCaProvider        SubCaProvider        `json:"subCaProvider"`
-	AdvancedSettings     AdvancedSettings     `json:"advancedSettings,omitempty"`
+	ID                   string                `json:"id"`
+	CompanyID            string                `json:"companyId"`
+	Name                 string                `json:"name"`
+	ClientAuthentication *ClientAuthentication `json:"clientAuthentication,omitempty"`
+	ClientAuthorization  *ClientAuthorization  `json:"clientAuthorization,omitempty"`
+	CloudProviders       map[string]any        `json:"cloudProviders"`
+	MinTLSVersion        string                `json:"minTlsVersion"`
+	ServiceAccountIDs    []string              `json:"serviceAccountIds"`
+	Policies             []Policy              `json:"policies"`
+	SubCaProvider        SubCaProvider         `json:"subCaProvider"`
+	AdvancedSettings     AdvancedSettings      `json:"advancedSettings,omitempty"`
 }
 
 type Policy struct {
@@ -522,14 +522,14 @@ type AdvancedSettings struct {
 // the backend (since this API field is new). So we need to know when the API
 // field doesn't exist.
 type FireflyConfigPatch struct {
-	Name                 string               `json:"name"`
-	ClientAuthentication ClientAuthentication `json:"clientAuthentication"`
-	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization"`
-	CloudProviders       map[string]any       `json:"cloudProviders"`
-	MinTLSVersion        string               `json:"minTlsVersion"`
-	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
-	PolicyIDs            []string             `json:"policyIds"`
-	SubCaProviderID      string               `json:"subCaProviderId"`
+	Name                 string                `json:"name"`
+	ClientAuthentication *ClientAuthentication `json:"clientAuthentication,omitempty"`
+	ClientAuthorization  *ClientAuthorization  `json:"clientAuthorization,omitempty"`
+	CloudProviders       map[string]any        `json:"cloudProviders"`
+	MinTLSVersion        string                `json:"minTlsVersion"`
+	ServiceAccountIDs    []string              `json:"serviceAccountIds"`
+	PolicyIDs            []string              `json:"policyIds"`
+	SubCaProviderID      string                `json:"subCaProviderId"`
 	// The advancedSettings field is not supported yet with the PATCH verb, so
 	// it is not included. Pleqse add it as soon as it appears in the API:
 	// https://developer.venafi.com/tlsprotectcloud/reference/configurations_update
