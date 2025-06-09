@@ -50,10 +50,7 @@ type FireflyConfig struct {
 	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
 	Policies             []Policy             `json:"policies"`
 	SubCaProvider        SubCaProvider        `json:"subCaProvider"`
-
-	// Since this is a new field, it might not be returned by the API since it
-	// isn't in prod yet. So let's keep it a pointer so that we know it.
-	AdvancedSettings *AdvancedSettings `json:"advancedSettings,omitempty"`
+	AdvancedSettings     AdvancedSettings     `json:"advancedSettings,omitempty"`
 }
 
 type Policy struct {
@@ -533,7 +530,9 @@ type FireflyConfigPatch struct {
 	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
 	PolicyIDs            []string             `json:"policyIds"`
 	SubCaProviderID      string               `json:"subCaProviderId"`
-	AdvancedSettings     *AdvancedSettings    `json:"advancedSettings,omitempty"`
+	// The advancedSettings field is not supported yet with the PATCH verb, so
+	// it is not included. Pleqse add it as soon as it appears in the API:
+	// https://developer.venafi.com/tlsprotectcloud/reference/configurations_update
 }
 
 func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
@@ -551,7 +550,6 @@ func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
 		ServiceAccountIDs:    full.ServiceAccountIDs,
 		PolicyIDs:            policyIDs,
 		SubCaProviderID:      full.SubCaProvider.ID,
-		AdvancedSettings:     full.AdvancedSettings,
 	}
 }
 
@@ -633,7 +631,20 @@ edit:
 		return err
 	}
 
+	// If the advanced settings have been modified, let's warn the user: it
+	// isn't supported yet. See:
+	// https://developer.venafi.com/tlsprotectcloud/reference/configurations_update
+	d := cmp.Diff(config.AdvancedSettings, modified.AdvancedSettings)
+	if d != "" {
+		fmt.Fprintf(os.Stderr, "WARNING: The advancedSettings field has been modified:\n"+
+			"\n"+d+"\n"+
+			"WARNING: The advancedSettings field is not supported yet, so it will be ignored.\n"+
+			"WARNING: Support for patching advancedSettings will be added in the future.\n"+
+			"WARNING: https://developer.venafi.com/tlsprotectcloud/reference/configurations_update\n")
+	}
+
 	patch := fullToPatch(&modified)
+
 	err = patchConfig(apiURL, apiKey, id, *patch)
 	if err != nil {
 		return fmt.Errorf("while patching Firefly configuration: %w", err)
@@ -646,7 +657,7 @@ edit:
 	//
 	// First off, let's check if the user has changed something under the
 	// `subCaProvider`.
-	d := cmp.Diff(config.SubCaProvider, modified.SubCaProvider)
+	d = cmp.Diff(config.SubCaProvider, modified.SubCaProvider)
 	if d != "" {
 		if modified.SubCaProvider.PKCS11.PIN == "" {
 			// Add the notice to the top of the file.
