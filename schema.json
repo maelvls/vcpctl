@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/certificate-config.schema.json",
+  "title": "CertificateConfig",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "name": { "type": "string" },
+    "clientAuthentication": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["JWT_JWKS"] },
+        "urls": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "clientAuthorization": {
+      "type": "object",
+      "properties": {
+        "customClaimsAliases": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "cloudProviders": { "type": "object" },
+    "minTlsVersion": {
+      "type": "string",
+      "enum": ["TLS13", "TLS12", "TLS11", "TLS10"]
+    },
+    "serviceAccountIds": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "policies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Policy" }
+    },
+    "subCaProvider": { "$ref": "#/$defs/SubCaProvider" },
+    "advancedSettings": {
+      "type": "object",
+      "properties": {
+        "enableIssuanceAuditLog": { "type": "boolean" },
+        "includeRawCertDataInAuditLog": { "type": "boolean" },
+        "requireFIPSCompliantBuild": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "Policy": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "validityPeriod": { "type": "string" },
+        "subject": { "$ref": "#/$defs/SubjectOrSans" },
+        "sans": { "$ref": "#/$defs/SubjectOrSans" },
+        "keyUsages": { "type": "array", "items": { "type": "string" } },
+        "extendedKeyUsages": { "type": "array", "items": { "type": "string" } },
+        "keyAlgorithm": {
+          "type": "object",
+          "properties": {
+            "allowedValues": { "type": "array", "items": { "type": "string" } },
+            "defaultValue": { "type": "string" }
+          }
+        }
+      }
+    },
+    "SubjectOrSans": {
+      "type": "object",
+      "properties": {
+        "commonName": { "$ref": "#/$defs/FieldPolicy" },
+        "country": { "$ref": "#/$defs/FieldPolicy" },
+        "locality": { "$ref": "#/$defs/FieldPolicy" },
+        "organization": { "$ref": "#/$defs/FieldPolicy" },
+        "organizationalUnit": { "$ref": "#/$defs/FieldPolicy" },
+        "stateOrProvince": { "$ref": "#/$defs/FieldPolicy" },
+        "dnsNames": { "$ref": "#/$defs/FieldPolicy" },
+        "ipAddresses": { "$ref": "#/$defs/FieldPolicy" },
+        "rfc822Names": { "$ref": "#/$defs/FieldPolicy" },
+        "uniformResourceIdentifiers": { "$ref": "#/$defs/FieldPolicy" }
+      }
+    },
+    "FieldPolicy": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["OPTIONAL", "REQUIRED"] },
+        "allowedValues": { "type": "array", "items": { "type": "string" } },
+        "defaultValues": { "type": "array", "items": { "type": "string" } },
+        "minOccurrences": { "type": "integer" },
+        "maxOccurrences": { "type": "integer" }
+      }
+    },
+    "SubCaProvider": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "caType": { "type": "string" },
+        "caAccountId": { "type": "string", "format": "uuid" },
+        "caProductOptionId": { "type": "string", "format": "uuid" },
+        "validityPeriod": { "type": "string" },
+        "commonName": { "type": "string" },
+        "organization": { "type": "string" },
+        "country": { "type": "string" },
+        "locality": { "type": "string" },
+        "organizationalUnit": { "type": "string" },
+        "stateOrProvince": { "type": "string" },
+        "keyAlgorithm": { "type": "string" },
+        "pkcs11": {
+          "type": "object",
+          "properties": {
+            "allowedClientLibraries": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "partitionLabel": { "type": "string" },
+            "partitionSerialNumber": { "type": "string" },
+            "pin": { "type": "string" },
+            "signingEnabled": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

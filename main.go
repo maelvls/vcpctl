@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,22 +41,22 @@ type ClientAuthorization struct {
 
 // From https://developer.venafi.com/tlsprotectcloud/reference/configurations_getbyid
 type FireflyConfig struct {
-	ID                   string                `json:"id"`
-	CompanyID            string                `json:"companyId"`
-	Name                 string                `json:"name"`
-	ClientAuthentication *ClientAuthentication `json:"clientAuthentication,omitempty"`
-	ClientAuthorization  *ClientAuthorization  `json:"clientAuthorization,omitempty"`
-	CloudProviders       map[string]any        `json:"cloudProviders"`
-	MinTLSVersion        string                `json:"minTlsVersion"`
-	ServiceAccountIDs    []string              `json:"serviceAccountIds"`
-	Policies             []Policy              `json:"policies"`
-	SubCaProvider        SubCaProvider         `json:"subCaProvider"`
-	AdvancedSettings     AdvancedSettings      `json:"advancedSettings,omitempty"`
+	ID                   string               `json:"id,omitempty"`
+	Name                 string               `json:"name"`
+	ClientAuthentication ClientAuthentication `json:"clientAuthentication,omitempty"`
+	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization,omitempty"`
+	CloudProviders       map[string]any       `json:"cloudProviders"`
+	MinTLSVersion        string               `json:"minTlsVersion"`
+	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
+	Policies             []Policy             `json:"policies"`
+	SubCaProvider        SubCaProvider        `json:"subCaProvider"`
+	AdvancedSettings     AdvancedSettings     `json:"advancedSettings,omitempty"`
+	CreationDate         string               `json:"creationDate,omitempty"`
+	ModificationDate     string               `json:"modificationDate,omitempty"`
 }
 
 type Policy struct {
 	ID                string       `json:"id"`
-	CompanyID         string       `json:"companyId"`
 	Name              string       `json:"name"`
 	ValidityPeriod    string       `json:"validityPeriod"`
 	Subject           Subject      `json:"subject"`
@@ -89,7 +90,6 @@ type CommonName struct {
 
 type SubCaProvider struct {
 	ID                 string `json:"id"`
-	CompanyID          string `json:"companyId"`
 	Name               string `json:"name"`
 	CaType             string `json:"caType"`
 	CaAccountID        string `json:"caAccountId"`
@@ -103,8 +103,6 @@ type SubCaProvider struct {
 	StateOrProvince    string `json:"stateOrProvince"`
 	KeyAlgorithm       string `json:"keyAlgorithm"`
 	PKCS11             PKCS11 `json:"pkcs11"`
-	CreationDate       string `json:"creationDate"`
-	ModificationDate   string `json:"modificationDate"`
 }
 
 type PKCS11 struct {
@@ -113,6 +111,21 @@ type PKCS11 struct {
 	PartitionSerialNumber  string   `json:"partitionSerialNumber"`
 	PIN                    string   `json:"pin"`
 	SigningEnabled         bool     `json:"signingEnabled"`
+}
+
+// In Go, you can't compare structs that contain slices, maps, or functions
+// directly, so it was impossible to do:
+//
+//	if p == (PKCS11{})...
+//
+// Alternatively, we could use reflect.DeepEqual, but that would have been
+// overkill.
+func isZeroPKCS11(p PKCS11) bool {
+	return len(p.AllowedClientLibraries) == 0 &&
+		p.PartitionLabel == "" &&
+		p.PartitionSerialNumber == "" &&
+		p.PIN == "" &&
+		!p.SigningEnabled
 }
 
 // For now we aren't yet using ~/.config/vcpctl.yml.
@@ -145,11 +158,197 @@ func getToolConfig() (ToolConf, error) {
 	}, nil
 }
 
-// New cobra command for ls
+func saLsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "ls",
+		Short: "List Service Accounts",
+		Long: undent.Undent(`
+			List Service Accounts. Service Accounts are used to authenticate
+			applications that use the Firefly Configurations.
+			Example:
+			  vcpctl sa ls
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("sa ls: while getting config %w", err)
+			}
+			svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("sa ls: while listing service accounts: %w", err)
+			}
+			var rows [][]string
+			for _, sa := range svcaccts {
+				rows = append(rows, []string{
+					sa.Name,
+					sa.ID,
+					sa.AuthenticationType,
+				})
+			}
+			t := table.New().
+				Headers("Service Account", "Client ID", "Authentication Type").
+				Rows(rows...)
+			fmt.Println(t.String())
+			return nil
+		},
+	}
+}
+
+func saCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sa",
+		Short: "Manage Service Accounts",
+		Long: undent.Undent(`
+			Manage Service Accounts. Service Accounts are used to authenticate
+			applications that use the Firefly Configurations.
+			You can list, create, delete, and set a Service Account for a Firefly
+			Configuration.
+
+			Example:
+			  vcpctl sa ls
+			  vcpctl sa create "My Service Account"
+			  vcpctl sa delete "My Service Account"
+			  vcpctl set-service-account my-config "My Service Account"
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.AddCommand(
+		saLsCmd(),
+		saRmCmd(),
+		saSetCmd(),
+	)
+	return cmd
+}
+
+func saSetCmd() *cobra.Command {
+	var saName, configName string
+	cmd := &cobra.Command{
+		Use:   "set",
+		Short: "Creates or updates a Service Account",
+		Long: undent.Undent(`
+			Creates or updates a Service Account. If the Service Account already
+			exists, it will be updated. If it does not exist, it will be created.
+
+			Example:
+			  vcpctl sa set --name maelvls
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if saName == "" {
+				return fmt.Errorf("sa set: --name flag is required")
+			}
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("sa set: while getting config %w", err)
+			}
+
+			// Does it already exist?
+			existingSA, err := getServiceAccountByName(conf.APIURL, conf.APIKey, saName)
+			switch {
+			case errors.As(err, &NotFound{}):
+				// Doesn't exist yet, we will be creating it below.
+			case err == nil:
+				// Exists, we will be updating it.
+			default:
+				return fmt.Errorf("sa set: while checking if service account exists: %w", err)
+			}
+
+			var resp SACreateResp
+			if existingSA.ID == "" {
+				resp, err = createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
+					Name:               saName,
+					Owner:              configName,
+					CredentialLifetime: 365, // 1 year.
+					Scopes: []string{
+						"distributed-issuance",
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("sa set: while creating service account: %w", err)
+				}
+				fmt.Fprintf(os.Stdout, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
+			} else {
+				// Update the existing service account by removing the old and
+				// creating it again.
+				deleteServiceAccount(conf.APIURL, conf.APIKey, existingSA.Name)
+				resp, err = createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
+					Name:               saName,
+					Owner:              configName,
+					CredentialLifetime: 365, // 1 year.
+					Scopes: []string{
+						"distributed-issuance",
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("sa set: while creating service account: %w", err)
+				}
+				fmt.Fprintf(os.Stdout, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
+			}
+
+			// Saving priv key to ./svcacct.pem
+			if resp.PrivateKey != "" {
+				if err := os.WriteFile("svcacct.pem", []byte(resp.PrivateKey), 0600); err != nil {
+					return fmt.Errorf("sa set: while writing private key to svcacct.pem: %w", err)
+				}
+				fmt.Fprintln(os.Stdout, "Private key saved to ./svcacct.pem")
+			} else {
+				fmt.Fprintln(os.Stdout, "No private key was returned, this is expected for OIDC Service Accounts.")
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&saName, "name", "", "Name of the Service Account")
+	cmd.Flags().StringVar(&configName, "config", "", "Name of the Firefly Configuration")
+	return cmd
+}
+
+func saRmCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rm",
+		Short: "Remove a Service Account",
+		Long: undent.Undent(`
+			Remove a Service Account. This will delete the Service Account from
+			Venafi Control Plane. You cannot remove a Service Account that is
+			attached to a Firefly Configuration. You must first remove the
+			Service Account from the Firefly Configuration using the
+			'vcpctl set-service-account' command.
+
+			Example:
+			  vcpctl sa rm "My Service Account"
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("sa rm: expected 1 argument, got %d", len(args))
+			}
+			saName := args[0]
+
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("sa rm: while getting config %w", err)
+			}
+
+			err = deleteServiceAccount(conf.APIURL, conf.APIKey, saName)
+			if err != nil {
+				return fmt.Errorf("sa rm: %w", err)
+			}
+
+			return nil
+		},
+	}
+}
+
+// List Firefly configurations.
 func lsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls",
-		Short: "List the Firefly Configurations present in Venafi Control Plane.",
+		Short: "List the Firefly Configurations present in Venafi Control Plane",
 		Long: undent.Undent(`
 			List the Firefly Configurations present in Venafi Control Plane.
 		`),
@@ -226,7 +425,7 @@ func lsCmd() *cobra.Command {
 func setServiceAccountCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set-service-account",
-		Short: "Set a Service Account for a given Firefly Configuration.",
+		Short: "Set a Service Account for a given Firefly Configuration",
 		Long: undent.Undent(`
 			Set a Service Account for a given Firefly Configuration.
 			Example:
@@ -261,14 +460,9 @@ func setServiceAccountCmd() *cobra.Command {
 
 func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 	// Get configuration name by ID.
-	confID, err := getConfigID(apiURL, apiKey, confName)
+	config, err := getConfigByName(apiURL, apiKey, confName)
 	if err != nil {
 		return fmt.Errorf("while fetching Firefly configuration ID for the configuration '%s': %w", confName, err)
-	}
-
-	config, err := getConfig(apiURL, apiKey, confID)
-	if err != nil {
-		return fmt.Errorf("while fetching Firefly configuration '%s': %w", confName, err)
 	}
 
 	// Find service accounts.
@@ -291,7 +485,7 @@ func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 		for _, knownSa := range knownSvcaccts {
 			if knownSa.Name == saName {
 				if sa != nil {
-					return fmt.Errorf("service account name %q is ambiguous, please use the client ID instead", saName)
+					return fmt.Errorf("service account name '%s' is ambiguous, please use the client ID instead", saName)
 				}
 				sa = &knownSa
 			}
@@ -299,7 +493,7 @@ func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 	}
 
 	if sa == nil {
-		return fmt.Errorf("service account %q not found (not a valid name or client ID)", saName)
+		return fmt.Errorf("service account '%s' not found (not a valid name or client ID)", saName)
 	}
 
 	// Is this SA already in the configuration?
@@ -310,8 +504,8 @@ func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 
 	// Add the service account to the configuration.
 	config.ServiceAccountIDs = append(config.ServiceAccountIDs, sa.ID)
-	patch := fullToPatch(config)
-	err = patchConfig(apiURL, apiKey, confID, *patch)
+	patch := fullToPatchConfig(config)
+	err = patchConfig(apiURL, apiKey, config.ID, patch)
 	if err != nil {
 		return fmt.Errorf("while patching Firefly configuration: %w", err)
 	}
@@ -348,6 +542,467 @@ func editCmd() *cobra.Command {
 	}
 }
 
+func pushCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "push",
+		Short: "Push a Firefly Configuration to Venafi Control Plane",
+		Long: undent.Undent(`
+			Push a Firefly Configuration to Venafi Control Plane. The config may
+			already exist, in which case it will be updated. The name in the
+			config's 'name' field is used to identify the configuration.
+
+			Example:
+			  vcpctl push config.yaml
+			  vcpctl push - <config.yaml
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("push: expected 1 argument, got %d", len(args))
+			}
+
+			var file *os.File
+			var path string
+			switch args[0] {
+			case "-":
+				path = "/dev/stdin"
+				file = os.Stdin
+			default:
+				path = args[0]
+				var err error
+				file, err = os.Open(path)
+				if err != nil {
+					return fmt.Errorf("push: opening file ''%s'': %w", path, err)
+				}
+				defer file.Close()
+			}
+
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("push: while getting config %w", err)
+			}
+
+			bytes, err := io.ReadAll(file)
+			if err != nil {
+				return fmt.Errorf("push: while reading Firefly configuration from '%s': %w", path, err)
+			}
+
+			if err := validateYAMLFireflyConfig(bytes); err != nil {
+				return fmt.Errorf("push: Firefly configuration validation failed: %w", err)
+			}
+
+			// Read the Firefly configuration.
+			var updatedConfig FireflyConfig
+			if err := yaml.Unmarshal(bytes, &updatedConfig); err != nil {
+				return fmt.Errorf("push: while decoding Firefly configuration from '%s': %w", path, err)
+			}
+
+			if updatedConfig.Name == "" {
+				return fmt.Errorf("push: Firefly configuration must have a 'name' field set")
+			}
+
+			// Patch the original configuration with the new values.
+			err = createOrUpdateConfigAndDeps(conf.APIURL, conf.APIKey, updatedConfig)
+			if err != nil {
+				return fmt.Errorf("push: while patching Firefly configuration: %w", err)
+			}
+
+			return nil
+		},
+	}
+}
+
+func getSubCaProvider(apiURL, apiKey, id string) (SubCaProvider, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
+	if err != nil {
+		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var result SubCaProvider
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			body, _ := io.ReadAll(resp.Body)
+			return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while decoding response: %w, body: %s", err, body)
+		}
+		return result, nil
+	case http.StatusNotFound:
+		return SubCaProvider{}, NotFound{NameOrID: id}
+	default:
+		body, _ := io.ReadAll(resp.Body)
+		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: returned status code %s, body: %s", resp.Status, body)
+	}
+}
+
+func getPolicyByName(apiURL, apiKey, nameOrID string) (Policy, error) {
+	policies, err := getPolicies(apiURL, apiKey)
+	if err != nil {
+		return Policy{}, fmt.Errorf("getPolicyByName: while getting policies: %w", err)
+	}
+
+	// Find the policy by name. Error out if duplicate names are found.
+	var found Policy
+	for _, cur := range policies {
+		if cur.Name == nameOrID {
+			if found.ID != "" {
+				return Policy{}, fmt.Errorf("getPolicyByName: duplicate policies found with name '%s':\n"+
+					"- %s (%s) created on %s\n"+
+					"- %s (%s) created on %s\n"+
+					"Please remove one of the service accounts first. You can run:\n"+
+					"    vcpctl sa delete %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
+			}
+			found = cur
+		}
+	}
+	if found.ID == "" {
+		return Policy{}, fmt.Errorf("getPolicyByName: policy with name '%s' not found", nameOrID)
+	}
+
+	// Now we can get the policy by ID.
+	return found, nil
+}
+
+func getSubCaProviderByName(apiURL, apiKey, name string) (SubCaProvider, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
+	if err != nil {
+		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue.
+	default:
+		body, _ := io.ReadAll(resp.Body)
+		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: returned status code %s, body: %s", resp.Status, body)
+	}
+
+	var result struct {
+		SubCaProviders []SubCaProvider `json:"subCaProviders"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: while decoding response: %w", err)
+	}
+
+	// Error out if a duplicate name is found.
+	var found SubCaProvider
+	for _, provider := range result.SubCaProviders {
+		if provider.Name == name {
+			if found.ID != "" {
+				return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: duplicate subCA providers found with name '%s':\n"+
+					"- %s (%s)\n"+
+					"- %s (%s)\n"+
+					"Please remove one of the subCA providers first. You can run:\n"+
+					"    vcpctl subca delete %s", name, provider.Name, provider.ID, found.Name, found.ID, found.ID)
+			}
+			found = provider
+		}
+	}
+	if found.ID == "" {
+		return SubCaProvider{}, fmt.Errorf("subCA provider: %w", NotFound{NameOrID: name})
+	}
+
+	// Now we can get the subCA provider by ID.
+	return found, nil
+}
+
+func getConfigByName(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
+	if err != nil {
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue.
+	default:
+		return FireflyConfig{}, parseJSONErrorOrDumpBody(resp)
+	}
+	var result struct {
+		Configurations []FireflyConfig `json:"configurations"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: while decoding response: %w", err)
+	}
+	// Find the configuration by name or ID. Error out if duplicate names are found.
+	var found FireflyConfig
+	for _, cur := range result.Configurations {
+		if cur.Name == nameOrID || cur.ID == nameOrID {
+			if found.ID != "" {
+				return FireflyConfig{}, fmt.Errorf("getConfigByName: duplicate configurations found with name '%s':\n"+
+					"- %s (%s) created on %s\n"+
+					"- %s (%s) created on %s\n"+
+					"Please remove one of the configurations first. You can run:\n"+
+					"    vcpctl delete %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
+			}
+			found = cur
+		}
+	}
+	if found.ID == "" {
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: configuration with name or ID '%s' not found", nameOrID)
+	}
+
+	// Now we can get the configuration by ID.
+	return found, nil
+}
+
+func getPolicies(apiURL, apiKey string) ([]Policy, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getPolicies: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getPolicies: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var result struct {
+			Policies []Policy `json:"policies"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, fmt.Errorf("getPolicies: while decoding response: %w", err)
+		}
+		return result.Policies, nil
+	default:
+		return nil, parseJSONErrorOrDumpBody(resp)
+	}
+}
+
+func getPolicy(apiURL, apiKey, id string) (Policy, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies/"+id, nil)
+	if err != nil {
+		return Policy{}, fmt.Errorf("getPolicy: while creating request: %w", err)
+	}
+
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return Policy{}, fmt.Errorf("getPolicy: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var result Policy
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			body, _ := io.ReadAll(resp.Body)
+			return Policy{}, fmt.Errorf("getPolicy: while decoding response: %w, body: %s", err, body)
+		}
+		return result, nil
+	case http.StatusNotFound:
+		return Policy{}, &NotFound{NameOrID: id}
+	default:
+		body, _ := io.ReadAll(resp.Body)
+		return Policy{}, fmt.Errorf("getPolicy: returned status code %s, body: %s", resp.Status, body)
+	}
+}
+
+func pullCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pull",
+		Short: "Pull a Firefly Configuration from Venafi Control Plane",
+		Long: undent.Undent(`
+			Pull a Firefly Configuration from Venafi Control Plane. The config
+			will be written to stdout in YAML format.
+
+			Example:
+			  vcpctl pull my-config
+			  vcpctl pull 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("pull: expected 1 argument, got %d", len(args))
+			}
+			idOrName := args[0]
+
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("pull: while getting config %w", err)
+			}
+
+			// Get the original configuration.
+			originalConfig, err := getConfigByName(conf.APIURL, conf.APIKey, idOrName)
+			if err != nil {
+				return fmt.Errorf("pull: while getting original Firefly configuration: %w", err)
+			}
+
+			// Find service accounts.
+			knownSvcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("pull: while fetching service accounts: %w", err)
+			}
+
+			yamlData, err := yaml.MarshalWithOptions(originalConfig, yaml.WithComment(annotateSvcAccts(originalConfig, knownSvcaccts)))
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintln(os.Stdout, string(yamlData))
+
+			return nil
+		},
+	}
+}
+
+// createConfig creates a new Firefly configuration or updates an
+// existing one. Also deals with creating the subCA policies.
+func createConfig(apiURL, apiKey string, config FireflyConfig) (string, error) {
+	reqBody := struct {
+		Name              string   `json:"name"`
+		SubCaProviderID   string   `json:"subCaProviderId"`
+		PolicyIDs         []string `json:"policyIds"`
+		ServiceAccountIDs []string `json:"serviceAccountIds"`
+		MinTLSVersion     string   `json:"minTlsVersion"`
+		AdvancedSettings  struct {
+			EnableIssuanceAuditLog       bool `json:"enableIssuanceAuditLog"`
+			IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog"`
+			RequireFIPSCompliantBuild    bool `json:"requireFIPSCompliantBuild"`
+		} `json:"advancedSettings"`
+		ClientAuthentication ClientAuthentication `json:"clientAuthentication"`
+		CloudProviders       map[string]any       `json:"cloudProviders"`
+	}{
+		Name:              config.Name,
+		SubCaProviderID:   config.SubCaProvider.ID,
+		PolicyIDs:         make([]string, len(config.Policies)),
+		ServiceAccountIDs: config.ServiceAccountIDs,
+		MinTLSVersion:     config.MinTLSVersion,
+		AdvancedSettings: struct {
+			EnableIssuanceAuditLog       bool `json:"enableIssuanceAuditLog"`
+			IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog"`
+			RequireFIPSCompliantBuild    bool `json:"requireFIPSCompliantBuild"`
+		}{
+			EnableIssuanceAuditLog:       config.AdvancedSettings.EnableIssuanceAuditLog,
+			IncludeRawCertDataInAuditLog: config.AdvancedSettings.IncludeRawCertDataInAuditLog,
+			RequireFIPSCompliantBuild:    config.AdvancedSettings.RequireFIPSCompliantBuild,
+		},
+		ClientAuthentication: config.ClientAuthentication,
+		CloudProviders:       config.CloudProviders,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("createConfig: while marshaling configuration: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/configurations", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("createConfig: while creating request: %w", err)
+	}
+
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("createConfig: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("createConfig: returned status code %s, body: %s", resp.Status, body)
+	}
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("createConfig: while decoding response: %w, body: %s", err, body)
+	}
+	return result.ID, nil
+}
+
+func createFireflyPolicy(apiURL, apiKey string, policy Policy) (string, error) {
+	body, err := json.Marshal(policy)
+	if err != nil {
+		return "", fmt.Errorf("createFireflyPolicy: while marshaling policy: %w", err)
+	}
+	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/policies", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("createFireflyPolicy: while creating request: %w", err)
+	}
+
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("createFireflyPolicy: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("createFireflyPolicy: returned status code %s, body: %s", resp.Status, body)
+	}
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("createFireflyPolicy: while decoding response: %w, body: %s", err, body)
+	}
+	return result.ID, nil
+}
+
+func createSubCaProvider(apiURL, apiKey string, provider SubCaProvider) (string, error) {
+	body, err := json.Marshal(provider)
+	if err != nil {
+		return "", fmt.Errorf("createSubCaProvider: while marshaling provider: %w", err)
+	}
+	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/subcaproviders", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("createSubCaProvider: while creating request: %w", err)
+	}
+
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("createSubCaProvider: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("createSubCaProvider: returned status code %s, body: %s", resp.Status, body)
+	}
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("createSubCaProvider: while decoding response: %w, body: %s", err, body)
+	}
+	return result.ID, nil
+}
+
 // Replace the old flag-based main() with cobra execution.
 func main() {
 	var apiURLFlag string
@@ -365,7 +1020,7 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
 
-	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd())
+	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), pullCmd(), saCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -427,75 +1082,40 @@ func listConfigs(apiURL, apiKey string) ([]Config, error) {
 	return confs, nil
 }
 
-func getConfigID(apiURL, apiKey, name string) (string, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Configurations []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"configurations"`
-	}
-
-	body := new(bytes.Buffer)
-	if _, err := io.Copy(body, resp.Body); err != nil {
-		return "", fmt.Errorf("while reading configurations: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("returned status code %s, body: %s", resp.Status, body.String())
-	}
-
-	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
-		return "", fmt.Errorf("while decoding configurations: %w, body: %s", err, body.String())
-	}
-
-	for _, conf := range result.Configurations {
-		if conf.Name == name {
-			return conf.ID, nil
-		}
-	}
-
-	return "", fmt.Errorf("configuration %q not found", name)
+type NotFound struct {
+	NameOrID string `json:"id"`
 }
 
-func getConfig(apiURL, apiKey, id string) (*FireflyConfig, error) {
+func (e NotFound) Error() string {
+	return fmt.Sprintf("'%s' not found", e.NameOrID)
+}
+
+func getConfig(apiURL, apiKey, id string) (FireflyConfig, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id), nil)
 	if err != nil {
-		return nil, err
+		return FireflyConfig{}, err
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return FireflyConfig{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		// Dump body.
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("returned status code %s, body: %s", resp.Status, body)
+		return FireflyConfig{}, fmt.Errorf("returned status code %s, body: %s", resp.Status, body)
 	}
 
 	var fireflyConfig FireflyConfig
 	if err := json.NewDecoder(resp.Body).Decode(&fireflyConfig); err != nil {
-		return nil, err
+		return FireflyConfig{}, err
 	}
 
-	return &fireflyConfig, nil
+	return fireflyConfig, nil
 }
 
 type AdvancedSettings struct {
@@ -517,31 +1137,28 @@ type AdvancedSettings struct {
 //	policyIds: ...
 //	subCaProviderId: ...
 //	advancedSettings: ...
-//
-// The `advancedSettings` field is a pointer because it might not be returned by
-// the backend (since this API field is new). So we need to know when the API
-// field doesn't exist.
 type FireflyConfigPatch struct {
-	Name                 string                `json:"name"`
-	ClientAuthentication *ClientAuthentication `json:"clientAuthentication,omitempty"`
-	ClientAuthorization  *ClientAuthorization  `json:"clientAuthorization,omitempty"`
-	CloudProviders       map[string]any        `json:"cloudProviders"`
-	MinTLSVersion        string                `json:"minTlsVersion"`
-	ServiceAccountIDs    []string              `json:"serviceAccountIds"`
-	PolicyIDs            []string              `json:"policyIds"`
-	SubCaProviderID      string                `json:"subCaProviderId"`
+	Name                 string               `json:"name"`
+	ClientAuthentication ClientAuthentication `json:"clientAuthentication,omitempty"`
+	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization,omitempty"`
+	CloudProviders       map[string]any       `json:"cloudProviders"`
+	MinTLSVersion        string               `json:"minTlsVersion"`
+	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
+	PolicyIDs            []string             `json:"policyIds"`
+	SubCaProviderID      string               `json:"subCaProviderId"`
 	// The advancedSettings field is not supported yet with the PATCH verb, so
-	// it is not included. Pleqse add it as soon as it appears in the API:
+	// it is not included. Please add it as soon as it appears in the API:
 	// https://developer.venafi.com/tlsprotectcloud/reference/configurations_update
+	AdvancedSettings AdvancedSettings `json:"advancedSettings,omitempty"`
 }
 
-func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
+func fullToPatchConfig(full FireflyConfig) FireflyConfigPatch {
 	policyIDs := make([]string, len(full.Policies))
 	for i, p := range full.Policies {
 		policyIDs[i] = p.ID
 	}
 
-	return &FireflyConfigPatch{
+	return FireflyConfigPatch{
 		Name:                 full.Name,
 		ClientAuthentication: full.ClientAuthentication,
 		ClientAuthorization:  full.ClientAuthorization,
@@ -550,20 +1167,17 @@ func fullToPatch(full *FireflyConfig) *FireflyConfigPatch {
 		ServiceAccountIDs:    full.ServiceAccountIDs,
 		PolicyIDs:            policyIDs,
 		SubCaProviderID:      full.SubCaProvider.ID,
+		AdvancedSettings:     full.AdvancedSettings,
 	}
 }
 
 func editConfig(apiURL, apiKey, name string) error {
-	// Get configuration ID by name.
-	id, err := getConfigID(apiURL, apiKey, name)
+	config, err := getConfigByName(apiURL, apiKey, name)
 	if err != nil {
-		return fmt.Errorf("while fetching Firefly configuration ID for the configuration '%s': %w", name, err)
-	}
-
-	// Get full configuration
-	config, err := getConfig(apiURL, apiKey, id)
-	if err != nil {
-		return fmt.Errorf("while fetching Firefly configuration '%s': %w", name, err)
+		if errors.Is(err, NotFound{}) {
+			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl push config.yaml'", name)
+		}
+		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
 
 	// Find service accounts.
@@ -572,27 +1186,7 @@ func editConfig(apiURL, apiKey, name string) error {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
 
-	var comments = make(map[string][]*yaml.Comment)
-	for i, sa := range config.ServiceAccountIDs {
-		found := false
-		for _, knownSa := range knownSvcaccts {
-			if knownSa.ID == sa {
-				found = true
-				comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
-					yaml.LineComment(" " + knownSa.Name),
-				}
-				break
-			}
-		}
-		if !found {
-			comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
-				yaml.LineComment(" unknown service account"),
-			}
-		}
-	}
-
-	// Convert to YAML so that it is easier to edit.
-	yamlData, err := yaml.MarshalWithOptions(config, yaml.WithComment(comments))
+	yamlData, err := yaml.MarshalWithOptions(config, yaml.WithComment(annotateSvcAccts(config, knownSvcaccts)))
 	if err != nil {
 		return err
 	}
@@ -631,62 +1225,230 @@ edit:
 		return err
 	}
 
-	// If the advanced settings have been modified, let's warn the user: it
-	// isn't supported yet. See:
-	// https://developer.venafi.com/tlsprotectcloud/reference/configurations_update
-	d := cmp.Diff(config.AdvancedSettings, modified.AdvancedSettings)
-	if d != "" {
-		fmt.Fprintf(os.Stderr, "WARNING: The advancedSettings field has been modified:\n"+
-			"\n"+d+"\n"+
-			"WARNING: The advancedSettings field is not supported yet, so it will be ignored.\n"+
-			"WARNING: Support for patching advancedSettings will be added in the future.\n"+
-			"WARNING: https://developer.venafi.com/tlsprotectcloud/reference/configurations_update\n")
-	}
+	err = createOrUpdateConfigAndDeps(apiURL, apiKey, modified)
+	if errors.Is(err, errPINRequired) {
+		// If the PIN is required, we need to ask the user to fill it in.
+		fmt.Fprintln(os.Stderr, "ERROR: The subCaProvider.pkcs11.pin field is required.")
+		fmt.Fprintln(os.Stderr, "Reopening the editor so that you can fill it in.")
 
-	patch := fullToPatch(&modified)
+		// Add the notice to the top of the file.
+		notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
+			"# NOTICE: field. has been modified. Please re-edit the configuration to fill in the PKCS11 pin.\n"
 
-	err = patchConfig(apiURL, apiKey, id, *patch)
-	if err != nil {
-		return fmt.Errorf("while patching Firefly configuration: %w", err)
-	}
-
-	// The `subCaProvider.pkcs11.pin` field is never returned by the API, so we
-	// need to check if the user has changed it and patch it separately. If the
-	// user still wants to patch the subCAProvider, we need to ask them to
-	// re-edit the manifest to fill in the pin.
-	//
-	// First off, let's check if the user has changed something under the
-	// `subCaProvider`.
-	d = cmp.Diff(config.SubCaProvider, modified.SubCaProvider)
-	if d != "" {
-		if modified.SubCaProvider.PKCS11.PIN == "" {
-			// Add the notice to the top of the file.
-			notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
-				"# NOTICE: field. has been modified. Please re-edit the configuration to fill in the PKCS11 pin.\n"
-
-			// Prepend the notice to the modified YAML.
-			tmpfile.Seek(0, 0)
-			_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
-			if err != nil {
-				return fmt.Errorf("while writing notice to file: %w", err)
-			}
-			goto edit
-		}
-		var patchSub *SubCaProviderPatch
-		if modified.SubCaProvider.ID != "" {
-			patchSub = fullToPatchCAProvider(&modified.SubCaProvider)
-			err = patchSubCaProvider(apiURL, apiKey, modified.SubCaProvider.ID, *patchSub)
-			if err != nil {
-				return fmt.Errorf("while patching Firefly configuration's subCAProvider %q: %w", modified.SubCaProvider.Name, err)
-			}
-		}
-	}
-
-	for _, p := range modified.Policies {
-		patch := fullToPatchPolicy(&p)
-		err = patchPolicy(apiURL, apiKey, p.ID, *patch)
+		// Prepend the notice to the modified YAML.
+		tmpfile.Seek(0, 0)
+		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
 		if err != nil {
-			return fmt.Errorf("while patching Firefly configuration's policy %q: %w", p.Name, err)
+			return fmt.Errorf("while writing notice to file: %w", err)
+		}
+		goto edit
+	}
+	if err != nil {
+		return fmt.Errorf("while merging and patching Firefly configuration: %w", err)
+	}
+
+	return nil
+}
+
+func annotateSvcAccts(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
+	var comments = make(map[string][]*yaml.Comment)
+	for i, sa := range config.ServiceAccountIDs {
+		found := false
+		for _, knownSa := range allSvcAccts {
+			if knownSa.ID == sa {
+				found = true
+				comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
+					yaml.LineComment(" " + knownSa.Name),
+				}
+				break
+			}
+		}
+		if !found {
+			comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
+				yaml.LineComment(" unknown service account"),
+			}
+		}
+	}
+
+	return comments
+}
+
+var errPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
+
+// Also patches the nested SubCA provider and Firefly Policies. Use
+// errors.Is(err, errPINRequired) to check if the error is due to the missing
+// PIN.
+func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyConfig) error {
+	// Check that the service account IDs exist.
+	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
+	if err != nil {
+		return fmt.Errorf("while fetching service accounts: %w", err)
+	}
+	for _, saID := range updatedConfig.ServiceAccountIDs {
+		found := false
+		for _, knownSa := range knownSvcaccts {
+			if knownSa.ID == saID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("service account ID '%s' not found.\nTo list all existing service accounts, run:\n    vcpctl ls", saID)
+		}
+	}
+
+	templates, err := getIssuingTemplates(apiURL, apiKey)
+	if err != nil {
+		return fmt.Errorf("while getting issuing templates: %w", err)
+	}
+	// Find the built-in issuing template.
+	var builtin CertificateIssuingTemplate
+	for _, template := range templates {
+		if template.CertificateAuthority == "BUILTIN" {
+			builtin = template
+			break
+		}
+	}
+	if builtin.ID == "" {
+		return fmt.Errorf("built-in issuing template not found, please check your Venafi Control Plane configuration")
+	}
+
+	existingConfig, err := getConfigByName(apiURL, apiKey, updatedConfig.Name)
+	switch {
+	case errors.As(err, &NotFound{}):
+		// Continue below since the nested sub CA and policies may not already
+		// exist, so the Firefly configuration may need to be patched.
+	case err != nil:
+		return fmt.Errorf("while getting configuration ID: %w", err)
+	}
+
+	// Before dealing with patching the configuration, let's patch the policies
+	// and the SubCA provider, if needed.
+	for i := range updatedConfig.Policies {
+		// Get the original policy to check if it exists.
+		existingPolicy, err := getPolicyByName(apiURL, apiKey, updatedConfig.Policies[i].Name)
+		switch {
+		case errors.As(err, &NotFound{}):
+			// We will create it below.
+		case err != nil:
+			return fmt.Errorf("while getting the existing Firefly policy '%s': %w", updatedConfig.Policies[i].Name, err)
+		default:
+			// Policy exists and might need to be patched. Continue below.
+		}
+
+		if existingPolicy.ID == "" {
+			// The policy does not exist, we need to create it.
+			id, err := createFireflyPolicy(apiURL, apiKey, updatedConfig.Policies[i])
+			if err != nil {
+				return fmt.Errorf("while creating Firefly policy: %w", err)
+			}
+			updatedConfig.Policies[i].ID = id
+			fmt.Fprintf(os.Stderr, "Policy '%s' created with ID '%s'.\n", updatedConfig.Policies[i].Name, id)
+		} else {
+			updatedConfig.Policies[i].ID = existingPolicy.ID
+
+			// If the policy is not equal to the original one, we need to update it.
+			d := ANSIDiff(fullToPatchPolicy(existingPolicy), fullToPatchPolicy(updatedConfig.Policies[i]))
+			if d == "" {
+				fmt.Printf("Policy '%s' is unchanged, skipping update.\n", updatedConfig.Policies[i].Name)
+				continue
+			}
+
+			// If the policy is different, we need to update it.
+			fmt.Fprintf(os.Stderr, "Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
+
+			// Patch the policy.
+			err = patchPolicy(apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
+			if err != nil {
+				return fmt.Errorf("while patching Firefly policy #%d '%s': %w", i, updatedConfig.Policies[i].Name, err)
+			}
+		}
+	}
+
+	// Now, let's take care of the SubCA provider.
+	existingSubCa, err := getSubCaProviderByName(apiURL, apiKey, updatedConfig.SubCaProvider.Name)
+	switch {
+	case errors.As(err, &NotFound{}):
+		// We will create the SubCA provider just below.
+	case err != nil:
+		return fmt.Errorf("while getting original SubCA provider '%s': %w", updatedConfig.SubCaProvider.Name, err)
+	default:
+		// SubCA provider exists and might need to be patched. Continue below.
+	}
+
+	// Replace the sub CA's issuing template with the built-in one. Fail if
+	// caType != BUILTIN.
+	if updatedConfig.SubCaProvider.CaType != "BUILTIN" {
+		return fmt.Errorf("subCA provider '%s' has caType '%s', but only BUILTIN is supported for now", updatedConfig.SubCaProvider.Name, updatedConfig.SubCaProvider.CaType)
+	}
+	updatedConfig.SubCaProvider.CaAccountID = builtin.CertificateAuthorityAccountID
+	updatedConfig.SubCaProvider.CaProductOptionID = builtin.CertificateAuthorityProductOptionID
+
+	if existingSubCa.ID == "" {
+		// The SubCA provider does not exist, we need to create it.
+		id, err := createSubCaProvider(apiURL, apiKey, updatedConfig.SubCaProvider)
+		if err != nil {
+			return fmt.Errorf("while creating SubCA provider: %w", err)
+		}
+		updatedConfig.SubCaProvider.ID = id
+		fmt.Fprintf(os.Stderr, "SubCA provider '%s' created with ID '%s'.\n", updatedConfig.SubCaProvider.Name, id)
+	} else {
+		updatedConfig.SubCaProvider.ID = existingSubCa.ID
+
+		// If the SubCA provider is not equal to the original one, we need to update it.
+		diff := ANSIDiff(fullToPatchSubCAProvider(existingSubCa), fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
+		if diff == "" {
+			fmt.Printf("SubCA provider '%s' is unchanged, skipping update.\n", updatedConfig.SubCaProvider.Name)
+		} else {
+			// The `subCaProvider.pkcs11.pin` field is never returned by the API, so
+			// we need to check if the user has changed it and patch it separately.
+			// If the user still wants to patch the subCAProvider, we need to ask
+			// them to re-edit the manifest to fill in the pin.
+			//
+			// First off, let's check if the user has changed something under the
+			// `subCaProvider`.
+
+			if !isZeroPKCS11(updatedConfig.SubCaProvider.PKCS11) && updatedConfig.SubCaProvider.PKCS11.PIN == "" {
+				return fmt.Errorf("while patching Firefly configuration's subCAProvider: %w", errPINRequired)
+			}
+
+			// If the SubCA provider is different, we need to update it.
+			fmt.Fprintf(os.Stderr, "SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
+
+			// Patch the SubCA provider.
+			err = patchSubCaProvider(apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
+			if err != nil {
+				return fmt.Errorf("while patching Firefly SubCA provider '%s': %w", updatedConfig.SubCaProvider.Name, err)
+			}
+		}
+	}
+
+	// If we reach this point, we have successfully patched the configuration,
+	// subCA provider, and policies. Let's see if the Firefly configuration
+	// needs to be created or updated.
+	if existingConfig.ID == "" {
+		// The configuration does not exist, we need to create it.
+		confID, err := createConfig(apiURL, apiKey, updatedConfig)
+		if err != nil {
+			return fmt.Errorf("while creating Firefly configuration: %w", err)
+		}
+
+		fmt.Printf("Configuration '%s' created with ID '%s'.\n", updatedConfig.Name, confID)
+	} else {
+		// The configuration exists, we need to patch it.
+		d := ANSIDiff(fullToPatchConfig(existingConfig), fullToPatchConfig(updatedConfig))
+		if d == "" {
+			fmt.Printf("Configuration '%s' is unchanged, skipping update.\n", updatedConfig.Name)
+			return nil
+		} else {
+			fmt.Fprintf(os.Stderr, "Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
+
+			patch := fullToPatchConfig(updatedConfig)
+			err = patchConfig(apiURL, apiKey, existingConfig.ID, patch)
+			if err != nil {
+				return fmt.Errorf("while patching Firefly configuration: %w", err)
+			}
+			fmt.Printf("Configuration '%s' updated successfully.\n", updatedConfig.Name)
 		}
 	}
 
@@ -713,11 +1475,13 @@ func patchConfig(apiURL, apiKey, id string, patch FireflyConfigPatch) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update failed: %s: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// The patch was successful.
+		return nil
+	default:
+		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
 	}
-	return nil
 }
 
 // From: https://developer.venafi.com/tlsprotectcloud/reference/subcaproviders_update
@@ -730,7 +1494,7 @@ type SubCaProviderPatch struct {
 	Name               string `json:"name"`
 	Organization       string `json:"organization"`
 	OrganizationalUnit string `json:"organizationalUnit"`
-	PKCS11             PKCS11 `json:"pkcs11"`
+	PKCS11             PKCS11 `json:"pkcs11,omitempty"`
 	StateOrProvince    string `json:"stateOrProvince"`
 	ValidityPeriod     string `json:"validityPeriod"`
 }
@@ -755,15 +1519,47 @@ func patchSubCaProvider(apiURL, apiKey, id string, patch SubCaProviderPatch) err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update failed: %s: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// The patch was successful.
+		return nil
+	default:
+		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
 	}
-	return nil
 }
 
-func fullToPatchCAProvider(full *SubCaProvider) *SubCaProviderPatch {
-	return &SubCaProviderPatch{
+func parseJSONErrorOrDumpBody(resp *http.Response) error {
+	body, _ := io.ReadAll(resp.Body)
+
+	var venafiErr VenafiError
+	if err := json.Unmarshal(body, &venafiErr); err != nil {
+		return fmt.Errorf("while parsing JSON error: %w, body was: %s", err, body)
+	}
+
+	return venafiErr
+}
+
+// Examples:
+//
+//	{"errors":[{"code":1006,"message":"request object parsing failed","args":["request object parsing failed"]}]}
+//	{"errors":[{"code":10051,"message":"Unable to find VenafiCaIssuerPolicy for key [c549e230-454c-11f0-906f-19aebcf83bb8]","args":["VenafiCaIssuerPolicy",["c549e230-454c-11f0-906f-19aebcf83bb8"]]}]}
+type VenafiError struct {
+	Errors []struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+func (e VenafiError) Error() string {
+	var msgs []string
+	for _, err := range e.Errors {
+		msgs = append(msgs, fmt.Sprintf("%d: %s", err.Code, err.Message))
+	}
+	return fmt.Sprintf("\n* %s", strings.Join(msgs, "\n* "))
+}
+
+func fullToPatchSubCAProvider(full SubCaProvider) SubCaProviderPatch {
+	return SubCaProviderPatch{
 		CaProductOptionID:  full.CaProductOptionID,
 		CommonName:         full.CommonName,
 		Country:            full.Country,
@@ -798,8 +1594,8 @@ type Subject struct {
 	StateOrProvince    CommonName `json:"stateOrProvince"`
 }
 
-func fullToPatchPolicy(full *Policy) *PolicyPatch {
-	return &PolicyPatch{
+func fullToPatchPolicy(full Policy) PolicyPatch {
+	return PolicyPatch{
 		Name:              full.Name,
 		KeyAlgorithm:      full.KeyAlgorithm,
 		KeyUsages:         full.KeyUsages,
@@ -831,31 +1627,30 @@ func patchPolicy(apiURL, apiKey, id string, patch PolicyPatch) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update failed: %s: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// The patch was successful.
+		return nil
+	case http.StatusNotFound:
+		return fmt.Errorf("Firefly policy: %w", NotFound{NameOrID: id})
+	default:
+		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
 	}
-
-	return nil
 }
 
 type ServiceAccount struct {
-	AuthenticationType    string    `json:"authenticationType"`
-	CompanyID             string    `json:"companyId"`
-	CredentialLifetime    int       `json:"credentialLifetime"`
-	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn"`
-	Enabled               bool      `json:"enabled"`
-	ID                    string    `json:"id"`
-	Name                  string    `json:"name"`
-	Owner                 string    `json:"owner"`
-	Scopes                []string  `json:"scopes"`
-	UpdatedBy             string    `json:"updatedBy"`
-	UpdatedOn             time.Time `json:"updatedOn"`
-	Applications          []string  `json:"applications"`
-	Audience              string    `json:"audience"`
-	IssuerURL             string    `json:"issuerURL"`
-	JwksURI               string    `json:"jwksURI"`
-	Subject               string    `json:"subject"`
+	AuthenticationType string   `json:"authenticationType,omitempty"`
+	CredentialLifetime int      `json:"credentialLifetime,omitempty"`
+	Enabled            bool     `json:"enabled,omitempty"`
+	ID                 string   `json:"id,omitempty"`
+	Name               string   `json:"name,omitempty"`
+	Owner              string   `json:"owner,omitempty"`
+	Scopes             []string `json:"scopes,omitempty"`
+	Applications       []string `json:"applications,omitempty"`
+	Audience           string   `json:"audience,omitempty"`
+	IssuerURL          string   `json:"issuerURL,omitempty"`
+	JwksURI            string   `json:"jwksURI,omitempty"`
+	Subject            string   `json:"subject,omitempty"`
 }
 
 func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
@@ -888,6 +1683,129 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 		return nil, fmt.Errorf("while decoding service accounts: %w\n\nBody: %s", err, body.String())
 	}
 
+	return result, nil
+}
+
+func deleteServiceAccount(apiURL, apiKey, id string) error {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		return fmt.Errorf("service account: %w", NotFound{NameOrID: id})
+	case http.StatusNoContent:
+		// The deletion was successful.
+		return nil
+	default:
+		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+	}
+}
+
+func getServiceAccountByName(apiURL, apiKey, name string) (ServiceAccount, error) {
+	sas, err := getServiceAccounts(apiURL, apiKey)
+	if err != nil {
+		return ServiceAccount{}, fmt.Errorf("getServiceAccountByName: while getting service accounts: %w", err)
+	}
+
+	// Error out if a duplicate service account name is found.
+	var found []ServiceAccount
+	for _, sa := range sas {
+		if sa.Name == name {
+			found = append(found, sa)
+		}
+	}
+
+	if len(found) == 0 {
+		return ServiceAccount{}, NotFound{NameOrID: name}
+	}
+	if len(found) == 1 {
+		return found[0], nil
+	}
+
+	// If we have multiple service accounts with the same name, let the user
+	// know about the duplicates.
+	var lst strings.Builder
+	for _, sa := range found {
+		lst.WriteString(fmt.Sprintf("  - %s (%s)\n", sa.Name, sa.ID))
+	}
+	return ServiceAccount{}, fmt.Errorf("getServiceAccountByName: duplicate service account name '%s' found.\n"+
+		"The conflicting service accounts are:\n"+
+		lst.String()+
+		"Please remove one with the command:\n"+
+		"  vcpctl sa rm %s\n",
+		name,
+		found[0].ID)
+
+}
+
+//	{
+//	    "id": "862b6a31-4c53-11f0-b786-f25ae904e7a3",
+//	    "publicKey": "-----BEGIN PUBLIC
+//
+// KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE0wWhW9Ti5EU3qPzDU60xYLC45GoX\n3RfYWTk2nMpt+3Ex8hRqSs6rOhO4Iiy1k0cajbxVhQ1nh+qQQE36Lx0WSA==\n-----END PUBLIC
+// KEY-----\n"
+// }
+type SACreateResp struct {
+	ID         string `json:"id"`
+	PublicKey  string `json:"publicKey"`
+	PrivateKey string `json:"privateKey"`
+}
+
+func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateResp, error) {
+	// If no owner is specified, let's just use the first team we can find.
+	if sa.Owner == "" {
+		teams, err := getTeams(apiURL, apiKey)
+		if err != nil {
+			return SACreateResp{}, fmt.Errorf("createServiceAccount: while getting teams: %w", err)
+		}
+		if len(teams) == 0 {
+			return SACreateResp{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
+		}
+		sa.Owner = teams[0].ID
+		fmt.Fprintf(os.Stderr, "No owner specified, using the first team '%s' (%s) as the owner.\n", teams[0].Name, teams[0].ID)
+	}
+
+	saJSON, err := json.Marshal(sa)
+	if err != nil {
+		return SACreateResp{}, err
+	}
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/serviceaccounts", apiURL), bytes.NewReader(saJSON))
+	if err != nil {
+		return SACreateResp{}, err
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return SACreateResp{}, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusCreated | http.StatusOK:
+		// The creation was successful. Continue below to decode the response.
+	case http.StatusConflict:
+		return SACreateResp{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
+	default:
+		return SACreateResp{}, fmt.Errorf("bad request, please check the service account fields: %w", parseJSONErrorOrDumpBody(resp))
+	}
+
+	var result SACreateResp
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return SACreateResp{}, fmt.Errorf("createServiceAccount: while decoding response: %w", err)
+	}
 	return result, nil
 }
 
@@ -946,4 +1864,142 @@ func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) e
 	}
 
 	return nil
+}
+
+func ANSIDiff(x, y any, opts ...cmp.Option) string {
+	escapeCode := func(code int) string {
+		return fmt.Sprintf("\x1b[%dm", code)
+	}
+	diff := cmp.Diff(x, y, opts...)
+	if diff == "" {
+		return ""
+	}
+	ss := strings.Split(diff, "\n")
+	for i, s := range ss {
+		switch {
+		case strings.HasPrefix(s, "-"):
+			ss[i] = escapeCode(31) + s + escapeCode(0)
+		case strings.HasPrefix(s, "+"):
+			ss[i] = escapeCode(32) + s + escapeCode(0)
+		}
+	}
+	return strings.Join(ss, "\n")
+}
+
+type CertificateIssuingTemplate struct {
+	ID                                  string `json:"id"`
+	CompanyID                           string `json:"companyId"`
+	CertificateAuthority                string `json:"certificateAuthority"`
+	Name                                string `json:"name"`
+	CertificateAuthorityAccountID       string `json:"certificateAuthorityAccountId"`
+	CertificateAuthorityProductOptionID string `json:"certificateAuthorityProductOptionId"`
+	Product                             struct {
+		CertificateAuthority string   `json:"certificateAuthority"`
+		ProductName          string   `json:"productName"`
+		ProductTypes         []string `json:"productTypes"`
+		ValidityPeriod       string   `json:"validityPeriod"`
+	} `json:"product"`
+	Priority                  int       `json:"priority,omitempty"`
+	SystemGenerated           bool      `json:"systemGenerated"`
+	CreationDate              time.Time `json:"creationDate"`
+	ModificationDate          time.Time `json:"modificationDate"`
+	Status                    string    `json:"status"`
+	Reason                    string    `json:"reason"`
+	ReferencingApplicationIds []any     `json:"referencingApplicationIds"`
+	SubjectCNRegexes          []string  `json:"subjectCNRegexes"`
+	SubjectORegexes           []string  `json:"subjectORegexes"`
+	SubjectOURegexes          []string  `json:"subjectOURegexes"`
+	SubjectSTRegexes          []string  `json:"subjectSTRegexes"`
+	SubjectLRegexes           []string  `json:"subjectLRegexes"`
+	SubjectCValues            []string  `json:"subjectCValues"`
+	SanRegexes                []string  `json:"sanRegexes"`
+	SanDNSNameRegexes         []string  `json:"sanDnsNameRegexes"`
+	KeyTypes                  []struct {
+		KeyType    string `json:"keyType"`
+		KeyLengths []int  `json:"keyLengths"`
+	} `json:"keyTypes"`
+	KeyReuse                    bool  `json:"keyReuse"`
+	ExtendedKeyUsageValues      []any `json:"extendedKeyUsageValues"`
+	CsrUploadAllowed            bool  `json:"csrUploadAllowed"`
+	KeyGeneratedByVenafiAllowed bool  `json:"keyGeneratedByVenafiAllowed"`
+	ResourceConsumerUserIds     []any `json:"resourceConsumerUserIds"`
+	ResourceConsumerTeamIds     []any `json:"resourceConsumerTeamIds"`
+	EveryoneIsConsumer          bool  `json:"everyoneIsConsumer"`
+}
+
+func getIssuingTemplates(apiURL, apiKey string) ([]CertificateIssuingTemplate, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/certificateissuingtemplates", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getIssuingTemplates: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getIssuingTemplates: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue below.
+	default:
+		return nil, fmt.Errorf("getIssuingTemplates: unexpected status code %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+	}
+
+	var result struct {
+		CertificateIssuingTemplates []CertificateIssuingTemplate `json:"certificateIssuingTemplates"`
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("getIssuingTemplates: while reading response body: %w", err)
+	}
+
+	err = json.NewDecoder(bytes.NewReader(body)).Decode(&result)
+	if err != nil {
+		return nil, fmt.Errorf("getIssuingTemplates: while decoding 200 response: %w, body: %s", err, body)
+	}
+
+	return result.CertificateIssuingTemplates, nil
+}
+
+type Team struct {
+	ID                string              `json:"id"`
+	Name              string              `json:"name"`
+	SystemRoles       []string            `json:"systemRoles"`
+	ProductRoles      map[string][]string `json:"productRoles"`
+	Role              string              `json:"role"`
+	Members           []string            `json:"members"`
+	Owners            []string            `json:"owners"`
+	UserMatchingRules []any               `json:"userMatchingRules"`
+	ModificationDate  time.Time           `json:"modificationDate"`
+}
+
+// URL: https://api-dev210.qa.venafi.io/v1/teams?includeSystemGenerated=true
+func getTeams(apiURL, apiKey string) ([]Team, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/teams?includeSystemGenerated=true", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getTeams: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getTeams: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		// Dump body.
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getTeams: unexpected status %d: %s", resp.StatusCode, body)
+	}
+	var result struct {
+		Teams []Team `json:"teams"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("getTeams: while decoding response: %w", err)
+	}
+	return result.Teams, nil
 }
