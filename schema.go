@@ -26,12 +26,12 @@ func validateYAMLFireflyConfig(input []byte) error {
 	if err != nil {
 		return fmt.Errorf("unmarshalling JSON: %w", err)
 	}
-	err = schemaCompiler.AddResource("mem://firefly-config-schema.json", schemaParsed)
+	err = schemaCompiler.AddResource("mem://schema.json", schemaParsed)
 	if err != nil {
 		return fmt.Errorf("programmer mistake: failed to add schema: %w", err)
 	}
 
-	schema, err := schemaCompiler.Compile("mem://firefly-config-schema.json")
+	schema, err := schemaCompiler.Compile("mem://schema.json")
 	if err != nil {
 		return fmt.Errorf("programmer mistake: failed to compile schema: %w", err)
 	}
@@ -46,11 +46,12 @@ func validateYAMLFireflyConfig(input []byte) error {
 		return nil
 	}
 
+	// The error message is confusing as it talks about "mem://schema.json".
+	// Let's make it clearer.
 	var errAs *jsonschema.ValidationError
 	if ok := errors.As(err, &errAs); !ok {
 		return fmt.Errorf("validating JSON: %w", err)
 	}
-
 	var str []string
 	for _, cause := range errAs.Causes {
 		str = append(str, cause.Error())

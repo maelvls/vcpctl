@@ -1166,7 +1166,8 @@ func pullCmd() *cobra.Command {
 
 			yamlData, err := yaml.MarshalWithOptions(
 				hideMisleadingFields(originalConfig),
-				yaml.WithComment(annotateSvcAccts(originalConfig, knownSvcaccts)),
+				yaml.WithComment(comments(originalConfig, knownSvcaccts)),
+				yaml.Indent(4),
 			)
 			if err != nil {
 				return err
@@ -1527,7 +1528,7 @@ func editConfig(apiURL, apiKey, name string) error {
 
 	yamlData, err := yaml.MarshalWithOptions(
 		hideMisleadingFields(config),
-		yaml.WithComment(annotateSvcAccts(config, knownSvcaccts)),
+		yaml.WithComment(comments(config, knownSvcaccts)),
 	)
 	if err != nil {
 		return err
@@ -1618,8 +1619,14 @@ edit:
 	return nil
 }
 
-func annotateSvcAccts(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
+func comments(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
 	var comments = make(map[string][]*yaml.Comment)
+
+	// Add comment at the end of the file with the schema URL.
+	comments["$"] = []*yaml.Comment{
+		yaml.FootComment("", " yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/schema.json"),
+	}
+
 	for i, sa := range config.ServiceAccountIDs {
 		found := false
 		for _, knownSa := range allSvcAccts {

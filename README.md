@@ -42,3 +42,14 @@ vcpctl push test
 >
 > The `push` and `edit` commands will create the missing Firefly Sub CA Provider
 > and Firefly Policies.
+
+
+## Schema of config.yaml
+
+In VSCode or any other editor supporting the YAML LSP, you can add the following
+comment to the top of your `config.yaml` file to enable schema validation:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/schema.json
+name: test
+```
