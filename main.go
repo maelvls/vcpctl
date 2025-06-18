@@ -224,8 +224,8 @@ func saCmd() *cobra.Command {
 
 			Example:
 			  vcpctl sa ls
-			  vcpctl sa gen my-sa
-			  vcpctl sa delete my-sa
+			  vcpctl sa rm my-sa
+			  vcpctl sa gen-ca --name my-sa
 			  vcpctl set-service-account my-config my-sa
 		`),
 		SilenceUsage:  true,
@@ -234,33 +234,33 @@ func saCmd() *cobra.Command {
 	cmd.AddCommand(
 		saLsCmd(),
 		saRmCmd(),
-		saGenCmd(),
+		saGenRSACmd(),
 	)
 	return cmd
 }
 
-func saGenCmd() *cobra.Command {
+func saGenRSACmd() *cobra.Command {
 	var saName, configName string
 	cmd := &cobra.Command{
-		Use:   "gen",
-		Short: "Generates the service account private key",
+		Use:   "gen-rsa",
+		Short: "Generates a Private RSA Service Account",
 		Long: undent.Undent(`
-			Generates a private key and registers it as a Service Account in
+			Generates an RSA private key and registers it as a Service Account in
 			Venafi Control Plane. If the Service Account already exists, it will
 			be updated. If it does not exist, it will be created.
 
 			Example:
-			  vcpctl sa gen --name maelvls
+			  vcpctl sa gen-rsa --name maelvls
 		`),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if saName == "" {
-				return fmt.Errorf("sa gen: --name flag is required")
+				return fmt.Errorf("sa gen-rsa: --name flag is required")
 			}
 			conf, err := getToolConfig()
 			if err != nil {
-				return fmt.Errorf("sa gen: while getting config %w", err)
+				return fmt.Errorf("sa gen-rsa: while getting config %w", err)
 			}
 
 			// Does it already exist?
@@ -271,7 +271,7 @@ func saGenCmd() *cobra.Command {
 			case err == nil:
 				// Exists, we will be updating it.
 			default:
-				return fmt.Errorf("sa gen: while checking if service account exists: %w", err)
+				return fmt.Errorf("sa gen-rsa: while checking if service account exists: %w", err)
 			}
 
 			var resp SACreateResp
@@ -285,7 +285,7 @@ func saGenCmd() *cobra.Command {
 					},
 				})
 				if err != nil {
-					return fmt.Errorf("sa gen: while creating service account: %w", err)
+					return fmt.Errorf("sa gen-rsa: while creating service account: %w", err)
 				}
 				fmt.Fprintf(os.Stdout, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
 			} else {
@@ -293,7 +293,7 @@ func saGenCmd() *cobra.Command {
 				// creating it again.
 				err = deleteServiceAccount(conf.APIURL, conf.APIKey, existingSA.ID)
 				if err != nil {
-					return fmt.Errorf("sa gen: while deleting existing service account: %w", err)
+					return fmt.Errorf("sa gen-rsa: while deleting existing service account: %w", err)
 				}
 
 				resp, err = createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
@@ -305,20 +305,13 @@ func saGenCmd() *cobra.Command {
 					},
 				})
 				if err != nil {
-					return fmt.Errorf("sa gen: while creating service account: %w", err)
+					return fmt.Errorf("sa gen-rsa: while creating service account: %w", err)
 				}
-				fmt.Fprintf(os.Stdout, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
+				fmt.Fprintf(os.Stderr, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
 			}
 
-			// Saving priv key to ./svcacct.pem
-			if resp.PrivateKey != "" {
-				if err := os.WriteFile("svcacct.pem", []byte(resp.PrivateKey), 0600); err != nil {
-					return fmt.Errorf("sa gen: while writing private key to svcacct.pem: %w", err)
-				}
-				fmt.Fprintln(os.Stdout, "Private key saved to ./svcacct.pem")
-			} else {
-				fmt.Fprintln(os.Stdout, "No private key was returned, this is expected for OIDC Service Accounts.")
-			}
+			// Show the private key.
+			fmt.Fprintf(os.Stdout, "%s\n", resp.PrivateKey)
 
 			return nil
 		},
