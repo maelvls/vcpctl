@@ -249,6 +249,13 @@ func saGenRSACmd() *cobra.Command {
 			Venafi Control Plane. If the Service Account already exists, it will
 			be updated. If it does not exist, it will be created.
 
+			The output is a valid PEM-encoded RSA private key that can be used
+			to authenticate with the Firefly Configurations, e.g. in
+
+			  vcpctl sa gen-rsa --name my-sa | \
+			    kubectl create secret generic venafi-credentials \
+			    --from-file=svc-acct.key=/dev/stdin
+
 			Example:
 			  vcpctl sa gen-rsa --name maelvls
 		`),
