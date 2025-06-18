@@ -56,7 +56,7 @@ type FireflyConfig struct {
 }
 
 type Policy struct {
-	ID                string       `json:"id"`
+	ID                string       `json:"id,omitempty"`
 	Name              string       `json:"name"`
 	ValidityPeriod    string       `json:"validityPeriod"`
 	Subject           Subject      `json:"subject"`
@@ -64,8 +64,8 @@ type Policy struct {
 	KeyUsages         []string     `json:"keyUsages"`
 	ExtendedKeyUsages []string     `json:"extendedKeyUsages"`
 	KeyAlgorithm      KeyAlgorithm `json:"keyAlgorithm"`
-	CreationDate      string       `json:"creationDate"`
-	ModificationDate  string       `json:"modificationDate"`
+	CreationDate      string       `json:"creationDate,omitempty"`
+	ModificationDate  string       `json:"modificationDate,omitempty"`
 }
 
 type KeyAlgorithm struct {
@@ -74,10 +74,10 @@ type KeyAlgorithm struct {
 }
 
 type SANs struct {
-	DNSNames                   CommonName `json:"dnsNames"`
-	IPAddresses                CommonName `json:"ipAddresses"`
-	RFC822Names                CommonName `json:"rfc822Names"`
-	UniformResourceIdentifiers CommonName `json:"uniformResourceIdentifiers"`
+	DNSNames                   CommonName `json:"dnsNames" yaml:"dnsNames,flow"`
+	IPAddresses                CommonName `json:"ipAddresses" yaml:"ipAddresses,flow"`
+	RFC822Names                CommonName `json:"rfc822Names" yaml:"rfc822Names,flow"`
+	UniformResourceIdentifiers CommonName `json:"uniformResourceIdentifiers" yaml:"uniformResourceIdentifiers,flow"`
 }
 
 type CommonName struct {
@@ -89,11 +89,11 @@ type CommonName struct {
 }
 
 type SubCaProvider struct {
-	ID                 string `json:"id"`
+	ID                 string `json:"id,omitempty"`
 	Name               string `json:"name"`
 	CaType             string `json:"caType"`
-	CaAccountID        string `json:"caAccountId"`
-	CaProductOptionID  string `json:"caProductOptionId"`
+	CaAccountID        string `json:"caAccountId" yaml:"caAccountId,omitempty"`
+	CaProductOptionID  string `json:"caProductOptionId" yaml:"caProductOptionId,omitempty"`
 	ValidityPeriod     string `json:"validityPeriod"`
 	CommonName         string `json:"commonName"`
 	Organization       string `json:"organization"`
@@ -159,7 +159,8 @@ func getToolConfig() (ToolConf, error) {
 }
 
 func saLsCmd() *cobra.Command {
-	return &cobra.Command{
+	var outputFormat string
+	cmd := &cobra.Command{
 		Use:   "ls",
 		Short: "List Service Accounts",
 		Long: undent.Undent(`
@@ -179,21 +180,36 @@ func saLsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("sa ls: while listing service accounts: %w", err)
 			}
-			var rows [][]string
-			for _, sa := range svcaccts {
-				rows = append(rows, []string{
-					sa.Name,
-					sa.ID,
-					sa.AuthenticationType,
-				})
+
+			switch outputFormat {
+			case "json":
+				b, err := json.MarshalIndent(svcaccts, "", "  ")
+				if err != nil {
+					return fmt.Errorf("sa ls: while marshaling service accounts to JSON: %w", err)
+				}
+				fmt.Println(string(b))
+				return nil
+			case "table":
+				var rows [][]string
+				for _, sa := range svcaccts {
+					rows = append(rows, []string{
+						sa.Name,
+						sa.ID,
+						sa.AuthenticationType,
+					})
+				}
+				t := table.New().
+					Headers("Service Account", "Client ID", "Authentication Type").
+					Rows(rows...)
+				fmt.Println(t.String())
+				return nil
+			default:
+				return fmt.Errorf("sa ls: invalid output format: %s", outputFormat)
 			}
-			t := table.New().
-				Headers("Service Account", "Client ID", "Authentication Type").
-				Rows(rows...)
-			fmt.Println(t.String())
-			return nil
 		},
 	}
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, table)")
+	return cmd
 }
 
 func saCmd() *cobra.Command {
@@ -208,9 +224,9 @@ func saCmd() *cobra.Command {
 
 			Example:
 			  vcpctl sa ls
-			  vcpctl sa create "My Service Account"
-			  vcpctl sa delete "My Service Account"
-			  vcpctl set-service-account my-config "My Service Account"
+			  vcpctl sa gen my-sa
+			  vcpctl sa delete my-sa
+			  vcpctl set-service-account my-config my-sa
 		`),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -218,32 +234,33 @@ func saCmd() *cobra.Command {
 	cmd.AddCommand(
 		saLsCmd(),
 		saRmCmd(),
-		saSetCmd(),
+		saGenCmd(),
 	)
 	return cmd
 }
 
-func saSetCmd() *cobra.Command {
+func saGenCmd() *cobra.Command {
 	var saName, configName string
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Creates or updates a Service Account",
+		Use:   "gen",
+		Short: "Generates the service account private key",
 		Long: undent.Undent(`
-			Creates or updates a Service Account. If the Service Account already
-			exists, it will be updated. If it does not exist, it will be created.
+			Generates a private key and registers it as a Service Account in
+			Venafi Control Plane. If the Service Account already exists, it will
+			be updated. If it does not exist, it will be created.
 
 			Example:
-			  vcpctl sa set --name maelvls
+			  vcpctl sa gen --name maelvls
 		`),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if saName == "" {
-				return fmt.Errorf("sa set: --name flag is required")
+				return fmt.Errorf("sa gen: --name flag is required")
 			}
 			conf, err := getToolConfig()
 			if err != nil {
-				return fmt.Errorf("sa set: while getting config %w", err)
+				return fmt.Errorf("sa gen: while getting config %w", err)
 			}
 
 			// Does it already exist?
@@ -254,7 +271,7 @@ func saSetCmd() *cobra.Command {
 			case err == nil:
 				// Exists, we will be updating it.
 			default:
-				return fmt.Errorf("sa set: while checking if service account exists: %w", err)
+				return fmt.Errorf("sa gen: while checking if service account exists: %w", err)
 			}
 
 			var resp SACreateResp
@@ -268,13 +285,17 @@ func saSetCmd() *cobra.Command {
 					},
 				})
 				if err != nil {
-					return fmt.Errorf("sa set: while creating service account: %w", err)
+					return fmt.Errorf("sa gen: while creating service account: %w", err)
 				}
 				fmt.Fprintf(os.Stdout, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
 			} else {
 				// Update the existing service account by removing the old and
 				// creating it again.
-				deleteServiceAccount(conf.APIURL, conf.APIKey, existingSA.Name)
+				err = deleteServiceAccount(conf.APIURL, conf.APIKey, existingSA.ID)
+				if err != nil {
+					return fmt.Errorf("sa gen: while deleting existing service account: %w", err)
+				}
+
 				resp, err = createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
 					Name:               saName,
 					Owner:              configName,
@@ -284,7 +305,7 @@ func saSetCmd() *cobra.Command {
 					},
 				})
 				if err != nil {
-					return fmt.Errorf("sa set: while creating service account: %w", err)
+					return fmt.Errorf("sa gen: while creating service account: %w", err)
 				}
 				fmt.Fprintf(os.Stdout, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
 			}
@@ -292,7 +313,7 @@ func saSetCmd() *cobra.Command {
 			// Saving priv key to ./svcacct.pem
 			if resp.PrivateKey != "" {
 				if err := os.WriteFile("svcacct.pem", []byte(resp.PrivateKey), 0600); err != nil {
-					return fmt.Errorf("sa set: while writing private key to svcacct.pem: %w", err)
+					return fmt.Errorf("sa gen: while writing private key to svcacct.pem: %w", err)
 				}
 				fmt.Fprintln(os.Stdout, "Private key saved to ./svcacct.pem")
 			} else {
@@ -303,7 +324,6 @@ func saSetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&saName, "name", "", "Name of the Service Account")
-	cmd.Flags().StringVar(&configName, "config", "", "Name of the Firefly Configuration")
 	return cmd
 }
 
@@ -419,6 +439,291 @@ func lsCmd() *cobra.Command {
 			fmt.Println(t.String())
 			return nil
 		},
+	}
+}
+
+func subcaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "subca",
+		Short: "Manage SubCA Providers",
+		Long: undent.Undent(`
+			Manage SubCA Providers. SubCA Providers are used to issue certificates
+			from a SubCA. You can list, create, delete, and set a SubCA Provider
+			for a Firefly Configuration.
+
+			Example:
+			  vcpctl subca ls
+			  vcpctl subca create --name foo
+			  vcpctl subca rm foo
+			  vcpctl subca pull foo
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.AddCommand(
+		subcaLsCmd(),
+		subcaRmCmd(),
+	)
+	return cmd
+}
+
+func subcaLsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ls",
+		Short: "List SubCA Providers",
+		Long: undent.Undent(`
+			List SubCA Providers. SubCA Providers are used to issue certificates
+			from a SubCA. You can list, create, delete, and set a SubCA Provider
+			for a Firefly Configuration.
+
+			Example:
+			  vcpctl subca ls
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("subca ls: while getting config %w", err)
+			}
+			providers, err := getSubCaProviders(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("subca ls: while listing subCA providers: %w", err)
+			}
+
+			var rows [][]string
+			for _, provider := range providers {
+				rows = append(rows, []string{
+					provider.Name,
+					provider.ID,
+					provider.CaType,
+					provider.CaAccountID,
+					provider.CaProductOptionID,
+				})
+			}
+			t := table.New().
+				Headers("SubCA Provider", "ID", "CA Type", "CA Account ID", "CA Product Option ID").
+				Rows(rows...)
+
+			fmt.Println(t.String())
+
+			return nil
+		},
+	}
+	return cmd
+}
+
+func subcaRmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rm <subca-provider-name-or-id>",
+		Short: "Remove a SubCA Provider",
+		Long: undent.Undent(`
+			Remove a SubCA Provider. This will delete the SubCA Provider from
+			Venafi Control Plane. You cannot remove a SubCA Provider that is
+			attached to a Firefly Configuration.
+		`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("rm: expected 1 argument, got %d", len(args))
+			}
+			providerNameOrID := args[0]
+
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("rm: while getting config %w", err)
+			}
+
+			err = removeSubCaProvider(conf.APIURL, conf.APIKey, providerNameOrID)
+			if err != nil {
+				return fmt.Errorf("rm: %w", err)
+			}
+
+			return nil
+		},
+	}
+	return cmd
+}
+
+func policyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "policy",
+		Short: "Manage Policies",
+		Long: undent.Undent(`
+			Manage Policies. Policies are used to define the rules for issuing
+			certificates. You can list, create, delete, and set a Policy for a
+			Firefly Configuration.
+
+			Example:
+			  vcpctl policy ls
+			  vcpctl policy rm foo
+		`),
+	}
+	cmd.AddCommand(
+		policyLsCmd(),
+		policyRmCmd(),
+	)
+	return cmd
+}
+
+func policyLsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ls",
+		Short: "List Policies",
+		Long: undent.Undent(`
+			List Policies. Policies are used to define the rules for issuing
+			certificates.
+
+			Example:
+			  vcpctl policy ls
+		`),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("policy ls: while getting config %w", err)
+			}
+			policies, err := getPolicies(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("policy ls: while listing policies: %w", err)
+			}
+			var rows [][]string
+			for _, policy := range policies {
+				rows = append(rows, []string{
+					policy.Name,
+					policy.ID,
+					policy.ValidityPeriod,
+					strings.Join(policy.Subject.CommonName.DefaultValues, ", "),
+					strings.Join(policy.SANs.DNSNames.DefaultValues, ", "),
+				})
+			}
+
+			t := table.New().
+				Headers("Policy", "ID", "Validity Period", "Common Name", "DNS Names").
+				Rows(rows...)
+
+			fmt.Println(t.String())
+
+			return nil
+		},
+	}
+	return cmd
+}
+
+func policyRmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rm <policy-name-or-id>",
+		Short: "Remove a Policy",
+		Long: undent.Undent(`
+			Remove a Policy. This will delete the Policy from Venafi Control Plane.
+			You cannot remove a Policy that is attached to a Firefly Configuration.
+			You must first remove the Policy from the Firefly Configuration.
+
+			Example:
+			  vcpctl policy rm my-policy
+		`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("rm: expected 1 argument, got %d", len(args))
+			}
+			policyNameOrID := args[0]
+			conf, err := getToolConfig()
+			if err != nil {
+				return fmt.Errorf("rm: while getting config %w", err)
+			}
+			err = removePolicy(conf.APIURL, conf.APIKey, policyNameOrID)
+			if err != nil {
+				return fmt.Errorf("rm: %w", err)
+			}
+			fmt.Fprintf(os.Stdout, "Policy '%s' deleted successfully.\n", policyNameOrID)
+			return nil
+		},
+	}
+	return cmd
+}
+
+func removePolicy(apiURL, apiKey, policyName string) error {
+	// Find the policy by name.
+	policy, err := getPolicyByName(apiURL, apiKey, policyName)
+	if err != nil {
+		return fmt.Errorf("removePolicy: while getting policy by name %q: %w", policyName, err)
+	}
+
+	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/policies/"+policy.ID, nil)
+	if err != nil {
+		return fmt.Errorf("removePolicy: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("removePolicy: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusNoContent, http.StatusOK:
+		// Successfully removed.
+		return nil
+	default:
+		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+	}
+}
+
+func getSubCaProviders(apiURL, apiKey string) ([]SubCaProvider, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getSubCaProviders: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getSubCaProviders: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue.
+	default:
+		return nil, fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+	}
+
+	var result struct {
+		SubCaProviders []SubCaProvider `json:"subCaProviders"`
+	}
+
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("getSubCaProviders: while reading response body: %w", err)
+	}
+	if err := json.Unmarshal(bytes, &result); err != nil {
+		return nil, fmt.Errorf("getSubCaProviders: while decoding response: %w, body was: %s", err, bytes)
+	}
+
+	return result.SubCaProviders, nil
+}
+
+func removeSubCaProvider(apiURL, apiKey, providerNameOrID string) error {
+	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/subcaproviders/"+providerNameOrID, nil)
+	if err != nil {
+		return fmt.Errorf("removeSubCaProvider: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("removeSubCaProvider: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusNoContent, http.StatusOK:
+		// Successfully removed.
+		return nil
+	default:
+		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -594,9 +899,10 @@ func pushCmd() *cobra.Command {
 
 			// Read the Firefly configuration.
 			var updatedConfig FireflyConfig
-			if err := yaml.Unmarshal(bytes, &updatedConfig); err != nil {
+			if err := yaml.UnmarshalWithOptions(bytes, &updatedConfig, yaml.Strict()); err != nil {
 				return fmt.Errorf("push: while decoding Firefly configuration from '%s': %w", path, err)
 			}
+			updatedConfig = hideMisleadingFields(updatedConfig)
 
 			if updatedConfig.Name == "" {
 				return fmt.Errorf("push: Firefly configuration must have a 'name' field set")
@@ -656,7 +962,7 @@ func getPolicyByName(apiURL, apiKey, nameOrID string) (Policy, error) {
 					"- %s (%s) created on %s\n"+
 					"- %s (%s) created on %s\n"+
 					"Please remove one of the service accounts first. You can run:\n"+
-					"    vcpctl sa delete %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
+					"    vcpctl sa rm %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
 			}
 			found = cur
 		}
@@ -706,7 +1012,7 @@ func getSubCaProviderByName(apiURL, apiKey, name string) (SubCaProvider, error) 
 					"- %s (%s)\n"+
 					"- %s (%s)\n"+
 					"Please remove one of the subCA providers first. You can run:\n"+
-					"    vcpctl subca delete %s", name, provider.Name, provider.ID, found.Name, found.ID, found.ID)
+					"    vcpctl subca rm %s", name, provider.Name, provider.ID, found.Name, found.ID, found.ID)
 			}
 			found = provider
 		}
@@ -752,7 +1058,7 @@ func getConfigByName(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
 					"- %s (%s) created on %s\n"+
 					"- %s (%s) created on %s\n"+
 					"Please remove one of the configurations first. You can run:\n"+
-					"    vcpctl delete %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
+					"    vcpctl rm %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
 			}
 			found = cur
 		}
@@ -858,7 +1164,10 @@ func pullCmd() *cobra.Command {
 				return fmt.Errorf("pull: while fetching service accounts: %w", err)
 			}
 
-			yamlData, err := yaml.MarshalWithOptions(originalConfig, yaml.WithComment(annotateSvcAccts(originalConfig, knownSvcaccts)))
+			yamlData, err := yaml.MarshalWithOptions(
+				hideMisleadingFields(originalConfig),
+				yaml.WithComment(annotateSvcAccts(originalConfig, knownSvcaccts)),
+			)
 			if err != nil {
 				return err
 			}
@@ -868,6 +1177,36 @@ func pullCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// Zero out the config ID, subCA provider ID, and policy IDs in the
+// configuration. Service account IDs are kept. Useful for removing misleading
+// fields before marshalling to YAML.
+func hideMisleadingFields(config FireflyConfig) FireflyConfig {
+	c := config
+
+	var policies []Policy
+	for i := range config.Policies {
+		policies = append(policies, config.Policies[i])
+	}
+	c.Policies = policies
+
+	// Zero out all IDs in the configuration, so that we can use it to create
+	// a new configuration without any IDs.
+	c.ID = ""
+	c.CreationDate = ""
+	c.ModificationDate = ""
+	c.SubCaProvider.ID = ""
+	c.SubCaProvider.CaAccountID = ""
+	c.SubCaProvider.CaProductOptionID = ""
+
+	for i := range c.Policies {
+		c.Policies[i].ID = ""
+		c.Policies[i].CreationDate = ""
+		c.Policies[i].ModificationDate = ""
+	}
+
+	return c
 }
 
 // createConfig creates a new Firefly configuration or updates an
@@ -1020,7 +1359,7 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
 
-	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), pullCmd(), saCmd())
+	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), pullCmd(), saCmd(), subcaCmd(), policyCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -1186,7 +1525,10 @@ func editConfig(apiURL, apiKey, name string) error {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
 
-	yamlData, err := yaml.MarshalWithOptions(config, yaml.WithComment(annotateSvcAccts(config, knownSvcaccts)))
+	yamlData, err := yaml.MarshalWithOptions(
+		hideMisleadingFields(config),
+		yaml.WithComment(annotateSvcAccts(config, knownSvcaccts)),
+	)
 	if err != nil {
 		return err
 	}
@@ -1220,9 +1562,35 @@ edit:
 	if err != nil {
 		return err
 	}
+
+	err = validateYAMLFireflyConfig(modifiedRaw)
+	if err != nil {
+		notice := "# NOTICE: The configuration you have modified is not valid.\n" +
+			"# NOTICE: Please fix the errors and re-edit the configuration.\n" +
+			"# NOTICE: The errors are:\n" + err.Error() + "\n"
+
+		// Prepend the notice to the modified YAML.
+		tmpfile.Seek(0, 0)
+		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
+		if err != nil {
+			return fmt.Errorf("while writing notice to file: %w", err)
+		}
+		goto edit
+	}
+
 	var modified FireflyConfig
-	if err := yaml.Unmarshal(modifiedRaw, &modified); err != nil {
-		return err
+	if err := yaml.UnmarshalWithOptions(modifiedRaw, &modified, yaml.Strict()); err != nil {
+		notice := "# NOTICE: The configuration you have modified is not valid.\n" +
+			"# NOTICE: Please fix the errors and re-edit the configuration.\n" +
+			"# NOTICE: The errors are:\n" + err.Error() + "\n"
+
+		// Prepend the notice to the modified YAML.
+		tmpfile.Seek(0, 0)
+		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
+		if err != nil {
+			return fmt.Errorf("while writing notice to file: %w", err)
+		}
+		goto edit
 	}
 
 	err = createOrUpdateConfigAndDeps(apiURL, apiKey, modified)
@@ -1586,12 +1954,12 @@ type PolicyPatch struct {
 }
 
 type Subject struct {
-	CommonName         CommonName `json:"commonName"`
-	Country            CommonName `json:"country"`
-	Locality           CommonName `json:"locality"`
-	Organization       CommonName `json:"organization"`
-	OrganizationalUnit CommonName `json:"organizationalUnit"`
-	StateOrProvince    CommonName `json:"stateOrProvince"`
+	CommonName         CommonName `json:"commonName" yaml:"commonName,flow"`
+	Country            CommonName `json:"country" yaml:"country,flow"`
+	Locality           CommonName `json:"locality" yaml:"locality,flow"`
+	Organization       CommonName `json:"organization" yaml:"organization,flow"`
+	OrganizationalUnit CommonName `json:"organizationalUnit" yaml:"organizationalUnit,flow"`
+	StateOrProvince    CommonName `json:"stateOrProvince" yaml:"stateOrProvince,flow"`
 }
 
 func fullToPatchPolicy(full Policy) PolicyPatch {
@@ -1794,12 +2162,12 @@ func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateRes
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
-	case http.StatusCreated | http.StatusOK:
+	case http.StatusCreated, http.StatusOK:
 		// The creation was successful. Continue below to decode the response.
 	case http.StatusConflict:
 		return SACreateResp{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
 	default:
-		return SACreateResp{}, fmt.Errorf("bad request, please check the service account fields: %w", parseJSONErrorOrDumpBody(resp))
+		return SACreateResp{}, fmt.Errorf("http %d: please check the service account fields: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result SACreateResp
