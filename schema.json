@@ -11,7 +11,7 @@
     "https://json-schema.org/draft/2020-12/vocab/content": true
   },
   "title": "Firefly Configuration",
-  "description": "Schema for the Firefly configuration. See: https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
+  "description": "Schema for the Firefly configuration. Inspired from: https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
   "unevaluatedProperties": false,
   "type": "object",
   "properties": {

@@ -1955,7 +1955,8 @@ func parseJSONErrorOrDumpBody(resp *http.Response) error {
 
 	var venafiErr VenafiError
 	if err := json.Unmarshal(body, &venafiErr); err != nil {
-		return fmt.Errorf("while parsing JSON error: %w, body was: %s", err, string(body))
+		logutil.Debugf("parseJSONErrorOrDumpBody: while decoding JSON error response: %s", err)
+		return fmt.Errorf("unexpected error: %s", string(body))
 	}
 
 	return venafiErr
