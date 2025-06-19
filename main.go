@@ -17,12 +17,59 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/maelvls/undent"
+	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
 )
 
 const (
 	userAgent = "vcpctl/v0.0.1"
 )
+
+// Replace the old flag-based main() with cobra execution.
+func main() {
+	var apiURLFlag string
+	const defaultAPIURL = "https://api.venafi.cloud"
+
+	rootCmd := &cobra.Command{
+		Use:   "vcpctl",
+		Short: "A CLI tool for Venafi configurations",
+		Long: undent.Undent(`
+			vcpctl is a CLI tool for managing Venafi Control Plane configurations.
+			To configure it, set the APIKEY environment variable to your
+			Venafi Control Plane API key. You can also set the APIURL environment variable
+			to override the default API URL.
+
+			Usage:
+			  vcpctl ls
+			  vcpctl push config.yaml
+			  vcpctl edit <config-name>
+			  vcpctl pull <config-name> >config.yaml
+			  vcpctl set-service-account <config-name> <service-account-name>
+			  vcpctl sa ls
+			  vcpctl sa rm
+			  vcpctl sa gen-rsa
+			  vcpctl subca ls
+			  vcpctl subca rm
+			  vcpctl policy ls
+			  vcpctl policy rm
+
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
+		},
+	}
+
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
+	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
+	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), pullCmd(), saCmd(), subcaCmd(), policyCmd())
+
+	if err := rootCmd.Execute(); err != nil {
+		logutil.Errorf("%v", err)
+		os.Exit(1)
+	}
+}
 
 type ClientAuthentication struct {
 	Type string   `json:"type"`
@@ -294,7 +341,7 @@ func saGenRSACmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("sa gen-rsa: while creating service account: %w", err)
 				}
-				fmt.Fprintf(os.Stdout, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
+				logutil.Infof("Service Account '%s' created.\nClient ID: %s", saName, resp.ID)
 			} else {
 				// Update the existing service account by removing the old and
 				// creating it again.
@@ -314,11 +361,11 @@ func saGenRSACmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("sa gen-rsa: while creating service account: %w", err)
 				}
-				fmt.Fprintf(os.Stderr, "Service Account '%s' created.\nClient ID: %s\n", saName, resp.ID)
+				logutil.Infof("Service Account '%s' updated.\nClient ID: %s", saName, resp.ID)
 			}
 
 			// Show the private key.
-			fmt.Fprintf(os.Stdout, "%s\n", resp.PrivateKey)
+			fmt.Println(resp.PrivateKey)
 
 			return nil
 		},
@@ -635,7 +682,7 @@ func policyRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			fmt.Fprintf(os.Stdout, "Policy '%s' deleted successfully.\n", policyNameOrID)
+			logutil.Infof("Policy '%s' deleted successfully.", policyNameOrID)
 			return nil
 		},
 	}
@@ -699,7 +746,7 @@ func getSubCaProviders(apiURL, apiKey string) ([]SubCaProvider, error) {
 		return nil, fmt.Errorf("getSubCaProviders: while reading response body: %w", err)
 	}
 	if err := json.Unmarshal(bytes, &result); err != nil {
-		return nil, fmt.Errorf("getSubCaProviders: while decoding response: %w, body was: %s", err, bytes)
+		return nil, fmt.Errorf("getSubCaProviders: while decoding %s response: %w, body was: %s", resp.Status, err, string(bytes))
 	}
 
 	return result.SubCaProviders, nil
@@ -803,7 +850,7 @@ func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 
 	// Is this SA already in the configuration?
 	if slices.Contains(config.ServiceAccountIDs, sa.ID) {
-		fmt.Fprintf(os.Stderr, "Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.\n", sa.Name, sa.ID, config.Name)
+		logutil.Infof("Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.", sa.Name, sa.ID, config.Name)
 		return nil
 	}
 
@@ -936,14 +983,13 @@ func getSubCaProvider(apiURL, apiKey, id string) (SubCaProvider, error) {
 		var result SubCaProvider
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			body, _ := io.ReadAll(resp.Body)
-			return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while decoding response: %w, body: %s", err, body)
+			return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 		}
 		return result, nil
 	case http.StatusNotFound:
 		return SubCaProvider{}, NotFound{NameOrID: id}
 	default:
-		body, _ := io.ReadAll(resp.Body)
-		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: returned status code %s, body: %s", resp.Status, body)
+		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -992,8 +1038,7 @@ func getSubCaProviderByName(apiURL, apiKey, name string) (SubCaProvider, error) 
 	case http.StatusOK:
 		// Continue.
 	default:
-		body, _ := io.ReadAll(resp.Body)
-		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: returned status code %s, body: %s", resp.Status, body)
+		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -1041,7 +1086,7 @@ func getConfigByName(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
 	case http.StatusOK:
 		// Continue.
 	default:
-		return FireflyConfig{}, parseJSONErrorOrDumpBody(resp)
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 	var result struct {
 		Configurations []FireflyConfig `json:"configurations"`
@@ -1115,15 +1160,13 @@ func getPolicy(apiURL, apiKey, id string) (Policy, error) {
 	case http.StatusOK:
 		var result Policy
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			body, _ := io.ReadAll(resp.Body)
-			return Policy{}, fmt.Errorf("getPolicy: while decoding response: %w, body: %s", err, body)
+			return Policy{}, fmt.Errorf("getPolicy: while decoding %s response: %w", resp.Status, err)
 		}
 		return result, nil
 	case http.StatusNotFound:
 		return Policy{}, &NotFound{NameOrID: id}
 	default:
-		body, _ := io.ReadAll(resp.Body)
-		return Policy{}, fmt.Errorf("getPolicy: returned status code %s, body: %s", resp.Status, body)
+		return Policy{}, fmt.Errorf("getPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -1173,7 +1216,7 @@ func pullCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(os.Stdout, string(yamlData))
+			fmt.Println(string(yamlData))
 
 			return nil
 		},
@@ -1264,17 +1307,26 @@ func createConfig(apiURL, apiKey string, config FireflyConfig) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("createConfig: returned status code %s, body: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusCreated, http.StatusOK:
+		// Continue below.
+	default:
+		return "", fmt.Errorf("createConfig: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
+
 	var result struct {
 		ID string `json:"id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("createConfig: while decoding response: %w, body: %s", err, body)
+
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("createConfig: while reading response body: %w", err)
 	}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return "", fmt.Errorf("createConfig: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+	}
+
 	return result.ID, nil
 }
 
@@ -1296,16 +1348,24 @@ func createFireflyPolicy(apiURL, apiKey string, policy Policy) (string, error) {
 		return "", fmt.Errorf("createFireflyPolicy: while making request: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("createFireflyPolicy: returned status code %s, body: %s", resp.Status, body)
+
+	switch resp.StatusCode {
+	case http.StatusCreated, http.StatusOK:
+		// Continue below.
+	default:
+		return "", fmt.Errorf("createFireflyPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
+
 	var result struct {
 		ID string `json:"id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("createFireflyPolicy: while decoding response: %w, body: %s", err, body)
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("createFireflyPolicy: while reading response body: %w", err)
+	}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return "", fmt.Errorf("createFireflyPolicy: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 	return result.ID, nil
 }
@@ -1329,43 +1389,25 @@ func createSubCaProvider(apiURL, apiKey string, provider SubCaProvider) (string,
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("createSubCaProvider: returned status code %s, body: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusCreated, http.StatusOK:
+		// Continue below.
+	default:
+		return "", fmt.Errorf("createSubCaProvider: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
+
 	var result struct {
 		ID string `json:"id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("createSubCaProvider: while decoding response: %w, body: %s", err, body)
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("createSubCaProvider: while reading response body: %w", err)
+	}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return "", fmt.Errorf("createSubCaProvider: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 	return result.ID, nil
-}
-
-// Replace the old flag-based main() with cobra execution.
-func main() {
-	var apiURLFlag string
-	const defaultAPIURL = "https://api.venafi.cloud"
-
-	rootCmd := &cobra.Command{
-		Use:           "vcpctl",
-		Short:         "A CLI tool for Venafi configurations",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
-		},
-	}
-
-	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
-
-	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), pullCmd(), saCmd(), subcaCmd(), policyCmd())
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }
 
 type Config struct {
@@ -1399,8 +1441,12 @@ func listConfigs(apiURL, apiKey string) ([]Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while reading response: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("/v1/distributedissuers/configurations: returned status code %s, body: %s", resp.Status, b.String())
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue below.
+	default:
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	if err := json.NewDecoder(b).Decode(&result); err != nil {
@@ -1444,10 +1490,11 @@ func getConfig(apiURL, apiKey, id string) (FireflyConfig, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		// Dump body.
-		body, _ := io.ReadAll(resp.Body)
-		return FireflyConfig{}, fmt.Errorf("returned status code %s, body: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue below.
+	default:
+		return FireflyConfig{}, fmt.Errorf("getConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var fireflyConfig FireflyConfig
@@ -1597,8 +1644,8 @@ edit:
 	err = createOrUpdateConfigAndDeps(apiURL, apiKey, modified)
 	if errors.Is(err, errPINRequired) {
 		// If the PIN is required, we need to ask the user to fill it in.
-		fmt.Fprintln(os.Stderr, "ERROR: The subCaProvider.pkcs11.pin field is required.")
-		fmt.Fprintln(os.Stderr, "Reopening the editor so that you can fill it in.")
+		logutil.Errorf("ERROR: The subCaProvider.pkcs11.pin field is required.")
+		logutil.Errorf("Reopening the editor so that you can fill it in.")
 
 		// Add the notice to the top of the file.
 		notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
@@ -1718,19 +1765,19 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 				return fmt.Errorf("while creating Firefly policy: %w", err)
 			}
 			updatedConfig.Policies[i].ID = id
-			fmt.Fprintf(os.Stderr, "Policy '%s' created with ID '%s'.\n", updatedConfig.Policies[i].Name, id)
+			logutil.Infof("Policy '%s' created with ID '%s'.", updatedConfig.Policies[i].Name, id)
 		} else {
 			updatedConfig.Policies[i].ID = existingPolicy.ID
 
 			// If the policy is not equal to the original one, we need to update it.
 			d := ANSIDiff(fullToPatchPolicy(existingPolicy), fullToPatchPolicy(updatedConfig.Policies[i]))
 			if d == "" {
-				fmt.Printf("Policy '%s' is unchanged, skipping update.\n", updatedConfig.Policies[i].Name)
+				logutil.Infof("Policy '%s' is unchanged, skipping update.", updatedConfig.Policies[i].Name)
 				continue
 			}
 
 			// If the policy is different, we need to update it.
-			fmt.Fprintf(os.Stderr, "Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
+			logutil.Infof("Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
 
 			// Patch the policy.
 			err = patchPolicy(apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
@@ -1766,14 +1813,14 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 			return fmt.Errorf("while creating SubCA provider: %w", err)
 		}
 		updatedConfig.SubCaProvider.ID = id
-		fmt.Fprintf(os.Stderr, "SubCA provider '%s' created with ID '%s'.\n", updatedConfig.SubCaProvider.Name, id)
+		logutil.Infof("SubCA provider '%s' created with ID '%s'.", updatedConfig.SubCaProvider.Name, id)
 	} else {
 		updatedConfig.SubCaProvider.ID = existingSubCa.ID
 
 		// If the SubCA provider is not equal to the original one, we need to update it.
 		diff := ANSIDiff(fullToPatchSubCAProvider(existingSubCa), fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
 		if diff == "" {
-			fmt.Printf("SubCA provider '%s' is unchanged, skipping update.\n", updatedConfig.SubCaProvider.Name)
+			logutil.Infof("SubCA provider '%s' is unchanged, skipping update.", updatedConfig.SubCaProvider.Name)
 		} else {
 			// The `subCaProvider.pkcs11.pin` field is never returned by the API, so
 			// we need to check if the user has changed it and patch it separately.
@@ -1788,7 +1835,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 			}
 
 			// If the SubCA provider is different, we need to update it.
-			fmt.Fprintf(os.Stderr, "SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
+			logutil.Infof("SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
 
 			// Patch the SubCA provider.
 			err = patchSubCaProvider(apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
@@ -1808,22 +1855,22 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 			return fmt.Errorf("while creating Firefly configuration: %w", err)
 		}
 
-		fmt.Printf("Configuration '%s' created with ID '%s'.\n", updatedConfig.Name, confID)
+		logutil.Infof("Configuration '%s' created with ID '%s'.", updatedConfig.Name, confID)
 	} else {
 		// The configuration exists, we need to patch it.
 		d := ANSIDiff(fullToPatchConfig(existingConfig), fullToPatchConfig(updatedConfig))
 		if d == "" {
-			fmt.Printf("Configuration '%s' is unchanged, skipping update.\n", updatedConfig.Name)
+			logutil.Infof("Configuration '%s' is unchanged, skipping update.", updatedConfig.Name)
 			return nil
 		} else {
-			fmt.Fprintf(os.Stderr, "Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
+			logutil.Infof("Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
 
 			patch := fullToPatchConfig(updatedConfig)
 			err = patchConfig(apiURL, apiKey, existingConfig.ID, patch)
 			if err != nil {
 				return fmt.Errorf("while patching Firefly configuration: %w", err)
 			}
-			fmt.Printf("Configuration '%s' updated successfully.\n", updatedConfig.Name)
+			logutil.Infof("Configuration '%s' updated successfully.", updatedConfig.Name)
 		}
 	}
 
@@ -1908,7 +1955,7 @@ func parseJSONErrorOrDumpBody(resp *http.Response) error {
 
 	var venafiErr VenafiError
 	if err := json.Unmarshal(body, &venafiErr); err != nil {
-		return fmt.Errorf("while parsing JSON error: %w, body was: %s", err, body)
+		return fmt.Errorf("while parsing JSON error: %w, body was: %s", err, string(body))
 	}
 
 	return venafiErr
@@ -2042,10 +2089,11 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		// Dump body.
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("returned status code %s, body: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// The request was successful. Continue below to decode the response.
+	default:
+		return nil, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	body := new(bytes.Buffer)
@@ -2055,7 +2103,7 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 
 	var result []ServiceAccount
 	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
-		return nil, fmt.Errorf("while decoding service accounts: %w\n\nBody: %s", err, body.String())
+		return nil, fmt.Errorf("while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
 	}
 
 	return result, nil
@@ -2147,7 +2195,7 @@ func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateRes
 			return SACreateResp{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
 		}
 		sa.Owner = teams[0].ID
-		fmt.Fprintf(os.Stderr, "No owner specified, using the first team '%s' (%s) as the owner.\n", teams[0].Name, teams[0].ID)
+		logutil.Infof("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
 	}
 
 	saJSON, err := json.Marshal(sa)
@@ -2233,9 +2281,13 @@ func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) e
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update failed: %s: %s", resp.Status, body)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// The patch was successful.
+	case http.StatusNotFound:
+		return fmt.Errorf("service account: %w", NotFound{NameOrID: id})
+	default:
+		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	return nil
@@ -2320,7 +2372,7 @@ func getIssuingTemplates(apiURL, apiKey string) ([]CertificateIssuingTemplate, e
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, fmt.Errorf("getIssuingTemplates: unexpected status code %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return nil, fmt.Errorf("got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -2334,7 +2386,7 @@ func getIssuingTemplates(apiURL, apiKey string) ([]CertificateIssuingTemplate, e
 
 	err = json.NewDecoder(bytes.NewReader(body)).Decode(&result)
 	if err != nil {
-		return nil, fmt.Errorf("getIssuingTemplates: while decoding 200 response: %w, body: %s", err, body)
+		return nil, fmt.Errorf("getIssuingTemplates: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 
 	return result.CertificateIssuingTemplates, nil
@@ -2365,11 +2417,14 @@ func getTeams(apiURL, apiKey string) ([]Team, error) {
 		return nil, fmt.Errorf("getTeams: while making request: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		// Dump body.
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("getTeams: unexpected status %d: %s", resp.StatusCode, body)
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue below.
+	default:
+		return nil, fmt.Errorf("getTeams: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
+
 	var result struct {
 		Teams []Team `json:"teams"`
 	}
