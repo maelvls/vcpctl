@@ -1209,12 +1209,13 @@ func pullCmd() *cobra.Command {
 
 			yamlData, err := yaml.MarshalWithOptions(
 				hideMisleadingFields(originalConfig),
-				yaml.WithComment(comments(originalConfig, knownSvcaccts)),
+				yaml.WithComment(svcAcctsComments(originalConfig, knownSvcaccts)),
 				yaml.Indent(4),
 			)
 			if err != nil {
 				return err
 			}
+			yamlData = appendSchemaComment(yamlData)
 
 			fmt.Println(string(yamlData))
 
@@ -1575,11 +1576,12 @@ func editConfig(apiURL, apiKey, name string) error {
 
 	yamlData, err := yaml.MarshalWithOptions(
 		hideMisleadingFields(config),
-		yaml.WithComment(comments(config, knownSvcaccts)),
+		yaml.WithComment(svcAcctsComments(config, knownSvcaccts)),
 	)
 	if err != nil {
 		return err
 	}
+	yamlData = appendSchemaComment(yamlData)
 	tmpfile, err := os.CreateTemp("", "vcp-*.yaml")
 	if err != nil {
 		return err
@@ -1666,13 +1668,8 @@ edit:
 	return nil
 }
 
-func comments(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
+func svcAcctsComments(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
 	var comments = make(map[string][]*yaml.Comment)
-
-	// Add comment at the end of the file with the schema URL.
-	comments["$"] = []*yaml.Comment{
-		yaml.FootComment("", " yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/schema.json"),
-	}
 
 	for i, sa := range config.ServiceAccountIDs {
 		found := false
@@ -2433,4 +2430,21 @@ func getTeams(apiURL, apiKey string) ([]Team, error) {
 		return nil, fmt.Errorf("getTeams: while decoding response: %w", err)
 	}
 	return result.Teams, nil
+}
+
+// For anyone who uses the Red Hat YAML LSP server.
+func appendSchemaComment(b []byte) []byte {
+	return appendLines(b,
+		"# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/schema.json",
+	)
+}
+
+func appendLines(b []byte, line ...string) []byte {
+	if len(line) == 0 {
+		return b
+	}
+	for _, l := range line {
+		b = append(b, []byte("\n"+l+"\n")...)
+	}
+	return b
 }
