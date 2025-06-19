@@ -14,10 +14,15 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/lexer"
+	"github.com/goccy/go-yaml/printer"
 	"github.com/google/go-cmp/cmp"
 	"github.com/maelvls/undent"
 	"github.com/maelvls/vcpctl/logutil"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -1217,7 +1222,7 @@ func pullCmd() *cobra.Command {
 			}
 			yamlData = appendSchemaComment(yamlData)
 
-			fmt.Println(string(yamlData))
+			coloredYAMLPrintf(string(yamlData))
 
 			return nil
 		},
@@ -2447,4 +2452,70 @@ func appendLines(b []byte, line ...string) []byte {
 		b = append(b, []byte("\n"+l+"\n")...)
 	}
 	return b
+}
+
+func coloredYAMLPrintf(yamlBytes string) {
+	// If not a TTY, let's not color the output.
+	if !isatty.IsTerminal(os.Stdout.Fd()) {
+		fmt.Print(yamlBytes)
+		return
+	}
+
+	const escape = "\x1b"
+	format := func(attr color.Attribute) string {
+		return fmt.Sprintf("%s[%dm", escape, attr)
+	}
+
+	tokens := lexer.Tokenize(yamlBytes)
+
+	var p printer.Printer
+	p.LineNumber = false
+	p.LineNumberFormat = func(num int) string {
+		fn := color.New(color.Bold, color.FgHiWhite).SprintFunc()
+		return fn(fmt.Sprintf("%2d | ", num))
+	}
+	p.Bool = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiMagenta),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Number = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiMagenta),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.MapKey = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiCyan),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Anchor = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiYellow),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Alias = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiYellow),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.String = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiGreen),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Comment = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiBlack),
+			Suffix: format(color.Reset),
+		}
+	}
+	writer := colorable.NewColorableStdout()
+	_, _ = writer.Write([]byte(p.PrintTokens(tokens)))
 }

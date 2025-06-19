@@ -11,7 +11,10 @@ require (
 	github.com/spf13/cobra v1.9.1
 )
 
-require github.com/mattn/go-colorable v0.1.14 // indirect
+require (
+	github.com/fatih/color v1.18.0 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+)
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
