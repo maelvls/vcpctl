@@ -2,7 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss/table"
+	"github.com/charmbracelet/fang"
+	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/lipgloss/v2/table"
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/lexer"
@@ -27,14 +35,13 @@ import (
 )
 
 const (
-	userAgent = "vcpctl/v0.0.1"
+	userAgent     = "vcpctl/v0.0.1"
+	defaultAPIURL = "https://api.venafi.cloud"
 )
 
 // Replace the old flag-based main() with cobra execution.
 func main() {
 	var apiURLFlag string
-	const defaultAPIURL = "https://api.venafi.cloud"
-
 	rootCmd := &cobra.Command{
 		Use:   "vcpctl",
 		Short: "A CLI tool for Venafi configurations",
@@ -43,26 +50,25 @@ func main() {
 			To configure it, set the APIKEY environment variable to your
 			Venafi Control Plane API key. You can also set the APIURL environment variable
 			to override the default API URL.
-
-			Usage:
-			  vcpctl ls
-			  vcpctl push config.yaml
-			  vcpctl edit <config-name>
-			  vcpctl pull <config-name> >config.yaml
-			  vcpctl set-service-account <config-name> <service-account-name>
-			  vcpctl sa ls
-			  vcpctl sa rm
-			  vcpctl sa gen-rsa
-			  vcpctl subca ls
-			  vcpctl subca rm
-			  vcpctl policy ls
-			  vcpctl policy rm
-
+		`),
+		Example: undent.Undent(`
+			vcpctl ls
+			vcpctl push config.yaml
+			vcpctl edit <config-name>
+			vcpctl pull <config-name> > config.yaml
+			vcpctl set-service-account <config-name> <service-account-name>
+			vcpctl sa ls
+			vcpctl sa rm
+			vcpctl sa keygen
+			vcpctl subca ls
+			vcpctl subca rm
+			vcpctl policy ls
+			vcpctl policy rm
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+			_ = cmd.Help()
 		},
 	}
 
@@ -70,8 +76,9 @@ func main() {
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), pullCmd(), saCmd(), subcaCmd(), policyCmd())
 
-	if err := rootCmd.Execute(); err != nil {
-		logutil.Errorf("%v", err)
+	ctx := context.Background()
+	err := fang.Execute(ctx, rootCmd)
+	if err != nil {
 		os.Exit(1)
 	}
 }
@@ -186,17 +193,17 @@ type ToolConf struct {
 	APIKey string `json:"apiKey"`
 }
 
-var apiURLFlag string
-
-const defaultAPIURL = "https://api.venafi.cloud"
-
-func getToolConfig() (ToolConf, error) {
+func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	token := os.Getenv("APIKEY")
 	if token == "" {
 		return ToolConf{}, fmt.Errorf("APIKEY environment variable not set")
 	}
 
 	// Priority: --api-url flag > APIURL env var > https://api.venafi.cloud.
+	apiURLFlag, err := cmd.Flags().GetString("api-url")
+	if err != nil {
+		return ToolConf{}, fmt.Errorf("failed to get api-url flag: %w", err)
+	}
 	apiURL := defaultAPIURL
 	if apiURLFlag != "" {
 		apiURL = apiURLFlag
@@ -218,13 +225,13 @@ func saLsCmd() *cobra.Command {
 		Long: undent.Undent(`
 			List Service Accounts. Service Accounts are used to authenticate
 			applications that use the Firefly Configurations.
-			Example:
-			  vcpctl sa ls
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl sa ls
+			vcpctl sa ls -ojson
+		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa ls: while getting config %w", err)
 			}
@@ -252,6 +259,7 @@ func saLsCmd() *cobra.Command {
 				}
 				t := table.New().
 					Headers("Service Account", "Client ID", "Authentication Type").
+					StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
 					Rows(rows...)
 				fmt.Println(t.String())
 				return nil
@@ -269,58 +277,65 @@ func saCmd() *cobra.Command {
 		Use:   "sa",
 		Short: "Manage Service Accounts",
 		Long: undent.Undent(`
-			Manage Service Accounts. Service Accounts are used to authenticate
-			applications that use the Firefly Configurations.
-			You can list, create, delete, and set a Service Account for a Firefly
-			Configuration.
-
-			Example:
-			  vcpctl sa ls
-			  vcpctl sa rm my-sa
-			  vcpctl sa gen-ca --name my-sa
-			  vcpctl set-service-account my-config my-sa
+			Manage Service Accounts.
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl sa ls
+			vcpctl sa ls -ojson
+			vcpctl sa rm <sa-name>
+			vcpctl sa keygen <sa-name>
+			vcpctl set-service-account <config-name> <sa-name>
+		`),
 	}
 	cmd.AddCommand(
 		saLsCmd(),
 		saRmCmd(),
-		saGenRSACmd(),
+		saKeygenCmd(),
+		saGetClientIDCmd(),
+		&cobra.Command{Use: "gen-rsa", Deprecated: "the 'gen-rsa' command is deprecated, please use 'keygen' instead.", RunE: saKeygenCmd().RunE},
 	)
 	return cmd
 }
 
-func saGenRSACmd() *cobra.Command {
-	var saName, configName string
+func saKeygenCmd() *cobra.Command {
+	var outputFormat string
 	cmd := &cobra.Command{
-		Use:   "gen-rsa",
-		Short: "Generates a Private RSA Service Account",
+		Use:   "keygen <sa-name>",
+		Short: "Generates an EC private key and registers it to the given Service Account, or create it if it doesn't exist",
 		Long: undent.Undent(`
-			Generates an RSA private key and registers it as a Service Account in
-			Venafi Control Plane. If the Service Account already exists, it will
-			be updated. If it does not exist, it will be created.
+			Generates an EC private key and registers it to the given Service
+			Account in Venafi Control Plane. The Service Account is created
+			if it doesn't exist. The private key is printed to stdout in PEM,
+			you can use it to create a Kubernetes secret, for example:
 
-			The output is a valid PEM-encoded RSA private key that can be used
-			to authenticate with the Firefly Configurations, e.g. in
-
-			  vcpctl sa gen-rsa --name my-sa | \
+			  vcpctl sa keygen my-sa | \
 			    kubectl create secret generic venafi-credentials \
 			    --from-file=svc-acct.key=/dev/stdin
 
-			Example:
-			  vcpctl sa gen-rsa --name maelvls
+			Once that's done, you can grab the client ID with:
+
+			  vcpctl sa get-client-id <my-sa>
+
+			You can use '-ojson' to get the client ID and the private key in
+			JSON format in a venctl-compatible format that looks like this:
+
+			  {
+					"client_id": "123e4567-e89b-12d3-a456-426614174000",
+					"private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+			  }
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl sa keygen <sa-name>
+			vcpctl sa keygen <sa-name> -ojson
+		`),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if saName == "" {
-				return fmt.Errorf("sa gen-rsa: --name flag is required")
-			}
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa gen-rsa: while getting config %w", err)
+				return fmt.Errorf("sa keygen: while getting config %w", err)
 			}
+
+			saName := args[0]
 
 			// Does it already exist?
 			existingSA, err := getServiceAccountByName(conf.APIURL, conf.APIKey, saName)
@@ -330,52 +345,100 @@ func saGenRSACmd() *cobra.Command {
 			case err == nil:
 				// Exists, we will be updating it.
 			default:
-				return fmt.Errorf("sa gen-rsa: while checking if service account exists: %w", err)
+				return fmt.Errorf("sa keygen: while checking if service account exists: %w", err)
+			}
+
+			ecKey, ecPub, err := genECKeyPair()
+			if err != nil {
+				return fmt.Errorf("sa keygen: while generating EC key pair: %w", err)
 			}
 
 			var resp SACreateResp
 			if existingSA.ID == "" {
 				resp, err = createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
 					Name:               saName,
-					Owner:              configName,
-					CredentialLifetime: 365, // 1 year.
-					Scopes: []string{
-						"distributed-issuance",
-					},
+					CredentialLifetime: 365, // days
+					Scopes:             []string{"distributed-issuance"},
+					// PublicKey:          ecPub,
 				})
 				if err != nil {
-					return fmt.Errorf("sa gen-rsa: while creating service account: %w", err)
+					return fmt.Errorf("sa keygen: while creating service account: %w", err)
 				}
 				logutil.Infof("Service Account '%s' created.\nClient ID: %s", saName, resp.ID)
 			} else {
-				// Update the existing service account by removing the old and
-				// creating it again.
-				err = deleteServiceAccount(conf.APIURL, conf.APIKey, existingSA.ID)
+				updatedSA := existingSA
+				updatedSA.PublicKey = ecPub
+				p := fullToPatchServiceAccount(updatedSA)
+				err = patchServiceAccount(conf.APIURL, conf.APIKey, updatedSA.ID, p)
 				if err != nil {
-					return fmt.Errorf("sa gen-rsa: while deleting existing service account: %w", err)
+					return fmt.Errorf("sa keygen: while patching service account: %w", err)
 				}
 
-				resp, err = createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
-					Name:               saName,
-					Owner:              configName,
-					CredentialLifetime: 365, // 1 year.
-					Scopes: []string{
-						"distributed-issuance",
-					},
-				})
-				if err != nil {
-					return fmt.Errorf("sa gen-rsa: while creating service account: %w", err)
+				if logutil.EnableDebug {
+					d := ANSIDiff(fullToPatchServiceAccount(existingSA), fullToPatchServiceAccount(updatedSA))
+					logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
 				}
-				logutil.Infof("Service Account '%s' updated.\nClient ID: %s", saName, resp.ID)
+				logutil.Debugf("Client ID: %s", existingSA.ID)
 			}
 
-			// Show the private key.
-			fmt.Println(resp.PrivateKey)
+			switch outputFormat {
+			case "pem":
+				fmt.Println(ecKey)
+			case "json":
+				bytes, err := json.MarshalIndent(struct {
+					ClientID   string `json:"client_id"`
+					PrivateKey string `json:"private_key"`
+				}{ClientID: existingSA.ID, PrivateKey: ecKey}, "", "  ")
+				if err != nil {
+					return fmt.Errorf("sa keygen: while marshaling JSON: %w", err)
+				}
+				fmt.Println(string(bytes))
+			}
 
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&saName, "name", "", "Name of the Service Account")
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pem", "Output format (pem, json)")
+	return cmd
+}
+
+func saGetClientIDCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get-client-id <sa-name>",
+		Short: "Get the client ID of a Service Account",
+		Long: undent.Undent(`
+			Get the client ID of a Service Account. The client ID is used to
+			authenticate with the Firefly Configurations.
+			You can use this client ID to set the Service Account for a Firefly
+			Configuration.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa get-client-id <sa-name>
+		`),
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("sa get-client-id: while getting config %w", err)
+			}
+			saName := args[0]
+			sa, err := getServiceAccountByName(conf.APIURL, conf.APIKey, saName)
+			if err != nil {
+				if errors.As(err, &NotFound{}) {
+					return fmt.Errorf("sa get-client-id: service account '%s' not found", saName)
+				}
+				return fmt.Errorf("sa get-client-id: while getting service account by name: %w", err)
+			}
+
+			if sa.ID == "" {
+				return fmt.Errorf("sa get-client-id: service account '%s' has no client ID", saName)
+			}
+
+			fmt.Println(sa.ID)
+			return nil
+		},
+	}
+
 	return cmd
 }
 
@@ -385,23 +448,18 @@ func saRmCmd() *cobra.Command {
 		Short: "Remove a Service Account",
 		Long: undent.Undent(`
 			Remove a Service Account. This will delete the Service Account from
-			Venafi Control Plane. You cannot remove a Service Account that is
-			attached to a Firefly Configuration. You must first remove the
-			Service Account from the Firefly Configuration using the
-			'vcpctl set-service-account' command.
-
-			Example:
-			  vcpctl sa rm "My Service Account"
+			Venafi Control Plane.
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl sa rm <sa-name>
+		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("sa rm: expected 1 argument, got %d", len(args))
 			}
 			saName := args[0]
 
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa rm: while getting config %w", err)
 			}
@@ -424,12 +482,10 @@ func lsCmd() *cobra.Command {
 		Long: undent.Undent(`
 			List the Firefly Configurations present in Venafi Control Plane.
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Note: The following functions (GetTokenUsingFileConf and listObjects)
 			// should be implemented according to your needs.
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("ls: while getting config %w", err)
 			}
@@ -475,6 +531,7 @@ func lsCmd() *cobra.Command {
 
 			t := table.New().
 				Headers("Firefly Configuration", "Attached Service Accounts' Client IDs").
+				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
 				Rows(rows...)
 
 			fmt.Println(t.String())
@@ -486,6 +543,7 @@ func lsCmd() *cobra.Command {
 
 			t = table.New().
 				Headers("Service Account", "Client ID").
+				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
 				Rows(rows...)
 
 			fmt.Println(t.String())
@@ -509,8 +567,6 @@ func subcaCmd() *cobra.Command {
 			  vcpctl subca rm foo
 			  vcpctl subca pull foo
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
 	}
 	cmd.AddCommand(
 		subcaLsCmd(),
@@ -525,16 +581,14 @@ func subcaLsCmd() *cobra.Command {
 		Short: "List SubCA Providers",
 		Long: undent.Undent(`
 			List SubCA Providers. SubCA Providers are used to issue certificates
-			from a SubCA. You can list, create, delete, and set a SubCA Provider
-			for a Firefly Configuration.
-
-			Example:
-			  vcpctl subca ls
+			from a SubCA.
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl subca ls
+			vcpctl subca rm <subca-name>
+		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("subca ls: while getting config %w", err)
 			}
@@ -555,6 +609,7 @@ func subcaLsCmd() *cobra.Command {
 			}
 			t := table.New().
 				Headers("SubCA Provider", "ID", "CA Type", "CA Account ID", "CA Product Option ID").
+				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
 				Rows(rows...)
 
 			fmt.Println(t.String())
@@ -567,7 +622,7 @@ func subcaLsCmd() *cobra.Command {
 
 func subcaRmCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "rm <subca-provider-name-or-id>",
+		Use:   "rm <subca-name-or-id>",
 		Short: "Remove a SubCA Provider",
 		Long: undent.Undent(`
 			Remove a SubCA Provider. This will delete the SubCA Provider from
@@ -580,7 +635,7 @@ func subcaRmCmd() *cobra.Command {
 			}
 			providerNameOrID := args[0]
 
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: while getting config %w", err)
 			}
@@ -604,10 +659,10 @@ func policyCmd() *cobra.Command {
 			Manage Policies. Policies are used to define the rules for issuing
 			certificates. You can list, create, delete, and set a Policy for a
 			Firefly Configuration.
-
-			Example:
-			  vcpctl policy ls
-			  vcpctl policy rm foo
+		`),
+		Example: undent.Undent(`
+			vcpctl policy ls
+			vcpctl policy rm <policy-name>
 		`),
 	}
 	cmd.AddCommand(
@@ -624,14 +679,12 @@ func policyLsCmd() *cobra.Command {
 		Long: undent.Undent(`
 			List Policies. Policies are used to define the rules for issuing
 			certificates.
-
-			Example:
-			  vcpctl policy ls
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl policy ls
+		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("policy ls: while getting config %w", err)
 			}
@@ -652,6 +705,7 @@ func policyLsCmd() *cobra.Command {
 
 			t := table.New().
 				Headers("Policy", "ID", "Validity Period", "Common Name", "DNS Names").
+				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
 				Rows(rows...)
 
 			fmt.Println(t.String())
@@ -670,16 +724,16 @@ func policyRmCmd() *cobra.Command {
 			Remove a Policy. This will delete the Policy from Venafi Control Plane.
 			You cannot remove a Policy that is attached to a Firefly Configuration.
 			You must first remove the Policy from the Firefly Configuration.
-
-			Example:
-			  vcpctl policy rm my-policy
+		`),
+		Example: undent.Undent(`
+			vcpctl policy rm <policy-name>
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("rm: expected 1 argument, got %d", len(args))
 			}
 			policyNameOrID := args[0]
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: while getting config %w", err)
 			}
@@ -718,7 +772,7 @@ func removePolicy(apiURL, apiKey, policyName string) error {
 		// Successfully removed.
 		return nil
 	default:
-		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -739,7 +793,7 @@ func getSubCaProviders(apiURL, apiKey string) ([]SubCaProvider, error) {
 	case http.StatusOK:
 		// Continue.
 	default:
-		return nil, fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return nil, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -775,7 +829,7 @@ func removeSubCaProvider(apiURL, apiKey, providerNameOrID string) error {
 		// Successfully removed.
 		return nil
 	default:
-		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -785,14 +839,11 @@ func setServiceAccountCmd() *cobra.Command {
 		Short: "Set a Service Account for a given Firefly Configuration",
 		Long: undent.Undent(`
 			Set a Service Account for a given Firefly Configuration.
-			Example:
-			  vcpctl set-service-account my-config "Service Account Name"
-
-			You can use also use the service account's client ID:
-			  vcpctl set-service-account my-config 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl set-service-account "config-name" "sa-name"
+			vcpctl set-service-account "config-name" "03931ba6-3fc5-11f0-85b8-9ee29ab248f0"
+		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 {
 				return fmt.Errorf("set-service-account: expected 2 arguments, got %d", len(args))
@@ -800,7 +851,7 @@ func setServiceAccountCmd() *cobra.Command {
 			confName := args[0]
 			saName := args[1]
 
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("set-service-account: while getting config %w", err)
 			}
@@ -877,14 +928,12 @@ func editCmd() *cobra.Command {
 		Long: undent.Undent(`
 			Edit a Firefly Configuration.
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("edit: expected 1 argument, got %d", len(args))
 			}
 
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("edit: while getting config %w", err)
 			}
@@ -907,13 +956,11 @@ func pushCmd() *cobra.Command {
 			Push a Firefly Configuration to Venafi Control Plane. The config may
 			already exist, in which case it will be updated. The name in the
 			config's 'name' field is used to identify the configuration.
-
-			Example:
-			  vcpctl push config.yaml
-			  vcpctl push - <config.yaml
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl push config.yaml
+			vcpctl push - < config.yaml
+		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("push: expected 1 argument, got %d", len(args))
@@ -935,7 +982,7 @@ func pushCmd() *cobra.Command {
 				defer file.Close()
 			}
 
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("push: while getting config %w", err)
 			}
@@ -1114,7 +1161,7 @@ func getConfigByName(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
 		}
 	}
 	if found.ID == "" {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: configuration with name or ID '%s' not found", nameOrID)
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: configuration with name '%s' not found", nameOrID)
 	}
 
 	// Now we can get the configuration by ID.
@@ -1182,20 +1229,17 @@ func pullCmd() *cobra.Command {
 		Long: undent.Undent(`
 			Pull a Firefly Configuration from Venafi Control Plane. The config
 			will be written to stdout in YAML format.
-
-			Example:
-			  vcpctl pull my-config
-			  vcpctl pull 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
 		`),
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Example: undent.Undent(`
+			vcpctl pull <config-name>
+		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("pull: expected 1 argument, got %d", len(args))
 			}
 			idOrName := args[0]
 
-			conf, err := getToolConfig()
+			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("pull: while getting config %w", err)
 			}
@@ -1904,7 +1948,7 @@ func patchConfig(apiURL, apiKey, id string, patch FireflyConfigPatch) error {
 		// The patch was successful.
 		return nil
 	default:
-		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -1948,7 +1992,7 @@ func patchSubCaProvider(apiURL, apiKey, id string, patch SubCaProviderPatch) err
 		// The patch was successful.
 		return nil
 	default:
-		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -2059,7 +2103,7 @@ func patchPolicy(apiURL, apiKey, id string, patch PolicyPatch) error {
 	case http.StatusNotFound:
 		return fmt.Errorf("Firefly policy: %w", NotFound{NameOrID: id})
 	default:
-		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -2076,6 +2120,7 @@ type ServiceAccount struct {
 	IssuerURL          string   `json:"issuerURL,omitempty"`
 	JwksURI            string   `json:"jwksURI,omitempty"`
 	Subject            string   `json:"subject,omitempty"`
+	PublicKey          string   `json:"publicKey,omitempty"`
 }
 
 func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
@@ -2112,7 +2157,23 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 	return result, nil
 }
 
-func deleteServiceAccount(apiURL, apiKey, id string) error {
+func deleteServiceAccount(apiURL, apiKey, nameOrID string) error {
+	var id string
+	if len(nameOrID) == 36 && strings.Count(nameOrID, "-") == 4 {
+		// It looks like a UUID, so we can use it directly.
+		id = nameOrID
+	} else {
+		// It looks like a name, so we need to find the ID first.
+		sa, err := getServiceAccountByName(apiURL, apiKey, nameOrID)
+		if err != nil {
+			if errors.Is(err, NotFound{}) {
+				return fmt.Errorf("service account '%s' not found", nameOrID)
+			}
+			return fmt.Errorf("while getting service account by name '%s': %w", nameOrID, err)
+		}
+		id = sa.ID
+	}
+
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
 	if err != nil {
 		return err
@@ -2133,7 +2194,7 @@ func deleteServiceAccount(apiURL, apiKey, id string) error {
 		// The deletion was successful.
 		return nil
 	default:
-		return fmt.Errorf("http %d: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -2174,19 +2235,42 @@ func getServiceAccountByName(apiURL, apiKey, name string) (ServiceAccount, error
 
 }
 
-//	{
-//	    "id": "862b6a31-4c53-11f0-b786-f25ae904e7a3",
-//	    "publicKey": "-----BEGIN PUBLIC
-//
-// KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE0wWhW9Ti5EU3qPzDU60xYLC45GoX\n3RfYWTk2nMpt+3Ex8hRqSs6rOhO4Iiy1k0cajbxVhQ1nh+qQQE36Lx0WSA==\n-----END PUBLIC
-// KEY-----\n"
-// }
 type SACreateResp struct {
 	ID         string `json:"id"`
 	PublicKey  string `json:"publicKey"`
 	PrivateKey string `json:"privateKey"`
 }
 
+// Returns the PEM-encoded private and public keys.
+func genECKeyPair() (string, string, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return "", "", fmt.Errorf("genECKeyPair: while generating EC key pair: %w", err)
+	}
+
+	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		return "", "", fmt.Errorf("genECKeyPair: while marshalling private key: %w", err)
+	}
+
+	pubBytes, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	if err != nil {
+		return "", "", fmt.Errorf("genECKeyPair: while marshalling public key: %w", err)
+	}
+
+	privPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: privBytes,
+	})
+	pubPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubBytes,
+	})
+	return string(privPEM), string(pubPEM), nil
+}
+
+// Owner can be left empty, in which case the first team will be used as the
+// owner.
 func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateResp, error) {
 	// If no owner is specified, let's just use the first team we can find.
 	if sa.Owner == "" {
@@ -2225,7 +2309,7 @@ func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateRes
 	case http.StatusConflict:
 		return SACreateResp{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
 	default:
-		return SACreateResp{}, fmt.Errorf("http %d: please check the service account fields: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return SACreateResp{}, fmt.Errorf("http %s: please check the Status account fields: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result SACreateResp
@@ -2249,8 +2333,8 @@ type ServiceAccountPatch struct {
 	Enabled            bool     `json:"enabled,omitempty"`
 }
 
-func fullServiceAccountToPatch(sa *ServiceAccount) *ServiceAccountPatch {
-	return &ServiceAccountPatch{
+func fullToPatchServiceAccount(sa ServiceAccount) ServiceAccountPatch {
+	return ServiceAccountPatch{
 		Applications:       sa.Applications,
 		Audience:           sa.Audience,
 		CredentialLifetime: sa.CredentialLifetime,
@@ -2261,18 +2345,19 @@ func fullServiceAccountToPatch(sa *ServiceAccount) *ServiceAccountPatch {
 		Scopes:             sa.Scopes,
 		Subject:            sa.Subject,
 		Enabled:            sa.Enabled,
+		PublicKey:          sa.PublicKey,
 	}
 }
 
 func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
-		return err
+		return fmt.Errorf("patchServiceAccount: while marshalling patch: %w", err)
 	}
 
 	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), bytes.NewReader(patchJSON))
 	if err != nil {
-		return err
+		return fmt.Errorf("patchServiceAccount: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -2280,12 +2365,12 @@ func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) e
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("patchServiceAccount: while sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
-	case http.StatusOK:
+	case http.StatusOK, http.StatusNoContent:
 		// The patch was successful.
 	case http.StatusNotFound:
 		return fmt.Errorf("service account: %w", NotFound{NameOrID: id})
