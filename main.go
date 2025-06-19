@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/fang"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/lipgloss/v2/table"
 	"github.com/fatih/color"
@@ -443,8 +444,9 @@ func saGetClientIDCmd() *cobra.Command {
 }
 
 func saRmCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "rm",
+	var interactive bool
+	cmd := &cobra.Command{
+		Use:   "rm [<sa-name> | -i]",
 		Short: "Remove a Service Account",
 		Long: undent.Undent(`
 			Remove a Service Account. This will delete the Service Account from
@@ -452,8 +454,37 @@ func saRmCmd() *cobra.Command {
 		`),
 		Example: undent.Undent(`
 			vcpctl sa rm <sa-name>
+			vcpctl sa rm -i
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if interactive {
+				if len(args) > 0 {
+					return fmt.Errorf("sa rm -i: expected no arguments when using --interactive, got %d", len(args))
+				}
+				// In interactive mode, we will list the service accounts and let the user
+				// select one to remove.
+				conf, err := getToolConfig(cmd)
+				if err != nil {
+					return fmt.Errorf("sa rm -i: while getting config %w", err)
+				}
+				svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+				if err != nil {
+					return fmt.Errorf("sa rm -i: while listing service accounts: %w", err)
+				}
+
+				// Use a simple prompt to select the service account to remove.
+				selected := rmInteractive(svcaccts)
+				for _, saID := range selected {
+					err = removeServiceAccount(conf.APIURL, conf.APIKey, saID)
+					if err != nil {
+						return fmt.Errorf("sa rm -i: while removing service account '%s': %w", saID, err)
+					}
+				}
+
+				logutil.Infof("Service Account(s) removed successfully:\n%s", strings.Join(selected, "\n"))
+				return nil
+			}
+
 			if len(args) != 1 {
 				return fmt.Errorf("sa rm: expected 1 argument, got %d", len(args))
 			}
@@ -464,7 +495,7 @@ func saRmCmd() *cobra.Command {
 				return fmt.Errorf("sa rm: while getting config %w", err)
 			}
 
-			err = deleteServiceAccount(conf.APIURL, conf.APIKey, saName)
+			err = removeServiceAccount(conf.APIURL, conf.APIKey, saName)
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}
@@ -472,11 +503,13 @@ func saRmCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively select the service account to remove.")
+	return cmd
 }
 
 // List Firefly configurations.
 func lsCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "ls",
 		Short: "List the Firefly Configurations present in Venafi Control Plane",
 		Long: undent.Undent(`
@@ -550,6 +583,7 @@ func lsCmd() *cobra.Command {
 			return nil
 		},
 	}
+	return cmd
 }
 
 func subcaCmd() *cobra.Command {
@@ -2123,6 +2157,34 @@ type ServiceAccount struct {
 	PublicKey          string   `json:"publicKey,omitempty"`
 }
 
+func (sa ServiceAccount) Equal(other ServiceAccount) bool {
+	return sa.ID == other.ID &&
+		sa.Name == other.Name &&
+		sa.AuthenticationType == other.AuthenticationType &&
+		sa.CredentialLifetime == other.CredentialLifetime &&
+		sa.Enabled == other.Enabled &&
+		sa.Owner == other.Owner &&
+		equalStringSlices(sa.Scopes, other.Scopes) &&
+		equalStringSlices(sa.Applications, other.Applications) &&
+		sa.Audience == other.Audience &&
+		sa.IssuerURL == other.IssuerURL &&
+		sa.JwksURI == other.JwksURI &&
+		sa.Subject == other.Subject &&
+		sa.PublicKey == other.PublicKey
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts", nil)
 	if err != nil {
@@ -2157,7 +2219,7 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 	return result, nil
 }
 
-func deleteServiceAccount(apiURL, apiKey, nameOrID string) error {
+func removeServiceAccount(apiURL, apiKey, nameOrID string) error {
 	var id string
 	if len(nameOrID) == 36 && strings.Count(nameOrID, "-") == 4 {
 		// It looks like a UUID, so we can use it directly.
@@ -2603,4 +2665,37 @@ func coloredYAMLPrintf(yamlBytes string) {
 	}
 	writer := colorable.NewColorableStdout()
 	_, _ = writer.Write([]byte(p.PrintTokens(tokens)))
+}
+
+// Returns a list of IDs.
+func rmInteractive(in []ServiceAccount) []string {
+	type item struct {
+		Name, ID string
+	}
+
+	var opts []huh.Option[item]
+	for _, sa := range in {
+		opts = append(opts, huh.NewOption(fmt.Sprintf("client ID: %s, name: %s", sa.ID, sa.Name), item{
+			Name: sa.Name,
+			ID:   sa.ID,
+		}).Selected(false))
+	}
+
+	var selected []item
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewMultiSelect[item]().Options(opts...).Value(&selected),
+		).Title("Select Service Accounts to remove"),
+	)
+
+	if err := form.Run(); err != nil {
+		logutil.Errorf("rmInteractive: while running form: %s", err)
+		return nil
+	}
+
+	var ids []string
+	for _, sel := range selected {
+		ids = append(ids, sel.ID)
+	}
+	return ids
 }
