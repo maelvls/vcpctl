@@ -365,7 +365,7 @@ func saKeygenCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("sa keygen: while creating service account: %w", err)
 				}
-				logutil.Infof("Service Account '%s' created.\nClient ID: %s", saName, resp.ID)
+				logutil.Debugf("Service Account '%s' created.\nClient ID: %s", saName, resp.ID)
 			} else {
 				updatedSA := existingSA
 				updatedSA.PublicKey = ecPub
@@ -481,7 +481,7 @@ func saRmCmd() *cobra.Command {
 					}
 				}
 
-				logutil.Infof("Service Account(s) removed successfully:\n%s", strings.Join(selected, "\n"))
+				logutil.Debugf("Service Account(s) removed successfully:\n%s", strings.Join(selected, "\n"))
 				return nil
 			}
 
@@ -775,7 +775,7 @@ func policyRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			logutil.Infof("Policy '%s' deleted successfully.", policyNameOrID)
+			logutil.Debugf("Policy '%s' deleted successfully.", policyNameOrID)
 			return nil
 		},
 	}
@@ -940,7 +940,7 @@ func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 
 	// Is this SA already in the configuration?
 	if slices.Contains(config.ServiceAccountIDs, sa.ID) {
-		logutil.Infof("Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.", sa.Name, sa.ID, config.Name)
+		logutil.Debugf("Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.", sa.Name, sa.ID, config.Name)
 		return nil
 	}
 
@@ -1845,19 +1845,19 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 				return fmt.Errorf("while creating Firefly policy: %w", err)
 			}
 			updatedConfig.Policies[i].ID = id
-			logutil.Infof("Policy '%s' created with ID '%s'.", updatedConfig.Policies[i].Name, id)
+			logutil.Debugf("Policy '%s' created with ID '%s'.", updatedConfig.Policies[i].Name, id)
 		} else {
 			updatedConfig.Policies[i].ID = existingPolicy.ID
 
 			// If the policy is not equal to the original one, we need to update it.
 			d := ANSIDiff(fullToPatchPolicy(existingPolicy), fullToPatchPolicy(updatedConfig.Policies[i]))
 			if d == "" {
-				logutil.Infof("Policy '%s' is unchanged, skipping update.", updatedConfig.Policies[i].Name)
+				logutil.Debugf("Policy '%s' is unchanged, skipping update.", updatedConfig.Policies[i].Name)
 				continue
 			}
 
 			// If the policy is different, we need to update it.
-			logutil.Infof("Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
+			logutil.Debugf("Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
 
 			// Patch the policy.
 			err = patchPolicy(apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
@@ -1893,14 +1893,14 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 			return fmt.Errorf("while creating SubCA provider: %w", err)
 		}
 		updatedConfig.SubCaProvider.ID = id
-		logutil.Infof("SubCA provider '%s' created with ID '%s'.", updatedConfig.SubCaProvider.Name, id)
+		logutil.Debugf("SubCA provider '%s' created with ID '%s'.", updatedConfig.SubCaProvider.Name, id)
 	} else {
 		updatedConfig.SubCaProvider.ID = existingSubCa.ID
 
 		// If the SubCA provider is not equal to the original one, we need to update it.
 		diff := ANSIDiff(fullToPatchSubCAProvider(existingSubCa), fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
 		if diff == "" {
-			logutil.Infof("SubCA provider '%s' is unchanged, skipping update.", updatedConfig.SubCaProvider.Name)
+			logutil.Debugf("SubCA provider '%s' is unchanged, skipping update.", updatedConfig.SubCaProvider.Name)
 		} else {
 			// The `subCaProvider.pkcs11.pin` field is never returned by the API, so
 			// we need to check if the user has changed it and patch it separately.
@@ -1915,7 +1915,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 			}
 
 			// If the SubCA provider is different, we need to update it.
-			logutil.Infof("SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
+			logutil.Debugf("SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
 
 			// Patch the SubCA provider.
 			err = patchSubCaProvider(apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
@@ -1935,22 +1935,22 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 			return fmt.Errorf("while creating Firefly configuration: %w", err)
 		}
 
-		logutil.Infof("Configuration '%s' created with ID '%s'.", updatedConfig.Name, confID)
+		logutil.Debugf("Configuration '%s' created with ID '%s'.", updatedConfig.Name, confID)
 	} else {
 		// The configuration exists, we need to patch it.
 		d := ANSIDiff(fullToPatchConfig(existingConfig), fullToPatchConfig(updatedConfig))
 		if d == "" {
-			logutil.Infof("Configuration '%s' is unchanged, skipping update.", updatedConfig.Name)
+			logutil.Debugf("Configuration '%s' is unchanged, skipping update.", updatedConfig.Name)
 			return nil
 		} else {
-			logutil.Infof("Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
+			logutil.Debugf("Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
 
 			patch := fullToPatchConfig(updatedConfig)
 			err = patchConfig(apiURL, apiKey, existingConfig.ID, patch)
 			if err != nil {
 				return fmt.Errorf("while patching Firefly configuration: %w", err)
 			}
-			logutil.Infof("Configuration '%s' updated successfully.", updatedConfig.Name)
+			logutil.Debugf("Configuration '%s' updated successfully.", updatedConfig.Name)
 		}
 	}
 
@@ -2344,7 +2344,7 @@ func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateRes
 			return SACreateResp{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
 		}
 		sa.Owner = teams[0].ID
-		logutil.Infof("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
+		logutil.Debugf("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
 	}
 
 	saJSON, err := json.Marshal(sa)

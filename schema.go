@@ -11,6 +11,16 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
+// To update schema.json:
+//
+//  jq --argjson defs "$(
+//    curl -sS https://api.venafi.cloud/v3/api-docs/vcamanagement-service \
+//      | jq '.components.schemas | with_entries(select(.value != null and (.key | test("(Request|Response|OpenApi)$") | not)))'
+//  )" '.["$defs"] = $defs' schema.json \
+//    | jq 'del(."$defs".JwtJwksAuthenticationInformation.allOf[0], ."$defs".JwtOidcAuthenticationInformation.allOf[0])' \
+//    | sed 's|#/components/schemas/|#/$defs/|g' >tmp.json \
+//    && mv tmp.json schema.json
+
 //go:embed "schema.json"
 var schemaJSON []byte
 
