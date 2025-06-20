@@ -3,31 +3,33 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/goccy/go-yaml"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// To update schema.json:
-//
-//  jq --argjson defs "$(
-//    curl -sS https://api.venafi.cloud/v3/api-docs/vcamanagement-service \
-//      | jq '.components.schemas | with_entries(select(.value != null and (.key | test("(Request|Response|OpenApi)$") | not)))'
-//  )" '.["$defs"] = $defs' schema.json \
-//    | jq 'del(."$defs".JwtJwksAuthenticationInformation.allOf[0], ."$defs".JwtOidcAuthenticationInformation.allOf[0])' \
-//    | sed 's|#/components/schemas/|#/$defs/|g' >tmp.json \
-//    && mv tmp.json schema.json
+// To update schema.json, run `go generate ./...`.
 
-//go:embed "schema.json"
+//go:embed "genschema/schema.json"
 var schemaJSON []byte
 
-func validateYAMLFireflyConfig(input []byte) error {
-	jsonBytes, err := yaml.YAMLToJSON(input)
+func validateFireflyConfig(input FireflyConfig) error {
+	// Work around some issues with the OpenAPI schema:
+	// 	- at '/cloudProviders': got null, want object
+	// 	- at '/serviceAccountIds': got null, want array
+	if input.CloudProviders == nil {
+		input.CloudProviders = make(map[string]any)
+	}
+	if input.ServiceAccountIDs == nil {
+		input.ServiceAccountIDs = make([]string, 0)
+	}
+
+	jsonBytes, err := json.Marshal(input)
 	if err != nil {
-		return fmt.Errorf("converting YAML to JSON: %w", err)
+		return fmt.Errorf("marshalling JSON: %w", err)
 	}
 
 	schemaCompiler := jsonschema.NewCompiler()

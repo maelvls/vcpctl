@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/certificate-config.schema.json",
+  "title": "Firefly Configuration",
+  "description": "Schema for the Firefly configuration.",
+  "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
+  "allOf": [
+    {
+      "type": "object",
+      "properties": {
+        "serviceAccounts": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/ServiceAccountBaseObject" },
+              { "required": ["name", "scopes"], "type": "object" }
+            ]
+          }
+        }
+      }
+    },
+    { "$ref": "#/$defs/ExtendedConfigurationInformation" }
+  ],
+  "$defs": {}
+}

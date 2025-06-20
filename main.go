@@ -21,8 +21,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss/v2"
-	"github.com/charmbracelet/lipgloss/v2/table"
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/lexer"
@@ -54,17 +52,18 @@ func main() {
 		`),
 		Example: undent.Undent(`
 			vcpctl ls
-			vcpctl push config.yaml
+			vcpctl put -f config.yaml
 			vcpctl edit <config-name>
-			vcpctl pull <config-name> > config.yaml
-			vcpctl set-service-account <config-name> <service-account-name>
+			vcpctl get <config-name> > config.yaml
+			vcpctl attach-sa <config-name> --sa <sa-name>
 			vcpctl sa ls
-			vcpctl sa rm
-			vcpctl sa keygen
+			vcpctl sa rm <sa-name>
+			vcpctl sa put keypair <sa-name>
+			vcpctl sa gen keypair <sa-name>
 			vcpctl subca ls
-			vcpctl subca rm
+			vcpctl subca rm <subca-name>
 			vcpctl policy ls
-			vcpctl policy rm
+			vcpctl policy rm <policy-name>
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -75,7 +74,7 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
-	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), rmCmd(), pullCmd(), saCmd(), subcaCmd(), policyCmd())
+	rootCmd.AddCommand(lsCmd(), editCmd(), attachSaCmd(), putCmd(), rmCmd(), getCmd(), saCmd(), subcaCmd(), policyCmd())
 
 	ctx := context.Background()
 	err := rootCmd.ExecuteContext(ctx)
@@ -102,18 +101,40 @@ type ClientAuthorization struct {
 
 // From https://developer.venafi.com/tlsprotectcloud/reference/configurations_getbyid
 type FireflyConfig struct {
-	ID                   string               `json:"id,omitempty"`
 	Name                 string               `json:"name"`
 	ClientAuthentication ClientAuthentication `json:"clientAuthentication,omitempty"`
 	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization,omitempty"`
 	CloudProviders       map[string]any       `json:"cloudProviders"`
 	MinTLSVersion        string               `json:"minTlsVersion"`
-	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
 	Policies             []Policy             `json:"policies"`
 	SubCaProvider        SubCa                `json:"subCaProvider"`
 	AdvancedSettings     AdvancedSettings     `json:"advancedSettings,omitempty"`
-	CreationDate         string               `json:"creationDate,omitempty"`
-	ModificationDate     string               `json:"modificationDate,omitempty"`
+
+	// These fields are returned by the API but are hidden in the 'put', 'get',
+	// and 'edit' commands.
+	ID                string   `json:"id,omitempty"`
+	CreationDate      string   `json:"creationDate,omitempty"`
+	ModificationDate  string   `json:"modificationDate,omitempty"`
+	ServiceAccountIDs []string `json:"serviceAccountIds,omitempty"`
+
+	// These fields are only used for the 'put', 'get', and 'edit' commands.
+	// They are not returned by the API.
+	ServiceAccounts []ServiceAccount `json:"serviceAccounts,omitempty"`
+}
+
+// Turn `serviceAccountIds` into `serviceAccounts` in the config.
+func populateServiceAccountsInConfig(config *FireflyConfig, sa []ServiceAccount) {
+	// If the Service Account already exists in the config, update it.
+	for _, saItem := range sa {
+		for i, saID := range config.ServiceAccountIDs {
+			if saItem.ID == saID {
+				config.ServiceAccounts = append(config.ServiceAccounts, saItem)
+				config.ServiceAccountIDs[i] = saItem.ID
+				break
+			}
+		}
+	}
+	config.ServiceAccountIDs = nil
 }
 
 type Policy struct {
@@ -222,15 +243,18 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 func saLsCmd() *cobra.Command {
 	var outputFormat string
 	cmd := &cobra.Command{
-		Use:   "ls",
+		Use:   "ls [-o json|id]",
 		Short: "List Service Accounts",
 		Long: undent.Undent(`
 			List Service Accounts. Service Accounts are used to authenticate
 			applications that use the Firefly Configurations.
+
+			You can use -oid to only display the Service Account client IDs.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa ls
 			vcpctl sa ls -ojson
+			vcpctl sa ls -oid
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
@@ -261,12 +285,17 @@ func saLsCmd() *cobra.Command {
 				}
 				printTable([]string{"Client ID", "Auth Type", "Service Account Name"}, rows)
 				return nil
+			case "id":
+				for _, sa := range svcaccts {
+					fmt.Println(sa.ID)
+				}
+				return nil
 			default:
 				return fmt.Errorf("sa ls: invalid output format: %s", outputFormat)
 			}
 		},
 	}
-	cmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, table)")
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, table, id)")
 	return cmd
 }
 
@@ -279,40 +308,75 @@ func saCmd() *cobra.Command {
 		`),
 		Example: undent.Undent(`
 			vcpctl sa ls
-			vcpctl sa ls -ojson
 			vcpctl sa rm <sa-name>
-			vcpctl sa keygen <sa-name>
-			vcpctl set-service-account <config-name> <sa-name>
+			vcpctl sa put keypair <sa-name>
+			vcpctl sa gen keypair <sa-name>
+			vcpctl sa get <sa-name>
 		`),
 	}
 	cmd.AddCommand(
 		saLsCmd(),
 		saRmCmd(),
-		saKeygenCmd(),
-		saGetClientIDCmd(),
-		&cobra.Command{Use: "gen-rsa", Deprecated: "the 'gen-rsa' command is deprecated, please use 'keygen' instead.", RunE: saKeygenCmd().RunE},
+		saPutCmd(),
+		saGenCmd(),
+		saGetCmd(),
+		&cobra.Command{Use: "gen-rsa", Deprecated: "the 'gen-rsa' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
+		&cobra.Command{Use: "keygen", Deprecated: "the 'keygen' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
+		&cobra.Command{Use: "get-clientid", Deprecated: "the 'get-clientid' command is deprecated, please use 'get-clientid' instead.", RunE: saGenkeypairCmd().RunE},
 	)
 	return cmd
 }
 
-func saKeygenCmd() *cobra.Command {
+func saGenCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gen",
+		Short: "Generate the key pair for a Service Account",
+		Long: undent.Undent(`
+			Generate the key pair for a Service Account.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa gen keypair <sa-name>
+			vcpctl sa gen keypair <sa-name> -ojson
+		`),
+	}
+	cmd.AddCommand(saGenkeypairCmd())
+	return cmd
+}
+
+func saPutCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "put",
+		Short: "Creates or updates a Service Account",
+		Long: undent.Undent(`
+			Creates or updates a Service Account in Venafi Control Plane.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa put keypair <sa-name>
+		`),
+	}
+	cmd.AddCommand(saPutKeypairCmd())
+	return cmd
+}
+
+func saGenkeypairCmd() *cobra.Command {
 	var outputFormat string
 	cmd := &cobra.Command{
-		Use:   "keygen <sa-name>",
+		Use:   "keypair <sa-name>",
 		Short: "Generates an EC private key and registers it to the given Service Account, or create it if it doesn't exist",
 		Long: undent.Undent(`
 			Generates an EC private key and registers it to the given Service
-			Account in Venafi Control Plane. The Service Account is created
-			if it doesn't exist. The private key is printed to stdout in PEM,
-			you can use it to create a Kubernetes secret, for example:
+			Account in Venafi Control Plane.
 
-			  vcpctl sa keygen my-sa | \
+			The private key is printed to stdout in PEM, you can use it to
+			create a Kubernetes secret, for example:
+
+			  vcpctl sa gen keypair my-sa | \
 			    kubectl create secret generic venafi-credentials \
 			    --from-file=svc-acct.key=/dev/stdin
 
 			Once that's done, you can grab the client ID with:
 
-			  vcpctl sa get-client-id <my-sa>
+			  vcpctl sa get -oid my-sa
 
 			You can use '-ojson' to get the client ID and the private key in
 			JSON format in a venctl-compatible format that looks like this:
@@ -323,14 +387,91 @@ func saKeygenCmd() *cobra.Command {
 			  }
 		`),
 		Example: undent.Undent(`
-			vcpctl sa keygen <sa-name>
-			vcpctl sa keygen <sa-name> -ojson
+			vcpctl sa gen keypair <sa-name>
+			vcpctl sa gen keypair <sa-name> -ojson
 		`),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa keygen: while getting config %w", err)
+				return fmt.Errorf("sa gen keypair: while getting config %w", err)
+			}
+
+			saName := args[0]
+
+			// Does it already exist?
+			existingSA, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
+			switch {
+			case errors.As(err, &NotFound{}):
+				return fmt.Errorf(undent.Undent(`
+					service account '%s' not found. You can create it with:
+						vcpctl sa put keypair %s
+				`), saName, saName)
+			case err == nil:
+				// Exists, we will be updating it.
+			default:
+				return fmt.Errorf("sa gen keypair: while checking if service account exists: %w", err)
+			}
+
+			ecKey, ecPub, err := genECKeyPair()
+			if err != nil {
+				return fmt.Errorf("sa gen keypair: while generating EC key pair: %w", err)
+			}
+
+			updatedSA := existingSA
+			updatedSA.PublicKey = ecPub
+			p := fullToPatchServiceAccount(updatedSA)
+			err = patchServiceAccount(conf.APIURL, conf.APIKey, updatedSA.ID, p)
+			if err != nil {
+				return fmt.Errorf("sa gen keypair: while patching service account: %w", err)
+			}
+
+			if logutil.EnableDebug {
+				d := ANSIDiff(fullToPatchServiceAccount(existingSA), fullToPatchServiceAccount(updatedSA))
+				logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
+			}
+			logutil.Debugf("Client ID: %s", existingSA.ID)
+
+			switch outputFormat {
+			case "pem":
+				fmt.Println(ecKey)
+			case "json":
+				bytes, err := json.MarshalIndent(struct {
+					ClientID   string `json:"client_id"`
+					PrivateKey string `json:"private_key"`
+				}{ClientID: existingSA.ID, PrivateKey: ecKey}, "", "  ")
+				if err != nil {
+					return fmt.Errorf("sa gen keypair: while marshaling JSON: %w", err)
+				}
+				fmt.Println(string(bytes))
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pem", "Output format (pem, json)")
+	return cmd
+}
+
+func saPutKeypairCmd() *cobra.Command {
+	var outputFormat string
+	var scopes []string
+	cmd := &cobra.Command{
+		Use:   "keypair <sa-name>",
+		Short: "Creates or updates the given Key Pair Authentication Service Account",
+		Long: undent.Undent(`
+			Creates or updates the given 'Private Key JWT' authentication
+			(also known as 'Key Pair Authentication') Service Account in the
+			Venafi Control Plane. Returns the Service Account's client ID.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa put keypair <sa-name>
+		`),
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("sa put keypair: while getting config %w", err)
 			}
 
 			saName := args[0]
@@ -343,100 +484,103 @@ func saKeygenCmd() *cobra.Command {
 			case err == nil:
 				// Exists, we will be updating it.
 			default:
-				return fmt.Errorf("sa keygen: while checking if service account exists: %w", err)
+				return fmt.Errorf("sa put keypair: while checking if service account exists: %w", err)
 			}
 
-			ecKey, ecPub, err := genECKeyPair()
-			if err != nil {
-				return fmt.Errorf("sa keygen: while generating EC key pair: %w", err)
-			}
-
-			var resp SACreateResp
 			if existingSA.ID == "" {
-				resp, err = createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
+				resp, err := createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
 					Name:               saName,
 					CredentialLifetime: 365, // days
-					Scopes:             []string{"distributed-issuance"},
-					// PublicKey:          ecPub,
+					Scopes:             scopes,
 				})
 				if err != nil {
-					return fmt.Errorf("sa keygen: while creating service account: %w", err)
+					return fmt.Errorf("sa put keypair: while creating service account: %w", err)
 				}
-				logutil.Debugf("Service Account '%s' created.\nClient ID: %s", saName, resp.ID)
+				logutil.Debugf("Service Account '%s' created.\nScopes: %s", saName, strings.Join(scopes, ", "))
+
+				fmt.Println(resp.ID)
+				return nil
 			} else {
 				updatedSA := existingSA
-				updatedSA.PublicKey = ecPub
 				p := fullToPatchServiceAccount(updatedSA)
 				err = patchServiceAccount(conf.APIURL, conf.APIKey, updatedSA.ID, p)
 				if err != nil {
-					return fmt.Errorf("sa keygen: while patching service account: %w", err)
+					return fmt.Errorf("sa put keypair: while patching service account: %w", err)
 				}
 
 				if logutil.EnableDebug {
 					d := ANSIDiff(fullToPatchServiceAccount(existingSA), fullToPatchServiceAccount(updatedSA))
 					logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
 				}
-				logutil.Debugf("Client ID: %s", existingSA.ID)
-			}
 
-			switch outputFormat {
-			case "pem":
-				fmt.Println(ecKey)
-			case "json":
-				bytes, err := json.MarshalIndent(struct {
-					ClientID   string `json:"client_id"`
-					PrivateKey string `json:"private_key"`
-				}{ClientID: existingSA.ID, PrivateKey: ecKey}, "", "  ")
-				if err != nil {
-					return fmt.Errorf("sa keygen: while marshaling JSON: %w", err)
-				}
-				fmt.Println(string(bytes))
+				fmt.Println(updatedSA.ID)
+				return nil
 			}
-
-			return nil
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pem", "Output format (pem, json)")
+	cmd.Flags().StringArrayVar(&scopes, "scopes", []string{"distributed-issuance"}, "Scopes for the Service Account (comma-separated, e.g. 'distributed-issuance,read-only')")
 	return cmd
 }
 
-func saGetClientIDCmd() *cobra.Command {
+func saGetCmd() *cobra.Command {
+	var format string
 	cmd := &cobra.Command{
-		Use:   "get-client-id <sa-name>",
-		Short: "Get the client ID of a Service Account",
+		Use:   "get <sa-name>",
+		Short: "Get the information about an existing Service Account",
 		Long: undent.Undent(`
-			Get the client ID of a Service Account. The client ID is used to
-			authenticate with the Firefly Configurations.
-			You can use this client ID to set the Service Account for a Firefly
-			Configuration.
+			Get the Service Account's details. You can use -o clientid to only
+			display the client ID of the Service Account.
 		`),
 		Example: undent.Undent(`
-			vcpctl sa get-client-id <sa-name>
+			vcpctl sa get <sa-name>
+			vcpctl sa get <sa-name> -o json
+			vcpctl sa get <sa-name> -o clientid
 		`),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa get-client-id: while getting config %w", err)
+				return fmt.Errorf("sa get: while getting config %w", err)
 			}
 			saName := args[0]
+
 			sa, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
 			if err != nil {
 				if errors.As(err, &NotFound{}) {
-					return fmt.Errorf("sa get-client-id: service account '%s' not found", saName)
+					return fmt.Errorf("sa get: service account '%s' not found", saName)
 				}
-				return fmt.Errorf("sa get-client-id: while getting service account by name: %w", err)
+				return fmt.Errorf("sa get: while getting service account by name: %w", err)
 			}
 
 			if sa.ID == "" {
-				return fmt.Errorf("sa get-client-id: service account '%s' has no client ID", saName)
+				return fmt.Errorf("sa get: service account '%s' has no client ID", saName)
 			}
 
-			fmt.Println(sa.ID)
-			return nil
+			switch format {
+			case "yaml":
+				bytes, err := yaml.Marshal(sa)
+				if err != nil {
+					return fmt.Errorf("sa get: while marshaling service account to YAML: %w", err)
+				}
+				coloredYAMLPrint(string(bytes) + "\n") // Not sure why '\n' is needed, but it is.
+				return nil
+			case "id":
+				fmt.Println(sa.ID)
+				return nil
+			case "json":
+				data, err := json.Marshal(sa)
+				if err != nil {
+					return fmt.Errorf("sa get: while marshaling service account to JSON: %w", err)
+				}
+				fmt.Println(string(data))
+				return nil
+			default:
+				return fmt.Errorf("sa get: unknown output format: %s", format)
+			}
 		},
 	}
-
+	cmd.Flags().StringVarP(&format, "output", "o", "yaml", "Output format (id, json, yaml). The 'id' is the service account's client ID.")
 	return cmd
 }
 
@@ -456,7 +600,7 @@ func saRmCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if interactive {
 				if len(args) > 0 {
-					return fmt.Errorf("sa rm -i: expected no arguments when using --interactive, got %d", len(args))
+					return fmt.Errorf("sa rm -i: expected no arguments when using --interactive, got %s", args)
 				}
 				// In interactive mode, we will list the service accounts and let the user
 				// select one to remove.
@@ -483,7 +627,7 @@ func saRmCmd() *cobra.Command {
 			}
 
 			if len(args) != 1 {
-				return fmt.Errorf("sa rm: expected 1 argument, got %d", len(args))
+				return fmt.Errorf("sa rm: expected a single argument (the service account name), got: %s", args)
 			}
 			saName := args[0]
 
@@ -637,7 +781,7 @@ func subcaRmCmd() *cobra.Command {
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected 1 argument, got %d", len(args))
+				return fmt.Errorf("rm: expected a single argument (the Sub CA name), got %s", args)
 			}
 			providerNameOrID := args[0]
 
@@ -701,21 +845,15 @@ func policyLsCmd() *cobra.Command {
 			var rows [][]string
 			for _, policy := range policies {
 				rows = append(rows, []string{
-					policy.Name,
 					policy.ID,
+					policy.Name,
 					policy.ValidityPeriod,
 					strings.Join(policy.Subject.CommonName.DefaultValues, ", "),
 					strings.Join(policy.SANs.DNSNames.DefaultValues, ", "),
 				})
 			}
 
-			t := table.New().
-				Headers("Policy", "ID", "Validity Period", "Common Name", "DNS Names").
-				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
-				Rows(rows...)
-
-			fmt.Println(t.String())
-
+			printTable([]string{"ID", "Policy Name", "Validity", "Common Name", "DNS Names"}, rows)
 			return nil
 		},
 	}
@@ -736,7 +874,7 @@ func policyRmCmd() *cobra.Command {
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected 1 argument, got %d", len(args))
+				return fmt.Errorf("rm: expected a single argument (the Policy name), got %s", args)
 			}
 			policyNameOrID := args[0]
 			conf, err := getToolConfig(cmd)
@@ -839,44 +977,47 @@ func removeSubCaProvider(apiURL, apiKey, providerNameOrID string) error {
 	}
 }
 
-func setServiceAccountCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "set-service-account",
-		Short: "Set a Service Account for a given Firefly Configuration",
+func attachSaCmd() *cobra.Command {
+	var saName string
+	cmd := &cobra.Command{
+		Use:   "attach-sa <config-name> --sa <sa-name>",
+		Short: "Attach a Service Account to a given Firefly Configuration",
 		Long: undent.Undent(`
-			Set a Service Account for a given Firefly Configuration.
+			Attach the given Service Account to the Firefly Configuration.
 		`),
 		Example: undent.Undent(`
-			vcpctl set-service-account "config-name" "sa-name"
-			vcpctl set-service-account "config-name" "03931ba6-3fc5-11f0-85b8-9ee29ab248f0"
+			vcpctl attach-sa "config-name" --sa "link-name"
+			vcpctl attach-sa "config-name" --sa "03931ba6-3fc5-11f0-85b8-9ee29ab248f0"
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 2 {
-				return fmt.Errorf("set-service-account: expected 2 arguments, got %d", len(args))
+			if len(args) != 1 {
+				return fmt.Errorf("attach-sa: expected a single argument (the Firefly configuration name), got %s", args)
 			}
 			confName := args[0]
-			saName := args[1]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("set-service-account: while getting config %w", err)
+				return fmt.Errorf("attach-sa: while getting config %w", err)
 			}
 
-			err = setServiceAccount(conf.APIURL, conf.APIKey, confName, saName)
+			err = attachSAToConf(conf.APIURL, conf.APIKey, confName, saName)
 			if err != nil {
-				return fmt.Errorf("set-service-account: %w", err)
+				return fmt.Errorf("attach-sa: %w", err)
 			}
 
 			return nil
 		},
 	}
+	cmd.Flags().StringVarP(&saName, "sa", "s", "", "Service Account name or client ID to attach to the Firefly Configuration")
+	_ = cmd.MarkFlagRequired("sa")
+	return cmd
 }
 
-func setServiceAccount(apiURL, apiKey, confName, saName string) error {
+func attachSAToConf(apiURL, apiKey, confName, saName string) error {
 	// Get configuration name by ID.
 	config, err := getConfig(apiURL, apiKey, confName)
 	if err != nil {
-		return fmt.Errorf("while fetching Firefly configuration ID for the configuration '%s': %w", confName, err)
+		return fmt.Errorf("while fetching the ID of the Firefly configuration '%s': %w", confName, err)
 	}
 
 	// Find service accounts.
@@ -936,7 +1077,7 @@ func editCmd() *cobra.Command {
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("edit: expected 1 argument, got %d", len(args))
+				return fmt.Errorf("edit: expected a single argument (the Firefly configuration name), got %s", args)
 			}
 
 			conf, err := getToolConfig(cmd)
@@ -954,74 +1095,80 @@ func editCmd() *cobra.Command {
 	}
 }
 
-func pushCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "push",
-		Short: "Push a Firefly Configuration to Venafi Control Plane",
+func putCmd() *cobra.Command {
+	var filePath string
+	cmd := &cobra.Command{
+		Use:   "put",
+		Short: "Creates or updates a Firefly Configuration",
 		Long: undent.Undent(`
-			Push a Firefly Configuration to Venafi Control Plane. The config may
-			already exist, in which case it will be updated. The name in the
-			config's 'name' field is used to identify the configuration.
+			Creates or updates a Firefly Configuration in Venafi Control Plane.
+			The name in the config's 'name' field is used to identify the
+			configuration.
 		`),
 		Example: undent.Undent(`
-			vcpctl push config.yaml
-			vcpctl push - < config.yaml
+			vcpctl put -f config.yaml
+			vcpctl put -f - < config.yaml
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return fmt.Errorf("push: expected 1 argument, got %d", len(args))
-			}
-
 			var file *os.File
-			var path string
-			switch args[0] {
+			switch filePath {
+			case "":
+				return fmt.Errorf("put: no file specified, use --file or -f to specify a file path")
 			case "-":
-				path = "/dev/stdin"
+				filePath = "/dev/stdin"
 				file = os.Stdin
 			default:
-				path = args[0]
 				var err error
-				file, err = os.Open(path)
+				file, err = os.Open(filePath)
 				if err != nil {
-					return fmt.Errorf("push: opening file ''%s'': %w", path, err)
+					return fmt.Errorf("put: opening file '%s': %w", filePath, err)
 				}
 				defer file.Close()
 			}
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("push: while getting config %w", err)
+				return fmt.Errorf("put: while getting config %w", err)
 			}
 
 			bytes, err := io.ReadAll(file)
 			if err != nil {
-				return fmt.Errorf("push: while reading Firefly configuration from '%s': %w", path, err)
+				return fmt.Errorf("put: while reading Firefly configuration from '%s': %w", filePath, err)
 			}
 
-			if err := validateYAMLFireflyConfig(bytes); err != nil {
-				return fmt.Errorf("push: Firefly configuration validation failed: %w", err)
+			// Get service accounts.
+			svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("put: while getting service accounts: %w", err)
 			}
 
 			// Read the Firefly configuration.
 			var updatedConfig FireflyConfig
 			if err := yaml.UnmarshalWithOptions(bytes, &updatedConfig, yaml.Strict()); err != nil {
-				return fmt.Errorf("push: while decoding Firefly configuration from '%s': %w", path, err)
+				return fmt.Errorf("put: while decoding Firefly configuration from '%s': %w", filePath, err)
 			}
 			updatedConfig = hideMisleadingFields(updatedConfig)
+			populateServiceAccountsInConfig(&updatedConfig, svcaccts)
+
+			if err := validateFireflyConfig(updatedConfig); err != nil {
+				return fmt.Errorf("put: Firefly configuration validation failed: %w", err)
+			}
 
 			if updatedConfig.Name == "" {
-				return fmt.Errorf("push: Firefly configuration must have a 'name' field set")
+				return fmt.Errorf("put: Firefly configuration must have a 'name' field set")
 			}
 
 			// Patch the original configuration with the new values.
-			err = createOrUpdateConfigAndDeps(conf.APIURL, conf.APIKey, updatedConfig)
+			err = createOrUpdateConfigAndDeps(conf.APIURL, conf.APIKey, svcaccts, updatedConfig)
 			if err != nil {
-				return fmt.Errorf("push: while patching Firefly configuration: %w", err)
+				return fmt.Errorf("put: while creating or updating the Firefly configuration, Sub CA, or Policies: %w", err)
 			}
 
 			return nil
 		},
 	}
+	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the Firefly Configuration file (YAML). Use '-' to read from stdin.")
+	return cmd
 }
 
 func rmCmd() *cobra.Command {
@@ -1038,7 +1185,7 @@ func rmCmd() *cobra.Command {
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected an argument <config-name|ID>, got %d", len(args))
+				return fmt.Errorf("rm: expected a single argument (the Firefly configuration name or ID), got %s", args)
 			}
 			nameOrID := args[0]
 			conf, err := getToolConfig(cmd)
@@ -1235,7 +1382,7 @@ func getConfig(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
 		}
 	}
 	if len(found) == 0 {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: configuration with name '%s' not found", nameOrID)
+		return FireflyConfig{}, NotFound{NameOrID: nameOrID}
 	}
 	if len(found) > 1 {
 		b := strings.Builder{}
@@ -1344,43 +1491,42 @@ func getPolicies(apiURL, apiKey string) ([]Policy, error) {
 	}
 }
 
-func pullCmd() *cobra.Command {
+func getCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "pull",
-		Short: "Pull a Firefly Configuration from Venafi Control Plane",
+		Use:   "get",
+		Short: "Get a Firefly Configuration from Venafi Control Plane",
 		Long: undent.Undent(`
-			Pull a Firefly Configuration from Venafi Control Plane. The config
+			Get a Firefly Configuration from Venafi Control Plane. The config
 			will be written to stdout in YAML format.
 		`),
 		Example: undent.Undent(`
-			vcpctl pull <config-name>
+			vcpctl get <config-name>
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("pull: expected 1 argument, got %d", len(args))
+				return fmt.Errorf("get: expected a single argument (the Firefly configuration name), got %s", args)
 			}
 			idOrName := args[0]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("pull: while getting config %w", err)
+				return fmt.Errorf("get: while getting config %w", err)
 			}
 
-			// Get the original configuration.
-			originalConfig, err := getConfig(conf.APIURL, conf.APIKey, idOrName)
-			if err != nil {
-				return fmt.Errorf("pull: while getting original Firefly configuration: %w", err)
-			}
-
-			// Find service accounts.
 			knownSvcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
 			if err != nil {
-				return fmt.Errorf("pull: while fetching service accounts: %w", err)
+				return fmt.Errorf("get: while fetching service accounts: %w", err)
 			}
 
+			config, err := getConfig(conf.APIURL, conf.APIKey, idOrName)
+			if err != nil {
+				return fmt.Errorf("get: while getting original Firefly configuration: %w", err)
+			}
+			populateServiceAccountsInConfig(&config, knownSvcaccts)
+
 			yamlData, err := yaml.MarshalWithOptions(
-				hideMisleadingFields(originalConfig),
-				yaml.WithComment(svcAcctsComments(originalConfig, knownSvcaccts)),
+				hideMisleadingFields(config),
+				yaml.WithComment(svcAcctsComments(config, knownSvcaccts)),
 				yaml.Indent(4),
 			)
 			if err != nil {
@@ -1388,7 +1534,7 @@ func pullCmd() *cobra.Command {
 			}
 			yamlData = appendSchemaComment(yamlData)
 
-			coloredYAMLPrintf(string(yamlData))
+			coloredYAMLPrint(string(yamlData))
 
 			return nil
 		},
@@ -1422,45 +1568,17 @@ func hideMisleadingFields(config FireflyConfig) FireflyConfig {
 		c.Policies[i].ModificationDate = ""
 	}
 
+	for i := range c.ServiceAccountIDs {
+		c.ServiceAccounts[i].ID = ""
+	}
+
 	return c
 }
 
 // createConfig creates a new Firefly configuration or updates an
 // existing one. Also deals with creating the subCA policies.
-func createConfig(apiURL, apiKey string, config FireflyConfig) (string, error) {
-	reqBody := struct {
-		Name              string   `json:"name"`
-		SubCaProviderID   string   `json:"subCaProviderId"`
-		PolicyIDs         []string `json:"policyIds"`
-		ServiceAccountIDs []string `json:"serviceAccountIds"`
-		MinTLSVersion     string   `json:"minTlsVersion"`
-		AdvancedSettings  struct {
-			EnableIssuanceAuditLog       bool `json:"enableIssuanceAuditLog"`
-			IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog"`
-			RequireFIPSCompliantBuild    bool `json:"requireFIPSCompliantBuild"`
-		} `json:"advancedSettings"`
-		ClientAuthentication ClientAuthentication `json:"clientAuthentication"`
-		CloudProviders       map[string]any       `json:"cloudProviders"`
-	}{
-		Name:              config.Name,
-		SubCaProviderID:   config.SubCaProvider.ID,
-		PolicyIDs:         make([]string, len(config.Policies)),
-		ServiceAccountIDs: config.ServiceAccountIDs,
-		MinTLSVersion:     config.MinTLSVersion,
-		AdvancedSettings: struct {
-			EnableIssuanceAuditLog       bool `json:"enableIssuanceAuditLog"`
-			IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog"`
-			RequireFIPSCompliantBuild    bool `json:"requireFIPSCompliantBuild"`
-		}{
-			EnableIssuanceAuditLog:       config.AdvancedSettings.EnableIssuanceAuditLog,
-			IncludeRawCertDataInAuditLog: config.AdvancedSettings.IncludeRawCertDataInAuditLog,
-			RequireFIPSCompliantBuild:    config.AdvancedSettings.RequireFIPSCompliantBuild,
-		},
-		ClientAuthentication: config.ClientAuthentication,
-		CloudProviders:       config.CloudProviders,
-	}
-
-	body, err := json.Marshal(reqBody)
+func createConfig(apiURL, apiKey string, config FireflyConfigPatch) (string, error) {
+	body, err := json.Marshal(config)
 	if err != nil {
 		return "", fmt.Errorf("createConfig: while marshaling configuration: %w", err)
 	}
@@ -1731,19 +1849,19 @@ func fullToPatchConfig(full FireflyConfig) FireflyConfigPatch {
 }
 
 func editConfig(apiURL, apiKey, name string) error {
-	config, err := getConfig(apiURL, apiKey, name)
-	if err != nil {
-		if errors.Is(err, NotFound{}) {
-			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl push config.yaml'", name)
-		}
-		return fmt.Errorf("while getting configuration ID: %w", err)
-	}
-
-	// Find service accounts.
 	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
+
+	config, err := getConfig(apiURL, apiKey, name)
+	if err != nil {
+		if errors.Is(err, NotFound{}) {
+			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl put config.yaml'", name)
+		}
+		return fmt.Errorf("while getting configuration ID: %w", err)
+	}
+	populateServiceAccountsInConfig(&config, knownSvcaccts)
 
 	yamlData, err := yaml.MarshalWithOptions(
 		hideMisleadingFields(config),
@@ -1784,21 +1902,6 @@ edit:
 		return err
 	}
 
-	err = validateYAMLFireflyConfig(modifiedRaw)
-	if err != nil {
-		notice := "# NOTICE: The configuration you have modified is not valid.\n" +
-			"# NOTICE: Please fix the errors and re-edit the configuration.\n" +
-			"# NOTICE: The errors are:\n" + err.Error() + "\n"
-
-		// Prepend the notice to the modified YAML.
-		tmpfile.Seek(0, 0)
-		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
-		if err != nil {
-			return fmt.Errorf("while writing notice to file: %w", err)
-		}
-		goto edit
-	}
-
 	var modified FireflyConfig
 	if err := yaml.UnmarshalWithOptions(modifiedRaw, &modified, yaml.Strict()); err != nil {
 		notice := "# NOTICE: The configuration you have modified is not valid.\n" +
@@ -1806,7 +1909,7 @@ edit:
 			"# NOTICE: The errors are:\n" + err.Error() + "\n"
 
 		// Prepend the notice to the modified YAML.
-		tmpfile.Seek(0, 0)
+		_, _ = tmpfile.Seek(0, 0)
 		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
 		if err != nil {
 			return fmt.Errorf("while writing notice to file: %w", err)
@@ -1814,7 +1917,22 @@ edit:
 		goto edit
 	}
 
-	err = createOrUpdateConfigAndDeps(apiURL, apiKey, modified)
+	err = validateFireflyConfig(modified)
+	if err != nil {
+		notice := "# NOTICE: The configuration you have modified is not valid.\n" +
+			"# NOTICE: Please fix the errors and re-edit the configuration.\n" +
+			"# NOTICE: The errors are:\n" + err.Error() + "\n"
+
+		// Prepend the notice to the modified YAML.
+		_, _ = tmpfile.Seek(0, 0)
+		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
+		if err != nil {
+			return fmt.Errorf("while writing notice to file: %w", err)
+		}
+		goto edit
+	}
+
+	err = createOrUpdateConfigAndDeps(apiURL, apiKey, knownSvcaccts, modified)
 	if errors.Is(err, errPINRequired) {
 		// If the PIN is required, we need to ask the user to fill it in.
 		logutil.Errorf("ERROR: The subCaProvider.pkcs11.pin field is required.")
@@ -1825,7 +1943,7 @@ edit:
 			"# NOTICE: field. has been modified. Please re-edit the configuration to fill in the PKCS11 pin.\n"
 
 		// Prepend the notice to the modified YAML.
-		tmpfile.Seek(0, 0)
+		_, _ = tmpfile.Seek(0, 0)
 		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
 		if err != nil {
 			return fmt.Errorf("while writing notice to file: %w", err)
@@ -1868,8 +1986,40 @@ var errPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patch
 // Also patches the nested SubCA provider and Firefly Policies. Use
 // errors.Is(err, errPINRequired) to check if the error is due to the missing
 // PIN.
-func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyConfig) error {
-	// Check that the service account IDs exist.
+func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []ServiceAccount, updatedConfig FireflyConfig) error {
+	// Start with creating or updating the Service Accounts.
+	for i := range updatedConfig.ServiceAccounts {
+		var id string
+		existingSa, err := findServiceAccount(updatedConfig.ServiceAccounts[i].Name, existingSvcAccts)
+		switch {
+		case errors.As(err, &NotFound{}):
+			// The service account does not exist. We will be creating below.
+		case err != nil:
+			return fmt.Errorf("while getting service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
+		default:
+			// The service account exists, we need to patch it below.
+		}
+		if existingSa.ID == "" {
+			// The service account does not have an ID, we need to create it.
+			resp, err := createServiceAccount(apiURL, apiKey, updatedConfig.ServiceAccounts[i])
+			if err != nil {
+				return fmt.Errorf("while creating service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
+			}
+			id = resp.ID
+			logutil.Debugf("Service account '%s' created with ID '%s'.", updatedConfig.ServiceAccounts[i].Name, resp.ID)
+		} else {
+			id = existingSa.ID
+			// The service account exists, we need to patch it.
+			err = patchServiceAccount(apiURL, apiKey, id, fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
+			if err != nil {
+				return fmt.Errorf("while patching service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
+			}
+			logutil.Debugf("Service account '%s' patched.", updatedConfig.ServiceAccounts[i].Name)
+		}
+		updatedConfig.ServiceAccounts[i].ID = id
+		updatedConfig.ServiceAccountIDs = append(updatedConfig.ServiceAccountIDs, id)
+	}
+
 	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
@@ -2018,7 +2168,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 	// needs to be created or updated.
 	if existingConfig.ID == "" {
 		// The configuration does not exist, we need to create it.
-		confID, err := createConfig(apiURL, apiKey, updatedConfig)
+		confID, err := createConfig(apiURL, apiKey, fullToPatchConfig(updatedConfig))
 		if err != nil {
 			return fmt.Errorf("while creating Firefly configuration: %w", err)
 		}
@@ -2038,7 +2188,6 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 			if err != nil {
 				return fmt.Errorf("while patching Firefly configuration: %w", err)
 			}
-			logutil.Debugf("Configuration '%s' updated successfully.", updatedConfig.Name)
 		}
 	}
 
@@ -2344,6 +2493,24 @@ func removeServiceAccount(apiURL, apiKey, nameOrID string) error {
 	default:
 		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
+}
+
+func findServiceAccount(nameOrID string, allSAs []ServiceAccount) (ServiceAccount, error) {
+	if looksLikeAnID(nameOrID) {
+		for _, sa := range allSAs {
+			if sa.ID == nameOrID {
+				return sa, nil
+			}
+		}
+		return ServiceAccount{}, NotFound{NameOrID: nameOrID}
+	}
+
+	for _, sa := range allSAs {
+		if sa.Name == nameOrID {
+			return sa, nil
+		}
+	}
+	return ServiceAccount{}, NotFound{NameOrID: nameOrID}
 }
 
 func getServiceAccount(apiURL, apiKey, nameOrID string) (ServiceAccount, error) {
@@ -2719,7 +2886,7 @@ func appendLines(b []byte, line ...string) []byte {
 	return b
 }
 
-func coloredYAMLPrintf(yamlBytes string) {
+func coloredYAMLPrint(yamlBytes string) {
 	// If not a TTY, let's not color the output.
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
 		fmt.Print(yamlBytes)
