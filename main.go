@@ -15,11 +15,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/lipgloss/v2/table"
@@ -75,11 +75,12 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
-	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), pullCmd(), saCmd(), subcaCmd(), policyCmd())
+	rootCmd.AddCommand(lsCmd(), editCmd(), setServiceAccountCmd(), pushCmd(), rmCmd(), pullCmd(), saCmd(), subcaCmd(), policyCmd())
 
 	ctx := context.Background()
-	err := fang.Execute(ctx, rootCmd)
+	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {
+		logutil.Errorf("%v", err)
 		os.Exit(1)
 	}
 }
@@ -109,7 +110,7 @@ type FireflyConfig struct {
 	MinTLSVersion        string               `json:"minTlsVersion"`
 	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
 	Policies             []Policy             `json:"policies"`
-	SubCaProvider        SubCaProvider        `json:"subCaProvider"`
+	SubCaProvider        SubCa                `json:"subCaProvider"`
 	AdvancedSettings     AdvancedSettings     `json:"advancedSettings,omitempty"`
 	CreationDate         string               `json:"creationDate,omitempty"`
 	ModificationDate     string               `json:"modificationDate,omitempty"`
@@ -148,7 +149,7 @@ type CommonName struct {
 	MaxOccurrences int      `json:"maxOccurrences"`
 }
 
-type SubCaProvider struct {
+type SubCa struct {
 	ID                 string `json:"id,omitempty"`
 	Name               string `json:"name"`
 	CaType             string `json:"caType"`
@@ -253,16 +254,12 @@ func saLsCmd() *cobra.Command {
 				var rows [][]string
 				for _, sa := range svcaccts {
 					rows = append(rows, []string{
-						sa.Name,
 						sa.ID,
-						sa.AuthenticationType,
+						uniqueColor(sa.AuthenticationType),
+						sa.Name,
 					})
 				}
-				t := table.New().
-					Headers("Service Account", "Client ID", "Authentication Type").
-					StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
-					Rows(rows...)
-				fmt.Println(t.String())
+				printTable([]string{"Client ID", "Auth Type", "Service Account Name"}, rows)
 				return nil
 			default:
 				return fmt.Errorf("sa ls: invalid output format: %s", outputFormat)
@@ -339,7 +336,7 @@ func saKeygenCmd() *cobra.Command {
 			saName := args[0]
 
 			// Does it already exist?
-			existingSA, err := getServiceAccountByName(conf.APIURL, conf.APIKey, saName)
+			existingSA, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
 			switch {
 			case errors.As(err, &NotFound{}):
 				// Doesn't exist yet, we will be creating it below.
@@ -423,7 +420,7 @@ func saGetClientIDCmd() *cobra.Command {
 				return fmt.Errorf("sa get-client-id: while getting config %w", err)
 			}
 			saName := args[0]
-			sa, err := getServiceAccountByName(conf.APIURL, conf.APIKey, saName)
+			sa, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
 			if err != nil {
 				if errors.As(err, &NotFound{}) {
 					return fmt.Errorf("sa get-client-id: service account '%s' not found", saName)
@@ -542,13 +539,13 @@ func lsCmd() *cobra.Command {
 					found := false
 					for _, sa := range knownSvcaccts {
 						if sa.ID == saID {
-							saNames = append(saNames, sa.ID+" ("+sa.Name+")")
+							saNames = append(saNames, sa.Name+" ("+lightGray(sa.ID)+")")
 							found = true
 							break
 						}
 					}
 					if !found {
-						saNames = append(saNames, saID+" (deleted)")
+						saNames = append(saNames, saID+redBold("deleted"))
 					}
 				}
 				confs[i].ServiceAccountIDs = saNames
@@ -562,24 +559,7 @@ func lsCmd() *cobra.Command {
 				})
 			}
 
-			t := table.New().
-				Headers("Firefly Configuration", "Attached Service Accounts' Client IDs").
-				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
-				Rows(rows...)
-
-			fmt.Println(t.String())
-
-			rows = nil
-			for _, m := range knownSvcaccts {
-				rows = append(rows, []string{m.Name, m.ID})
-			}
-
-			t = table.New().
-				Headers("Service Account", "Client ID").
-				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
-				Rows(rows...)
-
-			fmt.Println(t.String())
+			printTable([]string{"Firefly Configuration", "Attached Service Accounts"}, rows)
 			return nil
 		},
 	}
@@ -626,7 +606,7 @@ func subcaLsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("subca ls: while getting config %w", err)
 			}
-			providers, err := getSubCaProviders(conf.APIURL, conf.APIKey)
+			providers, err := getSubCas(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("subca ls: while listing subCA providers: %w", err)
 			}
@@ -634,20 +614,12 @@ func subcaLsCmd() *cobra.Command {
 			var rows [][]string
 			for _, provider := range providers {
 				rows = append(rows, []string{
-					provider.Name,
 					provider.ID,
-					provider.CaType,
-					provider.CaAccountID,
-					provider.CaProductOptionID,
+					uniqueColor(provider.CaType),
+					provider.Name,
 				})
 			}
-			t := table.New().
-				Headers("SubCA Provider", "ID", "CA Type", "CA Account ID", "CA Product Option ID").
-				StyleFunc(func(row, col int) lipgloss.Style { return lipgloss.NewStyle().Padding(0, 1) }).
-				Rows(rows...)
-
-			fmt.Println(t.String())
-
+			printTable([]string{"ID", "Type", "Sub CA Name"}, rows)
 			return nil
 		},
 	}
@@ -784,7 +756,7 @@ func policyRmCmd() *cobra.Command {
 
 func removePolicy(apiURL, apiKey, policyName string) error {
 	// Find the policy by name.
-	policy, err := getPolicyByName(apiURL, apiKey, policyName)
+	policy, err := getPolicy(apiURL, apiKey, policyName)
 	if err != nil {
 		return fmt.Errorf("removePolicy: while getting policy by name %q: %w", policyName, err)
 	}
@@ -810,16 +782,16 @@ func removePolicy(apiURL, apiKey, policyName string) error {
 	}
 }
 
-func getSubCaProviders(apiURL, apiKey string) ([]SubCaProvider, error) {
+func getSubCas(apiURL, apiKey string) ([]SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
 	if err != nil {
-		return nil, fmt.Errorf("getSubCaProviders: while creating request: %w", err)
+		return nil, fmt.Errorf("getSubCas: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("getSubCaProviders: while making request: %w", err)
+		return nil, fmt.Errorf("getSubCas: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -831,15 +803,15 @@ func getSubCaProviders(apiURL, apiKey string) ([]SubCaProvider, error) {
 	}
 
 	var result struct {
-		SubCaProviders []SubCaProvider `json:"subCaProviders"`
+		SubCaProviders []SubCa `json:"subCaProviders"`
 	}
 
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("getSubCaProviders: while reading response body: %w", err)
+		return nil, fmt.Errorf("getSubCas: while reading response body: %w", err)
 	}
 	if err := json.Unmarshal(bytes, &result); err != nil {
-		return nil, fmt.Errorf("getSubCaProviders: while decoding %s response: %w, body was: %s", resp.Status, err, string(bytes))
+		return nil, fmt.Errorf("getSubCas: while decoding %s response: %w, body was: %s", resp.Status, err, string(bytes))
 	}
 
 	return result.SubCaProviders, nil
@@ -902,7 +874,7 @@ func setServiceAccountCmd() *cobra.Command {
 
 func setServiceAccount(apiURL, apiKey, confName, saName string) error {
 	// Get configuration name by ID.
-	config, err := getConfigByName(apiURL, apiKey, confName)
+	config, err := getConfig(apiURL, apiKey, confName)
 	if err != nil {
 		return fmt.Errorf("while fetching Firefly configuration ID for the configuration '%s': %w", confName, err)
 	}
@@ -1052,71 +1024,155 @@ func pushCmd() *cobra.Command {
 	}
 }
 
-func getSubCaProvider(apiURL, apiKey, id string) (SubCaProvider, error) {
+func rmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rm <config-name>",
+		Short: "Remove a Firefly Configuration",
+		Long: undent.Undent(`
+			Remove a Firefly Configuration. This will delete the configuration
+			from Venafi Control Plane.
+		`),
+		Example: undent.Undent(`
+			vcpctl rm my-config
+			vcpctl rm 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
+		`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("rm: expected an argument <config-name|ID>, got %d", len(args))
+			}
+			nameOrID := args[0]
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("rm: while getting config %w", err)
+			}
+			// Get the configuration by name or ID.
+			c, err := getConfig(conf.APIURL, conf.APIKey, nameOrID)
+			if err != nil {
+				if errors.As(err, &NotFound{}) {
+					return fmt.Errorf("rm: Firefly configuration '%s' not found", nameOrID)
+				}
+				return fmt.Errorf("rm: while getting Firefly configuration by name or ID '%s': %w", nameOrID, err)
+			}
+			// Remove the configuration.
+			err = removeConfig(conf.APIURL, conf.APIKey, c.ID)
+			if err != nil {
+				return fmt.Errorf("rm: while removing Firefly configuration '%s': %w", nameOrID, err)
+			}
+			logutil.Debugf("Firefly Configuration '%s' removed successfully.", nameOrID)
+			return nil
+		},
+	}
+	return cmd
+}
+
+func getSubCaByID(apiURL, apiKey, id string) (SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
-		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while creating request: %w", err)
+		return SubCa{}, fmt.Errorf("getSubCa: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while making request: %w", err)
+		return SubCa{}, fmt.Errorf("getSubCa: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		var result SubCaProvider
+		var result SubCa
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			body, _ := io.ReadAll(resp.Body)
-			return SubCaProvider{}, fmt.Errorf("getSubCaProvider: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+			return SubCa{}, fmt.Errorf("getSubCa: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 		}
 		return result, nil
 	case http.StatusNotFound:
-		return SubCaProvider{}, NotFound{NameOrID: id}
+		return SubCa{}, NotFound{NameOrID: id}
 	default:
-		return SubCaProvider{}, fmt.Errorf("getSubCaProvider: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return SubCa{}, fmt.Errorf("getSubCa: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
-func getPolicyByName(apiURL, apiKey, nameOrID string) (Policy, error) {
+func getPolicy(apiURL, apiKey, nameOrID string) (Policy, error) {
+	if looksLikeAnID(nameOrID) {
+		return getPolicyByID(apiURL, apiKey, nameOrID)
+	}
+
 	policies, err := getPolicies(apiURL, apiKey)
 	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicyByName: while getting policies: %w", err)
+		return Policy{}, fmt.Errorf("getPolicy: while getting policies: %w", err)
 	}
 
 	// Find the policy by name. Error out if duplicate names are found.
-	var found Policy
+	var found []Policy
 	for _, cur := range policies {
 		if cur.Name == nameOrID {
-			if found.ID != "" {
-				return Policy{}, fmt.Errorf("getPolicyByName: duplicate policies found with name '%s':\n"+
-					"- %s (%s) created on %s\n"+
-					"- %s (%s) created on %s\n"+
-					"Please remove one of the service accounts first. You can run:\n"+
-					"    vcpctl sa rm %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
-			}
-			found = cur
+			found = append(found, cur)
 		}
 	}
-	if found.ID == "" {
-		return Policy{}, fmt.Errorf("getPolicyByName: policy with name '%s' not found", nameOrID)
+	if len(found) == 0 {
+		return Policy{}, fmt.Errorf("getPolicy: policy with name '%s' not found", nameOrID)
+	}
+	if len(found) > 1 {
+		b := strings.Builder{}
+		for _, cur := range found {
+			_, _ = b.WriteString(fmt.Sprintf("- %s (%s) created on %s\n", cur.Name, cur.ID, cur.CreationDate))
+		}
+		return Policy{}, fmt.Errorf(undent.Undent(`
+			getPolicy: duplicate policies found with name '%s':
+			%s
+			Please use an ID instead, or try to remove one of the service accounts
+			first with:
+			    vcpctl sa rm %s
+			`), nameOrID, b.String(), found[0].ID)
 	}
 
-	// Now we can get the policy by ID.
-	return found, nil
+	return found[0], nil
 }
 
-func getSubCaProviderByName(apiURL, apiKey, name string) (SubCaProvider, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
+func getPolicyByID(apiURL, apiKey, id string) (Policy, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies/"+id, nil)
 	if err != nil {
-		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: while creating request: %w", err)
+		return Policy{}, fmt.Errorf("getPolicyByID: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: while making request: %w", err)
+		return Policy{}, fmt.Errorf("getPolicyByID: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue below.
+	default:
+		return Policy{}, fmt.Errorf("getPolicyByID: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+	}
+	var result Policy
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return Policy{}, fmt.Errorf("getPolicyByID: while reading %s response body: %w", resp.Status, err)
+	}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return Policy{}, fmt.Errorf("getPolicyByID: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+	}
+	return result, nil
+}
+
+func getSubCa(apiURL, apiKey, name string) (SubCa, error) {
+	if looksLikeAnID(name) {
+		return getSubCaByID(apiURL, apiKey, name)
+	}
+
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
+	if err != nil {
+		return SubCa{}, fmt.Errorf("getSubCa: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return SubCa{}, fmt.Errorf("getSubCa: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1124,82 +1180,142 @@ func getSubCaProviderByName(apiURL, apiKey, name string) (SubCaProvider, error) 
 	case http.StatusOK:
 		// Continue.
 	default:
-		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return SubCa{}, fmt.Errorf("getSubCa: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
-		SubCaProviders []SubCaProvider `json:"subCaProviders"`
+		SubCaProviders []SubCa `json:"subCaProviders"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: while decoding response: %w", err)
+		return SubCa{}, fmt.Errorf("getSubCa: while decoding response: %w", err)
 	}
 
 	// Error out if a duplicate name is found.
-	var found SubCaProvider
+	var found []SubCa
 	for _, provider := range result.SubCaProviders {
 		if provider.Name == name {
-			if found.ID != "" {
-				return SubCaProvider{}, fmt.Errorf("getSubCaProviderByName: duplicate subCA providers found with name '%s':\n"+
-					"- %s (%s)\n"+
-					"- %s (%s)\n"+
-					"Please remove one of the subCA providers first. You can run:\n"+
-					"    vcpctl subca rm %s", name, provider.Name, provider.ID, found.Name, found.ID, found.ID)
-			}
-			found = provider
+			found = append(found, provider)
 		}
 	}
-	if found.ID == "" {
-		return SubCaProvider{}, fmt.Errorf("subCA provider: %w", NotFound{NameOrID: name})
+	if len(found) == 0 {
+		return SubCa{}, fmt.Errorf("subCA provider: %w", NotFound{NameOrID: name})
+	}
+	if len(found) > 1 {
+		b := strings.Builder{}
+		for _, cur := range found {
+			_, _ = b.WriteString(fmt.Sprintf("- %s (%s)\n", cur.Name, cur.ID))
+		}
+		return SubCa{}, fmt.Errorf(undent.Undent(`
+			getSubCa: duplicate sub CAs found with name '%s':
+			%s
+			Either use the subCA ID instead of the name, or remove one of the
+			subCAs first with:
+			    vcpctl subca rm %s
+		`), name, b.String(), found[0].ID)
 	}
 
-	// Now we can get the subCA provider by ID.
-	return found, nil
+	return found[0], nil
 }
 
-func getConfigByName(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
+func getConfig(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
+	if looksLikeAnID(nameOrID) {
+		return getConfigByID(apiURL, apiKey, nameOrID)
+	}
+
+	confs, err := getConfigs(apiURL, apiKey)
+	if err != nil {
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: while getting configurations: %w", err)
+	}
+
+	// We need to error out if duplicate names are found.
+	var found []FireflyConfig
+	for _, cur := range confs {
+		if cur.Name == nameOrID || cur.ID == nameOrID {
+			found = append(found, cur)
+		}
+	}
+	if len(found) == 0 {
+		return FireflyConfig{}, fmt.Errorf("getConfigByName: configuration with name '%s' not found", nameOrID)
+	}
+	if len(found) > 1 {
+		b := strings.Builder{}
+		for _, f := range found {
+			_, _ = b.WriteString(fmt.Sprintf("- %s (%s) created on %s\n", f.Name, f.ID, f.CreationDate))
+		}
+		return FireflyConfig{}, fmt.Errorf(undent.Undent(`
+			getConfigByName: duplicate Firefly Configurations found with name '%s':
+			%s
+			Either use the Firefly Configuration ID instead of the name, or try
+			removing the duplicates first with:
+			    vcpctl rm %s
+		`), nameOrID, b.String(), found[0].ID)
+	}
+
+	return found[0], nil
+}
+
+func getConfigs(apiURL, apiKey string) ([]FireflyConfig, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: while creating request: %w", err)
+		return nil, fmt.Errorf("getConfigs: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: while making request: %w", err)
+		return nil, fmt.Errorf("getConfigs: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		// Continue.
+		// Continue below.
 	default:
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return nil, fmt.Errorf("getConfigs: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 	var result struct {
 		Configurations []FireflyConfig `json:"configurations"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: while decoding response: %w", err)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("getConfigs: while reading response body: %w", err)
 	}
-	// Find the configuration by name or ID. Error out if duplicate names are found.
-	var found FireflyConfig
-	for _, cur := range result.Configurations {
-		if cur.Name == nameOrID || cur.ID == nameOrID {
-			if found.ID != "" {
-				return FireflyConfig{}, fmt.Errorf("getConfigByName: duplicate configurations found with name '%s':\n"+
-					"- %s (%s) created on %s\n"+
-					"- %s (%s) created on %s\n"+
-					"Please remove one of the configurations first. You can run:\n"+
-					"    vcpctl rm %s", nameOrID, cur.Name, cur.ID, cur.CreationDate, found.Name, found.ID, found.CreationDate, found.ID)
-			}
-			found = cur
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("getConfigs: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+	}
+	return result.Configurations, nil
+}
+
+func removeConfig(apiURL, apiKey, nameOrID string) error {
+	var id string
+	if looksLikeAnID(nameOrID) {
+		id = nameOrID
+	} else {
+		config, err := getConfig(apiURL, apiKey, nameOrID)
+		if err != nil {
+			return fmt.Errorf("removeConfig: while getting configuration by name %q: %w", nameOrID, err)
 		}
-	}
-	if found.ID == "" {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: configuration with name '%s' not found", nameOrID)
+		id = config.ID
 	}
 
-	// Now we can get the configuration by ID.
-	return found, nil
+	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/configurations/"+id, nil)
+	if err != nil {
+		return fmt.Errorf("removeConfig: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("removeConfig: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNoContent, http.StatusOK:
+		return nil
+	case http.StatusNotFound:
+		return &NotFound{NameOrID: nameOrID}
+	default:
+		return fmt.Errorf("removeConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+	}
 }
 
 func getPolicies(apiURL, apiKey string) ([]Policy, error) {
@@ -1228,34 +1344,6 @@ func getPolicies(apiURL, apiKey string) ([]Policy, error) {
 	}
 }
 
-func getPolicy(apiURL, apiKey, id string) (Policy, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies/"+id, nil)
-	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicy: while creating request: %w", err)
-	}
-
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicy: while making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		var result Policy
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return Policy{}, fmt.Errorf("getPolicy: while decoding %s response: %w", resp.Status, err)
-		}
-		return result, nil
-	case http.StatusNotFound:
-		return Policy{}, &NotFound{NameOrID: id}
-	default:
-		return Policy{}, fmt.Errorf("getPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
-	}
-}
-
 func pullCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pull",
@@ -1279,7 +1367,7 @@ func pullCmd() *cobra.Command {
 			}
 
 			// Get the original configuration.
-			originalConfig, err := getConfigByName(conf.APIURL, conf.APIKey, idOrName)
+			originalConfig, err := getConfig(conf.APIURL, conf.APIKey, idOrName)
 			if err != nil {
 				return fmt.Errorf("pull: while getting original Firefly configuration: %w", err)
 			}
@@ -1454,7 +1542,7 @@ func createFireflyPolicy(apiURL, apiKey string, policy Policy) (string, error) {
 	return result.ID, nil
 }
 
-func createSubCaProvider(apiURL, apiKey string, provider SubCaProvider) (string, error) {
+func createSubCaProvider(apiURL, apiKey string, provider SubCa) (string, error) {
 	body, err := json.Marshal(provider)
 	if err != nil {
 		return "", fmt.Errorf("createSubCaProvider: while marshaling provider: %w", err)
@@ -1560,7 +1648,7 @@ func (e NotFound) Error() string {
 	return fmt.Sprintf("'%s' not found", e.NameOrID)
 }
 
-func getConfig(apiURL, apiKey, id string) (FireflyConfig, error) {
+func getConfigByID(apiURL, apiKey, id string) (FireflyConfig, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id), nil)
 	if err != nil {
 		return FireflyConfig{}, err
@@ -1643,7 +1731,7 @@ func fullToPatchConfig(full FireflyConfig) FireflyConfigPatch {
 }
 
 func editConfig(apiURL, apiKey, name string) error {
-	config, err := getConfigByName(apiURL, apiKey, name)
+	config, err := getConfig(apiURL, apiKey, name)
 	if err != nil {
 		if errors.Is(err, NotFound{}) {
 			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl push config.yaml'", name)
@@ -1815,7 +1903,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 		return fmt.Errorf("built-in issuing template not found, please check your Venafi Control Plane configuration")
 	}
 
-	existingConfig, err := getConfigByName(apiURL, apiKey, updatedConfig.Name)
+	existingConfig, err := getConfig(apiURL, apiKey, updatedConfig.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
 		// Continue below since the nested sub CA and policies may not already
@@ -1828,7 +1916,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 	// and the SubCA provider, if needed.
 	for i := range updatedConfig.Policies {
 		// Get the original policy to check if it exists.
-		existingPolicy, err := getPolicyByName(apiURL, apiKey, updatedConfig.Policies[i].Name)
+		existingPolicy, err := getPolicy(apiURL, apiKey, updatedConfig.Policies[i].Name)
 		switch {
 		case errors.As(err, &NotFound{}):
 			// We will create it below.
@@ -1868,7 +1956,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, updatedConfig FireflyCon
 	}
 
 	// Now, let's take care of the SubCA provider.
-	existingSubCa, err := getSubCaProviderByName(apiURL, apiKey, updatedConfig.SubCaProvider.Name)
+	existingSubCa, err := getSubCa(apiURL, apiKey, updatedConfig.SubCaProvider.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
 		// We will create the SubCA provider just below.
@@ -2061,7 +2149,7 @@ func (e VenafiError) Error() string {
 	return fmt.Sprintf("\n* %s", strings.Join(msgs, "\n* "))
 }
 
-func fullToPatchSubCAProvider(full SubCaProvider) SubCaProviderPatch {
+func fullToPatchSubCAProvider(full SubCa) SubCaProviderPatch {
 	return SubCaProviderPatch{
 		CaProductOptionID:  full.CaProductOptionID,
 		CommonName:         full.CommonName,
@@ -2221,12 +2309,10 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 
 func removeServiceAccount(apiURL, apiKey, nameOrID string) error {
 	var id string
-	if len(nameOrID) == 36 && strings.Count(nameOrID, "-") == 4 {
-		// It looks like a UUID, so we can use it directly.
+	if looksLikeAnID(nameOrID) {
 		id = nameOrID
 	} else {
-		// It looks like a name, so we need to find the ID first.
-		sa, err := getServiceAccountByName(apiURL, apiKey, nameOrID)
+		sa, err := getServiceAccount(apiURL, apiKey, nameOrID)
 		if err != nil {
 			if errors.Is(err, NotFound{}) {
 				return fmt.Errorf("service account '%s' not found", nameOrID)
@@ -2260,22 +2346,26 @@ func removeServiceAccount(apiURL, apiKey, nameOrID string) error {
 	}
 }
 
-func getServiceAccountByName(apiURL, apiKey, name string) (ServiceAccount, error) {
+func getServiceAccount(apiURL, apiKey, nameOrID string) (ServiceAccount, error) {
+	if looksLikeAnID(nameOrID) {
+		return getServiceAccountByID(apiURL, apiKey, nameOrID)
+	}
+
 	sas, err := getServiceAccounts(apiURL, apiKey)
 	if err != nil {
-		return ServiceAccount{}, fmt.Errorf("getServiceAccountByName: while getting service accounts: %w", err)
+		return ServiceAccount{}, fmt.Errorf("getServiceAccount: while getting service accounts: %w", err)
 	}
 
 	// Error out if a duplicate service account name is found.
 	var found []ServiceAccount
 	for _, sa := range sas {
-		if sa.Name == name {
+		if sa.Name == nameOrID {
 			found = append(found, sa)
 		}
 	}
 
 	if len(found) == 0 {
-		return ServiceAccount{}, NotFound{NameOrID: name}
+		return ServiceAccount{}, NotFound{NameOrID: nameOrID}
 	}
 	if len(found) == 1 {
 		return found[0], nil
@@ -2283,18 +2373,46 @@ func getServiceAccountByName(apiURL, apiKey, name string) (ServiceAccount, error
 
 	// If we have multiple service accounts with the same name, let the user
 	// know about the duplicates.
-	var lst strings.Builder
+	var b strings.Builder
 	for _, sa := range found {
-		lst.WriteString(fmt.Sprintf("  - %s (%s)\n", sa.Name, sa.ID))
+		_, _ = b.WriteString(fmt.Sprintf("  - %s (%s)\n", sa.Name, sa.ID))
 	}
-	return ServiceAccount{}, fmt.Errorf("getServiceAccountByName: duplicate service account name '%s' found.\n"+
-		"The conflicting service accounts are:\n"+
-		lst.String()+
-		"Please remove one with the command:\n"+
-		"  vcpctl sa rm %s\n",
-		name,
-		found[0].ID)
+	return ServiceAccount{}, fmt.Errorf(undent.Undent(`
+		getServiceAccount: duplicate service account name '%s' found.
+		The conflicting service accounts are:
+		%s
+		Please use a client ID (that's the same as the service account ID), or
+		remove the duplicates using:
+		    vcpctl sa rm %s
+	`), nameOrID, b.String(), found[0].ID)
+}
 
+func getServiceAccountByID(apiURL, apiKey, id string) (ServiceAccount, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
+	if err != nil {
+		return ServiceAccount{}, err
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ServiceAccount{}, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// The request was successful. Continue below to decode the response.
+	default:
+		return ServiceAccount{}, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+	}
+
+	var result ServiceAccount
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return ServiceAccount{}, fmt.Errorf("getServiceAccountByID: while decoding response: %w", err)
+	}
+	return result, nil
 }
 
 type SACreateResp struct {
@@ -2371,7 +2489,7 @@ func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateRes
 	case http.StatusConflict:
 		return SACreateResp{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
 	default:
-		return SACreateResp{}, fmt.Errorf("http %s: please check the Status account fields: %w", resp.StatusCode, parseJSONErrorOrDumpBody(resp))
+		return SACreateResp{}, fmt.Errorf("http %s: please check the Status account fields: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result SACreateResp
@@ -2698,4 +2816,103 @@ func rmInteractive(in []ServiceAccount) []string {
 		ids = append(ids, sel.ID)
 	}
 	return ids
+}
+
+func looksLikeAnID(s string) bool {
+	if len(s) == 36 && strings.Count(s, "-") == 4 {
+		return true
+	}
+	return false
+}
+
+// I don't like Lipgloss's tables because they make it hard to select text in
+// the table without also selecting other elements. So I've implemented a
+// simple table printer that uses ANSI escape codes to color the output.
+//
+// All columns are tab-separated, and the headers are printed in bold cyan.
+func printTable(headers []string, rows [][]string) {
+	// Color the headers in bold cyan, and make them ALL CAPS.
+	for i := range headers {
+		headers[i] = strings.ToUpper(headers[i])
+		headers[i] = boldCyan(headers[i])
+	}
+
+	maxWidths := make([]int, len(headers))
+	for i, header := range headers {
+		maxWidths[i] = len(withoutANSI(header))
+	}
+	for _, row := range rows {
+		for i, col := range row {
+			len := len(withoutANSI(col))
+			if len > maxWidths[i] {
+				maxWidths[i] = len
+			}
+		}
+	}
+
+	for i, header := range headers {
+		fmt.Printf("%-*s\t", maxWidths[i]+countANSIChars(header), header)
+	}
+	fmt.Println()
+
+	for _, row := range rows {
+		for i, col := range row {
+			fmt.Printf("%-*s\t", maxWidths[i]+countANSIChars(col), col)
+		}
+		fmt.Println()
+	}
+}
+
+// Returns an ANSI color escape code that is unique to the given text.
+func uniqueColor(text string) string {
+	// Don't color if the terminal is not a TTY.
+	if !isatty.IsTerminal(os.Stdout.Fd()) {
+		return text
+	}
+
+	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", hash(text)%256, text)
+}
+
+func hash(s string) int {
+	// A simple hash function that returns a number between 0 and 255. This is
+	// not cryptographically secure, but it's good enough for our purposes of
+	// generating unique colors.
+	var h int
+	for _, c := range s {
+		h = (h*31 + int(c)) % 256
+	}
+	return h
+}
+
+func redBold(text string) string {
+	if !isatty.IsTerminal(os.Stdout.Fd()) {
+		return text
+	}
+	return fmt.Sprintf("\x1b[1;31m%s\x1b[0m", text)
+}
+
+func lightGray(text string) string {
+	if !isatty.IsTerminal(os.Stdout.Fd()) {
+		return text
+	}
+	return fmt.Sprintf("\x1b[90m%s\x1b[0m", text)
+}
+
+func boldCyan(text string) string {
+	if !isatty.IsTerminal(os.Stdout.Fd()) {
+		return text
+	}
+	return fmt.Sprintf("\x1b[1;34m%s\x1b[0m", text)
+}
+
+var ansiRegexp = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// Remove ANSI escape codes from the text. Useful for calculating how many chars
+// a string has for alignment purposes.
+func withoutANSI(s string) string {
+	return ansiRegexp.ReplaceAllString(s, "")
+}
+
+func countANSIChars(s string) int {
+	return len(s) - len(withoutANSI(s))
 }
