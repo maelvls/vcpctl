@@ -2932,7 +2932,7 @@ func getTeams(apiURL, apiKey string) ([]Team, error) {
 // For anyone who uses the Red Hat YAML LSP server.
 func appendSchemaComment(b []byte) []byte {
 	return appendLines(b,
-		"# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/schema.json",
+		"# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/genschema/schema.json",
 	)
 }
 
