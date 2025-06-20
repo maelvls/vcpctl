@@ -958,8 +958,58 @@ func getSubCas(apiURL, apiKey string) ([]SubCa, error) {
 	return result.SubCaProviders, nil
 }
 
-func removeSubCaProvider(apiURL, apiKey, providerNameOrID string) error {
-	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/subcaproviders/"+providerNameOrID, nil)
+func getSubCaByID(apiURL, apiKey, id string) (SubCa, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
+	if err != nil {
+		return SubCa{}, fmt.Errorf("getSubCaByID: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return SubCa{}, fmt.Errorf("getSubCaByID: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Continue.
+	case http.StatusNotFound:
+		return SubCa{}, &NotFound{NameOrID: id}
+	default:
+		return SubCa{}, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+	}
+
+	var result SubCa
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return SubCa{}, fmt.Errorf("getSubCaByID: while reading response body: %w", err)
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return SubCa{}, fmt.Errorf("getSubCaByID: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+	}
+	if result.ID == "" {
+		return SubCa{}, fmt.Errorf("getSubCaByID: SubCA provider '%s' not found", id)
+	}
+	return result, nil
+}
+
+func removeSubCaProvider(apiURL, apiKey, nameOrID string) error {
+	if looksLikeAnID(nameOrID) {
+		return removeSubCaProviderByID(apiURL, apiKey, nameOrID)
+	}
+
+	subCA, err := getSubCa(apiURL, apiKey, nameOrID)
+	if err != nil {
+		return fmt.Errorf("removeSubCaProvider: while getting SubCA provider by name '%s': %w", nameOrID, err)
+	}
+	if subCA.ID == "" {
+		return fmt.Errorf("removeSubCaProvider: SubCA provider '%s' not found", nameOrID)
+	}
+	return removeSubCaProviderByID(apiURL, apiKey, subCA.ID)
+}
+
+func removeSubCaProviderByID(apiURL, apiKey, id string) error {
+	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while creating request: %w", err)
 	}
@@ -1215,33 +1265,6 @@ func rmCmd() *cobra.Command {
 	return cmd
 }
 
-func getSubCaByID(apiURL, apiKey, id string) (SubCa, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
-	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCa: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCa: while making request: %w", err)
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusOK:
-		var result SubCa
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			body, _ := io.ReadAll(resp.Body)
-			return SubCa{}, fmt.Errorf("getSubCa: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
-		}
-		return result, nil
-	case http.StatusNotFound:
-		return SubCa{}, NotFound{NameOrID: id}
-	default:
-		return SubCa{}, fmt.Errorf("getSubCa: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
-	}
-}
-
 func getPolicy(apiURL, apiKey, nameOrID string) (Policy, error) {
 	if looksLikeAnID(nameOrID) {
 		return getPolicyByID(apiURL, apiKey, nameOrID)
@@ -1260,7 +1283,7 @@ func getPolicy(apiURL, apiKey, nameOrID string) (Policy, error) {
 		}
 	}
 	if len(found) == 0 {
-		return Policy{}, fmt.Errorf("getPolicy: policy with name '%s' not found", nameOrID)
+		return Policy{}, NotFound{NameOrID: nameOrID}
 	}
 	if len(found) > 1 {
 		b := strings.Builder{}
@@ -2078,15 +2101,6 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 		return fmt.Errorf("built-in issuing template not found, please check your Venafi Control Plane configuration")
 	}
 
-	existingConfig, err := getConfig(apiURL, apiKey, updatedConfig.Name)
-	switch {
-	case errors.As(err, &NotFound{}):
-		// Continue below since the nested sub CA and policies may not already
-		// exist, so the Firefly configuration may need to be patched.
-	case err != nil:
-		return fmt.Errorf("while getting configuration ID: %w", err)
-	}
-
 	// Before dealing with patching the configuration, let's patch the policies
 	// and the SubCA provider, if needed.
 	for i := range updatedConfig.Policies {
@@ -2095,10 +2109,10 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 		switch {
 		case errors.As(err, &NotFound{}):
 			// We will create it below.
-		case err != nil:
-			return fmt.Errorf("while getting the existing Firefly policy '%s': %w", updatedConfig.Policies[i].Name, err)
-		default:
+		case err == nil:
 			// Policy exists and might need to be patched. Continue below.
+		default:
+			return fmt.Errorf("while getting the existing Firefly policy '%s': %w", updatedConfig.Policies[i].Name, err)
 		}
 
 		if existingPolicy.ID == "" {
@@ -2188,9 +2202,17 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 		}
 	}
 
-	// If we reach this point, we have successfully patched the configuration,
-	// subCA provider, and policies. Let's see if the Firefly configuration
-	// needs to be created or updated.
+	// If we reach this point, we have successfully dealt with service accounts,
+	// the sub CA, and policies. Let's see if the Firefly configuration needs to
+	// be created or updated.
+	existingConfig, err := getConfig(apiURL, apiKey, updatedConfig.Name)
+	switch {
+	case errors.As(err, &NotFound{}):
+		// Continue below since the nested sub CA and policies may not already
+		// exist, so the Firefly configuration may need to be patched.
+	case err != nil:
+		return fmt.Errorf("while getting configuration ID: %w", err)
+	}
 	if existingConfig.ID == "" {
 		// The configuration does not exist, we need to create it.
 		confID, err := createConfig(apiURL, apiKey, fullToPatchConfig(updatedConfig))
