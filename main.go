@@ -692,7 +692,7 @@ func lsCmd() *cobra.Command {
 						}
 					}
 					if !found {
-						saNames = append(saNames, saID+redBold("deleted"))
+						saNames = append(saNames, saID+redBold(" (deleted)"))
 					}
 				}
 				confs[i].ServiceAccountIDs = saNames
@@ -1877,6 +1877,8 @@ func editConfig(apiURL, apiKey, name string) error {
 	}
 	defer tmpfile.Close()
 
+	info, _ := os.Stat(tmpfile.Name())
+	lastSaved := info.ModTime()
 edit:
 	// Open editor to let you edit YAML.
 	editor := os.Getenv("EDITOR")
@@ -1898,49 +1900,60 @@ edit:
 		return err
 	}
 
+	// Abort if the file is empty or if the file hasn't been written to.
+	if len(modifiedRaw) == 0 {
+		logutil.Debugf("the configuration file is empty, aborting")
+		return nil
+	}
+	info, _ = os.Stat(tmpfile.Name())
+	if info.ModTime().Equal(lastSaved) {
+		logutil.Infof("No edits, aborting.")
+		return nil
+	}
+
 	var modified FireflyConfig
 	if err := yaml.UnmarshalWithOptions(modifiedRaw, &modified, yaml.Strict()); err != nil {
-		notice := "# NOTICE: The configuration you have modified is not valid.\n" +
-			"# NOTICE: Please fix the errors and re-edit the configuration.\n" +
-			"# NOTICE: The errors are:\n" + err.Error() + "\n"
-
-		// Prepend the notice to the modified YAML.
-		_, _ = tmpfile.Seek(0, 0)
-		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
+		logutil.Debugf("the configuration you have modified is not valid:\n%s", err)
+		notice := "# NOTICE: Errors were found, please edit the configuration.\n" +
+			"# NOTICE: You can abort editing by emptying this file.\n" +
+			"# NOTICE:\n" +
+			"# NOTICE: " + strings.ReplaceAll(err.Error(), "\n", "\n# NOTICE: ") + "\n\n"
+		err = os.WriteFile(tmpfile.Name(), append([]byte(notice), modifiedRaw...), 0644)
 		if err != nil {
 			return fmt.Errorf("while writing notice to file: %w", err)
 		}
+		info, _ := os.Stat(tmpfile.Name())
+		lastSaved = info.ModTime()
 		goto edit
 	}
 
 	err = validateFireflyConfig(modified)
 	if err != nil {
-		notice := "# NOTICE: The configuration you have modified is not valid.\n" +
-			"# NOTICE: Please fix the errors and re-edit the configuration.\n" +
-			"# NOTICE: The errors are:\n" + err.Error() + "\n"
+		logutil.Debugf("the configuration you have modified is not valid:\n%s", err)
 
-		// Prepend the notice to the modified YAML.
-		_, _ = tmpfile.Seek(0, 0)
-		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
+		modifiedRaw := removeNoticeFromYAML(string(modifiedRaw))
+		notice := "# NOTICE: Errors were found, please edit the configuration.\n" +
+			"# NOTICE: You can abort editing by emptying this file.\n" +
+			"# NOTICE:\n" +
+			"# NOTICE: " + strings.ReplaceAll(err.Error(), "\n", "\n# NOTICE: ") + "\n\n"
+		err = os.WriteFile(tmpfile.Name(), append([]byte(notice), modifiedRaw...), 0644)
 		if err != nil {
 			return fmt.Errorf("while writing notice to file: %w", err)
 		}
+		info, _ := os.Stat(tmpfile.Name())
+		lastSaved = info.ModTime()
 		goto edit
 	}
 
 	err = createOrUpdateConfigAndDeps(apiURL, apiKey, knownSvcaccts, modified)
 	if errors.Is(err, errPINRequired) {
-		// If the PIN is required, we need to ask the user to fill it in.
 		logutil.Errorf("ERROR: The subCaProvider.pkcs11.pin field is required.")
-		logutil.Errorf("Reopening the editor so that you can fill it in.")
 
-		// Add the notice to the top of the file.
+		// If the PIN is required, we need to ask the user to fill it in.
+		modifiedRaw := removeNoticeFromYAML(string(modifiedRaw))
 		notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
-			"# NOTICE: field. has been modified. Please re-edit the configuration to fill in the PKCS11 pin.\n"
-
-		// Prepend the notice to the modified YAML.
-		_, _ = tmpfile.Seek(0, 0)
-		_, err = tmpfile.Write(append([]byte(notice), modifiedRaw...))
+			"# NOTICE: You can abort by emptying this file and closing it. Please re-edit the configuration to fill in the PKCS11 pin.\n\n"
+		err = os.WriteFile(tmpfile.Name(), append([]byte(notice), modifiedRaw...), 0644)
 		if err != nil {
 			return fmt.Errorf("while writing notice to file: %w", err)
 		}
@@ -1951,6 +1964,13 @@ edit:
 	}
 
 	return nil
+}
+
+var re = regexp.MustCompile(`(?m)^# NOTICE:.*\n`)
+
+// Remove the NOTICE lines from the YAML data.
+func removeNoticeFromYAML(yamlData string) string {
+	return re.ReplaceAllString(yamlData, "")
 }
 
 func svcAcctsComments(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
