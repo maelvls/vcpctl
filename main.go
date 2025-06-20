@@ -1150,7 +1150,7 @@ func putCmd() *cobra.Command {
 			if err := yaml.UnmarshalWithOptions(bytes, &updatedConfig, yaml.Strict()); err != nil {
 				return fmt.Errorf("put: while decoding Firefly configuration from '%s': %w", filePath, err)
 			}
-			updatedConfig = hideMisleadingFields(updatedConfig)
+			hideMisleadingFields(&updatedConfig)
 			populateServiceAccountsInConfig(&updatedConfig, svcaccts)
 
 			if err := validateFireflyConfig(updatedConfig); err != nil {
@@ -1526,9 +1526,10 @@ func getCmd() *cobra.Command {
 				return fmt.Errorf("get: while getting original Firefly configuration: %w", err)
 			}
 			populateServiceAccountsInConfig(&config, knownSvcaccts)
+			hideMisleadingFields(&config)
 
 			yamlData, err := yaml.MarshalWithOptions(
-				hideMisleadingFields(config),
+				config,
 				yaml.WithComment(svcAcctsComments(config, knownSvcaccts)),
 				yaml.Indent(4),
 			)
@@ -1547,15 +1548,7 @@ func getCmd() *cobra.Command {
 // Zero out the config ID, subCA provider ID, and policy IDs in the
 // configuration. Service account IDs are kept. Useful for removing misleading
 // fields before marshalling to YAML.
-func hideMisleadingFields(config FireflyConfig) FireflyConfig {
-	c := config
-
-	var policies []Policy
-	for i := range config.Policies {
-		policies = append(policies, config.Policies[i])
-	}
-	c.Policies = policies
-
+func hideMisleadingFields(c *FireflyConfig) {
 	// Zero out all IDs in the configuration, so that we can use it to create
 	// a new configuration without any IDs.
 	c.ID = ""
@@ -1571,12 +1564,10 @@ func hideMisleadingFields(config FireflyConfig) FireflyConfig {
 		c.Policies[i].ModificationDate = ""
 	}
 
-	for i := range c.ServiceAccountIDs {
+	for i := range c.ServiceAccounts {
 		c.ServiceAccounts[i].ID = ""
 		c.ServiceAccounts[i].Owner = ""
 	}
-
-	return c
 }
 
 // createConfig creates a new Firefly configuration or updates an
@@ -1866,9 +1857,10 @@ func editConfig(apiURL, apiKey, name string) error {
 		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
 	populateServiceAccountsInConfig(&config, knownSvcaccts)
+	hideMisleadingFields(&config)
 
 	yamlData, err := yaml.MarshalWithOptions(
-		hideMisleadingFields(config),
+		config,
 		yaml.WithComment(svcAcctsComments(config, knownSvcaccts)),
 	)
 	if err != nil {
