@@ -390,8 +390,11 @@ func saGenkeypairCmd() *cobra.Command {
 			vcpctl sa gen keypair <sa-name>
 			vcpctl sa gen keypair <sa-name> -ojson
 		`),
-		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("expects a single argument (the service account name), got: %s", args)
+			}
+
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: while getting config %w", err)
@@ -1570,6 +1573,7 @@ func hideMisleadingFields(config FireflyConfig) FireflyConfig {
 
 	for i := range c.ServiceAccountIDs {
 		c.ServiceAccounts[i].ID = ""
+		c.ServiceAccounts[i].Owner = ""
 	}
 
 	return c
@@ -2008,13 +2012,22 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 			id = resp.ID
 			logutil.Debugf("Service account '%s' created with ID '%s'.", updatedConfig.ServiceAccounts[i].Name, resp.ID)
 		} else {
+			// The service account exists, we may need to patch it.
 			id = existingSa.ID
-			// The service account exists, we need to patch it.
-			err = patchServiceAccount(apiURL, apiKey, id, fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
-			if err != nil {
-				return fmt.Errorf("while patching service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
+
+			// Un-hide the owner field.
+			updatedConfig.ServiceAccounts[i].Owner = existingSa.Owner
+			d := ANSIDiff(fullToPatchServiceAccount(existingSa), fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
+			if d != "" {
+				err = patchServiceAccount(apiURL, apiKey, id, fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
+				if err != nil {
+					return fmt.Errorf("while patching service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
+				}
+
+				logutil.Debugf("Service account '%s' patched:\n'%s'", updatedConfig.ServiceAccounts[i].Name, d)
+			} else {
+				logutil.Debugf("Service account '%s' is unchanged, skipping update.", updatedConfig.ServiceAccounts[i].Name)
 			}
-			logutil.Debugf("Service account '%s' patched.", updatedConfig.ServiceAccounts[i].Name)
 		}
 		updatedConfig.ServiceAccounts[i].ID = id
 		updatedConfig.ServiceAccountIDs = append(updatedConfig.ServiceAccountIDs, id)
@@ -2697,6 +2710,19 @@ func fullToPatchServiceAccount(sa ServiceAccount) ServiceAccountPatch {
 }
 
 func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) error {
+	// If no owner is specified, let's just use the first team we can find.
+	if patch.Owner == "" {
+		teams, err := getTeams(apiURL, apiKey)
+		if err != nil {
+			return fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
+		}
+		if len(teams) == 0 {
+			return fmt.Errorf("patchServiceAccount: no teams found, please specify an owner")
+		}
+		patch.Owner = teams[0].ID
+		logutil.Debugf("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
+	}
+
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return fmt.Errorf("patchServiceAccount: while marshalling patch: %w", err)
