@@ -26,22 +26,22 @@ You can edit the configuration in your `$EDITOR` with the command:
 vcpctl edit test
 ```
 
-You can read a Firefly configuration with:
+You can export a Firefly configuration along with its associated Sub CA, Policies, and Service Account with:
 
 ```bash
-vcpctl pull test
+vcpctl get test
 ```
 
-You can push a Firefly configuration with:
+You can create (and update) a Firefly configuration with:
 
 ```bash
-vcpctl push test
+vcpctl put -f test.yaml
 ```
 
 > [!NOTE]
 >
-> The `push` and `edit` commands will create the missing Firefly Sub CA Provider
-> and Firefly Policies.
+> The `put` and `edit` commands will create the missing Firefly Sub CA,
+> Firefly Policies, and Service Accounts.
 
 
 ## Schema of config.yaml
@@ -50,6 +50,6 @@ In VSCode or any other editor supporting the YAML LSP, you can add the following
 comment to the top of your `config.yaml` file to enable schema validation:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/genschema/schema.json
 name: test
 ```
