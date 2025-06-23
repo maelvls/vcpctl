@@ -19,7 +19,7 @@ var (
 )
 
 // Prints to stderr.
-func Debugf(format string, a ...interface{}) {
+func Debugf(format string, a ...any) {
 	if !EnableDebug {
 		return
 	}
@@ -28,13 +28,13 @@ func Debugf(format string, a ...interface{}) {
 }
 
 // Prints to stderr.
-func Errorf(format string, a ...interface{}) {
+func Errorf(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "%s: ", Red("error"))
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 }
 
 // Prints to stderr.
-func Infof(format string, a ...interface{}) {
+func Infof(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "%s: ", Yel("info"))
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 }

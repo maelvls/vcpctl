@@ -40,7 +40,7 @@ const (
 
 // Replace the old flag-based main() with cobra execution.
 func main() {
-	var apiURLFlag string
+	var apiURLFlag, apiKeyFlag string
 	rootCmd := &cobra.Command{
 		Use:   "vcpctl",
 		Short: "A CLI tool for Venafi configurations",
@@ -68,13 +68,18 @@ func main() {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Run: func(cmd *cobra.Command, args []string) {
-			_ = cmd.Help()
+			logutil.Errorf(undent.Undent(`
+				no command specified. To get started, run:
+					vcpctl auth login
+			`))
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the Venafi API URL (default: https://api.venafi.cloud, can also set APIURL env var; flag takes precedence)")
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given Venafi API URL. You can also set APIURL. Flag takes precedence. When using this flag, the configuration file is not used.")
+	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given Venafi API key. You can also set APIKEY. Flag takes precedence. When using this flag, the configuration file is not used.")
+
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
-	rootCmd.AddCommand(lsCmd(), editCmd(), attachSaCmd(), putCmd(), rmCmd(), getCmd(), saCmd(), subcaCmd(), policyCmd())
+	rootCmd.AddCommand(authCmd(), lsCmd(), editCmd(), attachSaCmd(), putCmd(), rmCmd(), getCmd(), saCmd(), subcaCmd(), policyCmd())
 
 	ctx := context.Background()
 	err := rootCmd.ExecuteContext(ctx)
@@ -82,6 +87,18 @@ func main() {
 		logutil.Errorf("%v", err)
 		os.Exit(1)
 	}
+}
+
+func authCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "auth",
+		Short:         "Commands for authenticating and switching tenants.",
+		Long:          "Manage authentication for Venafi Cloud, including login and switch.",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+	}
+	cmd.AddCommand(authLoginCmd(), authSwitchCmd())
+	return cmd
 }
 
 type ClientAuthentication struct {
@@ -184,7 +201,7 @@ type SubCa struct {
 	OrganizationalUnit string `json:"organizationalUnit"`
 	StateOrProvince    string `json:"stateOrProvince"`
 	KeyAlgorithm       string `json:"keyAlgorithm"`
-	PKCS11             PKCS11 `json:"pkcs11"`
+	PKCS11             PKCS11 `json:"pkcs11,omitempty"`
 }
 
 type PKCS11 struct {
@@ -217,26 +234,47 @@ type ToolConf struct {
 }
 
 func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
-	token := os.Getenv("APIKEY")
-	if token == "" {
-		return ToolConf{}, fmt.Errorf("APIKEY environment variable not set")
+	envAPIURL := os.Getenv("APIURL")
+	envAPIKey := os.Getenv("APIKEY")
+	flagAPIURL, _ := cmd.Flags().GetString("api-url")
+	flagAPIKey, _ := cmd.Flags().GetString("api-key")
+
+	// If any of $APIKEY, $APIURL, --api-key, or --api-url is set, we don't use
+	// the configuration file.
+	if flagAPIKey != "" || envAPIKey != "" || flagAPIURL != "" || envAPIURL != "" {
+		logutil.Debugf("one of $APIKEY, $APIURL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
+		// Priority: $APIURL > --api-url.
+		apiURL := envAPIURL
+		if apiURL == "" {
+			apiURL = flagAPIURL
+		}
+		apiKey := envAPIKey
+		if apiKey == "" {
+			apiKey = flagAPIKey
+		}
+
+		return ToolConf{
+			APIURL: apiURL,
+			APIKey: apiKey,
+		}, nil
 	}
 
-	// Priority: --api-url flag > APIURL env var > https://api.venafi.cloud.
-	apiURLFlag, err := cmd.Flags().GetString("api-url")
+	logutil.Debugf("none of $APIKEY, $APIURL, --api-key, or --api-url is set, using the configuration file at ~/%s", configPath)
+
+	conf, err := LoadFileConf()
 	if err != nil {
-		return ToolConf{}, fmt.Errorf("failed to get api-url flag: %w", err)
+		return ToolConf{}, fmt.Errorf("loading configuration: %w", err)
 	}
-	apiURL := defaultAPIURL
-	if apiURLFlag != "" {
-		apiURL = apiURLFlag
-	} else if envURL := os.Getenv("APIURL"); envURL != "" {
-		apiURL = envURL
+
+	// Find the current tenant.
+	current, ok := CurrentFrom(conf)
+	if !ok {
+		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl auth login")
 	}
 
 	return ToolConf{
-		APIURL: apiURL,
-		APIKey: token,
+		APIURL: current.APIURL,
+		APIKey: current.APIKey,
 	}, nil
 }
 
@@ -256,10 +294,12 @@ func saLsCmd() *cobra.Command {
 			vcpctl sa ls -ojson
 			vcpctl sa ls -oid
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa ls: while getting config %w", err)
+				return fmt.Errorf("sa ls: %w", err)
 			}
 			svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
 			if err != nil {
@@ -313,6 +353,8 @@ func saCmd() *cobra.Command {
 			vcpctl sa gen keypair <sa-name>
 			vcpctl sa get <sa-name>
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	cmd.AddCommand(
 		saLsCmd(),
@@ -338,6 +380,8 @@ func saGenCmd() *cobra.Command {
 			vcpctl sa gen keypair <sa-name>
 			vcpctl sa gen keypair <sa-name> -ojson
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	cmd.AddCommand(saGenkeypairCmd())
 	return cmd
@@ -353,6 +397,8 @@ func saPutCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	cmd.AddCommand(saPutKeypairCmd())
 	return cmd
@@ -390,6 +436,8 @@ func saGenkeypairCmd() *cobra.Command {
 			vcpctl sa gen keypair <sa-name>
 			vcpctl sa gen keypair <sa-name> -ojson
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expects a single argument (the service account name), got: %s", args)
@@ -397,7 +445,7 @@ func saGenkeypairCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa gen keypair: while getting config %w", err)
+				return fmt.Errorf("sa gen keypair: %w", err)
 			}
 
 			saName := args[0]
@@ -470,11 +518,13 @@ func saPutKeypairCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
 		`),
-		Args: cobra.ExactArgs(1),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa put keypair: while getting config %w", err)
+				return fmt.Errorf("sa put keypair: %w", err)
 			}
 
 			saName := args[0]
@@ -540,12 +590,18 @@ func saGetCmd() *cobra.Command {
 			vcpctl sa get <sa-name> -o json
 			vcpctl sa get <sa-name> -o clientid
 		`),
-		Args: cobra.ExactArgs(1),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa get: while getting config %w", err)
+				return fmt.Errorf("sa get: %w", err)
 			}
+
+			if len(args) != 1 {
+				return fmt.Errorf("sa get: expected a single argument (the service account name), got: %s", args)
+			}
+
 			saName := args[0]
 
 			sa, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
@@ -600,6 +656,8 @@ func saRmCmd() *cobra.Command {
 			vcpctl sa rm <sa-name>
 			vcpctl sa rm -i
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if interactive {
 				if len(args) > 0 {
@@ -609,7 +667,7 @@ func saRmCmd() *cobra.Command {
 				// select one to remove.
 				conf, err := getToolConfig(cmd)
 				if err != nil {
-					return fmt.Errorf("sa rm -i: while getting config %w", err)
+					return fmt.Errorf("sa rm -i: %w", err)
 				}
 				svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
 				if err != nil {
@@ -636,7 +694,7 @@ func saRmCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa rm: while getting config %w", err)
+				return fmt.Errorf("sa rm: %w", err)
 			}
 
 			err = removeServiceAccount(conf.APIURL, conf.APIKey, saName)
@@ -659,12 +717,14 @@ func lsCmd() *cobra.Command {
 		Long: undent.Undent(`
 			List the Firefly Configurations present in Venafi Control Plane.
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Note: The following functions (GetTokenUsingFileConf and listObjects)
 			// should be implemented according to your needs.
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("ls: while getting config %w", err)
+				return fmt.Errorf("ls: %w", err)
 			}
 
 			confs, err := listConfigs(conf.APIURL, conf.APIKey)
@@ -728,6 +788,8 @@ func subcaCmd() *cobra.Command {
 			  vcpctl subca rm foo
 			  vcpctl subca pull foo
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	cmd.AddCommand(
 		subcaLsCmd(),
@@ -748,10 +810,12 @@ func subcaLsCmd() *cobra.Command {
 			vcpctl subca ls
 			vcpctl subca rm <subca-name>
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("subca ls: while getting config %w", err)
+				return fmt.Errorf("subca ls: %w", err)
 			}
 			providers, err := getSubCas(conf.APIURL, conf.APIKey)
 			if err != nil {
@@ -782,6 +846,8 @@ func subcaRmCmd() *cobra.Command {
 			Venafi Control Plane. You cannot remove a SubCA Provider that is
 			attached to a Firefly Configuration.
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("rm: expected a single argument (the Sub CA name), got %s", args)
@@ -790,7 +856,7 @@ func subcaRmCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("rm: while getting config %w", err)
+				return fmt.Errorf("rm: %w", err)
 			}
 
 			err = removeSubCaProvider(conf.APIURL, conf.APIKey, providerNameOrID)
@@ -817,6 +883,8 @@ func policyCmd() *cobra.Command {
 			vcpctl policy ls
 			vcpctl policy rm <policy-name>
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	cmd.AddCommand(
 		policyLsCmd(),
@@ -836,10 +904,12 @@ func policyLsCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl policy ls
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("policy ls: while getting config %w", err)
+				return fmt.Errorf("policy ls: %w", err)
 			}
 			policies, err := getPolicies(conf.APIURL, conf.APIKey)
 			if err != nil {
@@ -875,6 +945,8 @@ func policyRmCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl policy rm <policy-name>
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("rm: expected a single argument (the Policy name), got %s", args)
@@ -882,7 +954,7 @@ func policyRmCmd() *cobra.Command {
 			policyNameOrID := args[0]
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("rm: while getting config %w", err)
+				return fmt.Errorf("rm: %w", err)
 			}
 			err = removePolicy(conf.APIURL, conf.APIKey, policyNameOrID)
 			if err != nil {
@@ -1042,6 +1114,8 @@ func attachSaCmd() *cobra.Command {
 			vcpctl attach-sa "config-name" --sa "link-name"
 			vcpctl attach-sa "config-name" --sa "03931ba6-3fc5-11f0-85b8-9ee29ab248f0"
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("attach-sa: expected a single argument (the Firefly configuration name), got %s", args)
@@ -1050,7 +1124,7 @@ func attachSaCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("attach-sa: while getting config %w", err)
+				return fmt.Errorf("attach-sa: %w", err)
 			}
 
 			err = attachSAToConf(conf.APIURL, conf.APIKey, confName, saName)
@@ -1128,6 +1202,8 @@ func editCmd() *cobra.Command {
 		Long: undent.Undent(`
 			Edit a Firefly Configuration.
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("edit: expected a single argument (the Firefly configuration name), got %s", args)
@@ -1135,7 +1211,7 @@ func editCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("edit: while getting config %w", err)
+				return fmt.Errorf("edit: %w", err)
 			}
 
 			err = editConfig(conf.APIURL, conf.APIKey, args[0])
@@ -1162,6 +1238,8 @@ func putCmd() *cobra.Command {
 			vcpctl put -f config.yaml
 			vcpctl put -f - < config.yaml
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var file *os.File
 			switch filePath {
@@ -1181,7 +1259,7 @@ func putCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("put: while getting config %w", err)
+				return fmt.Errorf("put: %w", err)
 			}
 
 			bytes, err := io.ReadAll(file)
@@ -1236,6 +1314,8 @@ func rmCmd() *cobra.Command {
 			vcpctl rm my-config
 			vcpctl rm 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("rm: expected a single argument (the Firefly configuration name or ID), got %s", args)
@@ -1243,7 +1323,7 @@ func rmCmd() *cobra.Command {
 			nameOrID := args[0]
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("rm: while getting config %w", err)
+				return fmt.Errorf("rm: %w", err)
 			}
 			// Get the configuration by name or ID.
 			c, err := getConfig(conf.APIURL, conf.APIKey, nameOrID)
@@ -1397,7 +1477,7 @@ func getConfig(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
 
 	confs, err := getConfigs(apiURL, apiKey)
 	if err != nil {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName: while getting configurations: %w", err)
+		return FireflyConfig{}, fmt.Errorf("getConfigByName:urations: %w", err)
 	}
 
 	// We need to error out if duplicate names are found.
@@ -1465,7 +1545,7 @@ func removeConfig(apiURL, apiKey, nameOrID string) error {
 	} else {
 		config, err := getConfig(apiURL, apiKey, nameOrID)
 		if err != nil {
-			return fmt.Errorf("removeConfig: while getting configuration by name %q: %w", nameOrID, err)
+			return fmt.Errorf("removeConfig:uration by name %q: %w", nameOrID, err)
 		}
 		id = config.ID
 	}
@@ -1528,6 +1608,8 @@ func getCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl get <config-name>
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("get: expected a single argument (the Firefly configuration name), got %s", args)
@@ -1536,7 +1618,7 @@ func getCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("get: while getting config %w", err)
+				return fmt.Errorf("get: %w", err)
 			}
 
 			knownSvcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
@@ -2885,6 +2967,99 @@ func getIssuingTemplates(apiURL, apiKey string) ([]CertificateIssuingTemplate, e
 	}
 
 	return result.CertificateIssuingTemplates, nil
+}
+
+type CheckResp struct {
+	User struct {
+		Username        string   `json:"username"`
+		ID              string   `json:"id"`
+		CompanyID       string   `json:"companyId"`
+		Firstname       string   `json:"firstname"`
+		Lastname        string   `json:"lastname"`
+		EmailAddress    string   `json:"emailAddress"`
+		UserType        string   `json:"userType"`
+		UserAccountType string   `json:"userAccountType"`
+		SsoStatus       string   `json:"ssoStatus"`
+		UserStatus      string   `json:"userStatus"`
+		SystemRoles     []string `json:"systemRoles"`
+		ProductRoles    struct {
+		} `json:"productRoles"`
+		LocalLoginDisabled           bool      `json:"localLoginDisabled"`
+		HasPassword                  bool      `json:"hasPassword"`
+		ForceLocalPasswordExpiration bool      `json:"forceLocalPasswordExpiration"`
+		FirstLoginDate               time.Time `json:"firstLoginDate"`
+		CreationDate                 time.Time `json:"creationDate"`
+		OwnedTeams                   []any     `json:"ownedTeams"`
+		MemberedTeams                []any     `json:"memberedTeams"`
+		Disabled                     bool      `json:"disabled"`
+		SignupAttributes             struct {
+		} `json:"signupAttributes"`
+	} `json:"user"`
+	Company struct {
+		ID                  string    `json:"id"`
+		Name                string    `json:"name"`
+		URLPrefix           string    `json:"urlPrefix"` // e.g. "ven-cert-manager-uk"
+		CompanyType         string    `json:"companyType"`
+		Active              bool      `json:"active"`
+		CreationDate        time.Time `json:"creationDate"`
+		Domains             []string  `json:"domains"`
+		ProductEntitlements []struct {
+			Label        string `json:"label"`
+			Capabilities []struct {
+				Name              string    `json:"name"`
+				ProductExpiryDate time.Time `json:"productExpiryDate"`
+				IsTrial           bool      `json:"isTrial"`
+			} `json:"capabilities"`
+			VisibilityConstraintsInformation struct {
+			} `json:"visibilityConstraintsInformation"`
+		} `json:"productEntitlements"`
+	} `json:"company"`
+	APIKey struct {
+		UserID            string    `json:"userId"`
+		Username          string    `json:"username"`
+		CompanyID         string    `json:"companyId"`
+		APIVersion        string    `json:"apiVersion"`
+		APIKeyStatus      string    `json:"apiKeyStatus"`
+		CreationDate      time.Time `json:"creationDate"`
+		ValidityStartDate time.Time `json:"validityStartDate"`
+		ValidityEndDate   time.Time `json:"validityEndDate"`
+	} `json:"apiKey"`
+}
+
+func checkAPIKey(apiURL, apiKey string) (CheckResp, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/useraccounts", apiURL), nil)
+	if err != nil {
+		return CheckResp{}, fmt.Errorf("while creating request for GET /v1/useraccounts: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return CheckResp{}, fmt.Errorf("while making request to GET /v1/useraccounts: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+	// The request was successful, the token is valid. Continue below.
+	case http.StatusUnauthorized:
+		return CheckResp{}, fmt.Errorf("unauthorized: please check your API key")
+	case http.StatusForbidden:
+		return CheckResp{}, fmt.Errorf("forbidden: please check your API key and permissions")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return CheckResp{}, fmt.Errorf("while reading response body: %w", err)
+	}
+
+	var result CheckResp
+	if err := json.Unmarshal(body, &result); err != nil {
+		return CheckResp{}, fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
+	}
+
+	return result, nil
 }
 
 type Team struct {
