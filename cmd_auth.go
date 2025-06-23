@@ -128,10 +128,7 @@ func authLoginCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
-			current, ok := currentFrom(conf)
-			if !ok {
-				return fmt.Errorf("no current tenant found in configuration. Please run:\n    vcpctl auth login")
-			}
+			current, _ := currentFrom(conf)
 
 			// Let the user know if they are already authenticated.
 			if current.URL != "" {
