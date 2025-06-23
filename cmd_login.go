@@ -209,6 +209,7 @@ func authLoginCmd() *cobra.Command {
 						}),
 					huh.NewInput().
 						Prompt("API Key: ").
+						EchoMode(huh.EchoModePassword).
 						DescriptionFunc(func() string {
 							if current.URL == "" {
 								return ""
