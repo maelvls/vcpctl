@@ -193,7 +193,7 @@ type SubCa struct {
 	OrganizationalUnit string `json:"organizationalUnit"`
 	StateOrProvince    string `json:"stateOrProvince"`
 	KeyAlgorithm       string `json:"keyAlgorithm"`
-	PKCS11             PKCS11 `json:"pkcs11,omitempty"`
+	PKCS11             PKCS11 `json:"pkcs11"`
 }
 
 type PKCS11 struct {
