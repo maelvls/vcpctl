@@ -42,11 +42,6 @@ func LogRequest(req *http.Request) {
 		}
 	}
 
-	var s []string
-	for k, v := range req.Header {
-		s = append(s, fmt.Sprintf("%s=%s", k, strings.Join(v, ",")))
-	}
-
 	// Replace newlines with spaces and fold repeated spaces for better
 	// readability.
 	body = strings.Join(strings.Fields(body), " ")
@@ -59,7 +54,7 @@ func LogRequest(req *http.Request) {
 	} else {
 		body = ", body:" + body
 	}
-	logutil.Debugf("req:  %s %s %v%s", req.Method, req.URL, strings.Join(s, " "), body)
+	logutil.Debugf("req:  %s %s %v%s", req.Method, req.URL, body)
 }
 
 func LogResponse(resp *http.Response) {

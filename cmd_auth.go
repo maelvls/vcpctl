@@ -133,6 +133,10 @@ func authLoginCmd() *cobra.Command {
 						Description("Enter the URL you use to log into the Venafi Cloud web UI. Example: https://ven-cert-manager-uk.venafi.cloud").
 						Value(&current.URL).
 						Validate(func(input string) error {
+							if strings.HasSuffix(input, "/") {
+								return fmt.Errorf("Tenant URL should not have a trailing slash")
+							}
+
 							apiURL, err := toAPIURL(cl, input)
 							switch {
 							case err == nil:
