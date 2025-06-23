@@ -81,6 +81,13 @@ func authLoginCmd() *cobra.Command {
 					return fmt.Errorf("the --api-key flag is required when using the --api-url flag")
 				}
 
+				if strings.HasSuffix(apiURL, "/") {
+					return fmt.Errorf("Tenant URL should not have a trailing slash, got: '%s'", apiURL)
+				}
+				if !strings.HasPrefix(apiURL, "https://") {
+					return fmt.Errorf("API URL should start with 'https://', got: '%s'", apiURL)
+				}
+
 				resp, err := checkAPIKey(cl, apiURL, apiKey)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
@@ -162,6 +169,9 @@ func authLoginCmd() *cobra.Command {
 				Validate(func(input string) error {
 					if strings.HasSuffix(input, "/") {
 						return fmt.Errorf("Tenant URL should not have a trailing slash")
+					}
+					if !strings.HasPrefix(input, "https://") {
+						return fmt.Errorf("Tenant URL should start with 'https://'")
 					}
 
 					apiURL, err := toAPIURL(cl, input)

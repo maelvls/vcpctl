@@ -597,7 +597,7 @@ func saGetCmd() *cobra.Command {
 func saRmCmd() *cobra.Command {
 	var interactive bool
 	cmd := &cobra.Command{
-		Use:   "rm [<sa-name> | -i]",
+		Use:   "rm (<sa-name> | -i)",
 		Short: "Remove a Service Account",
 		Long: undent.Undent(`
 			Remove a Service Account. This will delete the Service Account from
@@ -1069,7 +1069,7 @@ func attachSaCmd() *cobra.Command {
 			Attach the given Service Account to the Firefly Configuration.
 		`),
 		Example: undent.Undent(`
-			vcpctl attach-sa "config-name" --sa "link-name"
+			vcpctl attach-sa "config-name" --sa "sa-name"
 			vcpctl attach-sa "config-name" --sa "03931ba6-3fc5-11f0-85b8-9ee29ab248f0"
 		`),
 		SilenceErrors: true,

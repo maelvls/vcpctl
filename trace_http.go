@@ -22,11 +22,16 @@ func LogRequest(req *http.Request) {
 
 	// Redact the 80% first characters of the API key in the header for
 	// security. Replace the same number of chars.
+	headers := req.Header.Clone()
 	apiKey := req.Header.Get("tppl-api-key")
 	if len(apiKey) > 0 {
-		redactedKey := strings.Repeat("*", len(apiKey)-len(apiKey)*1/5) + apiKey[len(apiKey)*4/5:]
-		req.Header.Set("tppl-api-key", redactedKey)
+		headers.Set("tppl-api-key", strings.Repeat("*", len(apiKey)-len(apiKey)*1/5)+apiKey[len(apiKey)*4/5:])
 	}
+	var s []string
+	for k, v := range headers {
+		s = append(s, fmt.Sprintf("%s=%s", k, strings.Join(v, ",")))
+	}
+	headersStr := strings.Join(s, " ")
 
 	var body string
 	if req.Body != nil {
@@ -54,7 +59,7 @@ func LogRequest(req *http.Request) {
 	} else {
 		body = ", body:" + body
 	}
-	logutil.Debugf("req:  %s %s %v%s", req.Method, req.URL, body)
+	logutil.Debugf("req:  %s %s %s%s", req.Method, req.URL, headersStr, body)
 }
 
 func LogResponse(resp *http.Response) {
