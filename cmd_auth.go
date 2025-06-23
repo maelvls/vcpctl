@@ -69,7 +69,10 @@ func authLoginCmd() *cobra.Command {
 			    --api-url $APIURL --api-key $APIKEY
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// If the user provided the --api-url and --api-key flags, we use them.
+			cl := http.Client{Transport: Transport}
+
+			// If the user provided the --api-url and --api-key flags, we use
+			// them.
 			if apiURL != "" || apiKey != "" {
 				if apiURL == "" {
 					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
@@ -78,15 +81,30 @@ func authLoginCmd() *cobra.Command {
 					return fmt.Errorf("the --api-key flag is required when using the --api-url flag")
 				}
 
-				resp, err := checkAPIKey(apiURL, apiKey)
+				resp, err := checkAPIKey(cl, apiURL, apiKey)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
+				}
+
+				// Workaround the fact that all devstacks are created with the
+				// URL prefix "stack" instead of "ui-stack-devXXX". For now,
+				// let's just use the API URL, which looks like this:
+				//   https://api-dev210.qa.venafi.io
+				// and turn it into the tenant URL, like this:
+				//   https://ui-stack-dev210.qa.venafi.io
+				//
+				// See:
+				// https://gitlab.com/venafi/vaas/test-enablement/vaas-auto/-/merge_requests/738/diffs#note_2579353788
+				tenantURL := fmt.Sprintf("%s.venafi.cloud", resp.Company.URLPrefix)
+				if tenantURL == "stack" {
+					tenantURL = apiURL
+					tenantURL = strings.Replace(tenantURL, "api-", "ui-stack-", 1)
 				}
 
 				current := Auth{
 					APIURL: apiURL,
 					APIKey: apiKey,
-					URL:    fmt.Sprintf("https://%s.venafi.cloud", resp.Company.URLPrefix),
+					URL:    tenantURL,
 				}
 
 				err = saveCurrentTenant(current)
@@ -115,7 +133,7 @@ func authLoginCmd() *cobra.Command {
 						Description("Enter the URL you use to log into the Venafi Cloud web UI. Example: https://ven-cert-manager-uk.venafi.cloud").
 						Value(&current.URL).
 						Validate(func(input string) error {
-							apiURL, err := toAPIURL(input)
+							apiURL, err := toAPIURL(cl, input)
 							switch {
 							case err == nil:
 								current.URL = input
@@ -146,7 +164,7 @@ func authLoginCmd() *cobra.Command {
 							if len(input) != 36 {
 								return fmt.Errorf("API key must be 36 characters long")
 							}
-							_, err = checkAPIKey(current.APIURL, input)
+							_, err = checkAPIKey(cl, current.APIURL, input)
 							if err != nil {
 								return err
 							}
@@ -249,7 +267,7 @@ func authSwitchCmd() *cobra.Command {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
 			if len(conf.Auths) == 0 {
-				return fmt.Errorf("no tenants found in configuration. Please run `vcpctl auth login` to add one.")
+				return fmt.Errorf("no tenants found in configuration. Please run:\n    vcpctl auth login")
 			}
 
 			if len(args) > 0 {
@@ -328,10 +346,10 @@ func saveCurrentTenant(auth Auth) error {
 //
 //	https://ven-cert-manager-uk.venafi.cloud
 //	        <-- tenantName --->
-func toTenantID(tenantName string) (apiURL, tenantID string, _ error) {
+func toTenantID(cl http.Client, tenantName string) (apiURL, tenantID string, _ error) {
 	for _, apiURL := range venafiRegions {
 		url := fmt.Sprintf("%s/v1/companies/%s/loginconfig", apiURL, tenantName)
-		resp, err := http.Get(url)
+		resp, err := cl.Get(url)
 		if err != nil {
 			continue
 		}
@@ -353,9 +371,9 @@ func toTenantID(tenantName string) (apiURL, tenantID string, _ error) {
 }
 
 // Get the API URL for the given tenant URL.
-func toAPIURL(tenantURL string) (string, error) {
+func toAPIURL(cl http.Client, tenantURL string) (string, error) {
 	url := fmt.Sprintf("%s/single-spa-root-config/baseEnvironment.json", tenantURL)
-	resp, err := http.Get(url)
+	resp, err := cl.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
 	}
@@ -387,6 +405,7 @@ func toAPIURL(tenantURL string) (string, error) {
 	return respJSON.APIBaseURL, nil
 }
 
+// This must be used by all other commands to get the API key and API URL.
 func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	envAPIURL := os.Getenv("APIURL")
 	envAPIKey := os.Getenv("APIKEY")

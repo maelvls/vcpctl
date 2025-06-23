@@ -83,7 +83,11 @@ func main() {
 
 	ctx := context.Background()
 	err := rootCmd.ExecuteContext(ctx)
-	if err != nil {
+	switch {
+	case errors.Is(err, APIKeyInvalid):
+		logutil.Errorf("API key is invalid, try logging in again with:\n  vcpctl auth login\n")
+		os.Exit(1)
+	case err != nil:
 		logutil.Errorf("%v", err)
 		os.Exit(1)
 	}
@@ -240,11 +244,12 @@ func saLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa ls: %w", err)
 			}
-			svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			svcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("sa ls: while listing service accounts: %w", err)
 			}
@@ -386,6 +391,7 @@ func saGenkeypairCmd() *cobra.Command {
 				return fmt.Errorf("expects a single argument (the service account name), got: %s", args)
 			}
 
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: %w", err)
@@ -394,7 +400,7 @@ func saGenkeypairCmd() *cobra.Command {
 			saName := args[0]
 
 			// Does it already exist?
-			existingSA, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
+			existingSA, err := getServiceAccount(cl, conf.APIURL, conf.APIKey, saName)
 			switch {
 			case errors.As(err, &NotFound{}):
 				return fmt.Errorf(undent.Undent(`
@@ -415,7 +421,7 @@ func saGenkeypairCmd() *cobra.Command {
 			updatedSA := existingSA
 			updatedSA.PublicKey = ecPub
 			p := fullToPatchServiceAccount(updatedSA)
-			err = patchServiceAccount(conf.APIURL, conf.APIKey, updatedSA.ID, p)
+			err = patchServiceAccount(cl, conf.APIURL, conf.APIKey, updatedSA.ID, p)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: while patching service account: %w", err)
 			}
@@ -465,6 +471,7 @@ func saPutKeypairCmd() *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa put keypair: %w", err)
@@ -473,7 +480,7 @@ func saPutKeypairCmd() *cobra.Command {
 			saName := args[0]
 
 			// Does it already exist?
-			existingSA, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
+			existingSA, err := getServiceAccount(cl, conf.APIURL, conf.APIKey, saName)
 			switch {
 			case errors.As(err, &NotFound{}):
 				// Doesn't exist yet, we will be creating it below.
@@ -484,7 +491,7 @@ func saPutKeypairCmd() *cobra.Command {
 			}
 
 			if existingSA.ID == "" {
-				resp, err := createServiceAccount(conf.APIURL, conf.APIKey, ServiceAccount{
+				resp, err := createServiceAccount(cl, conf.APIURL, conf.APIKey, ServiceAccount{
 					Name:               saName,
 					CredentialLifetime: 365, // days
 					Scopes:             scopes,
@@ -499,7 +506,7 @@ func saPutKeypairCmd() *cobra.Command {
 			} else {
 				updatedSA := existingSA
 				p := fullToPatchServiceAccount(updatedSA)
-				err = patchServiceAccount(conf.APIURL, conf.APIKey, updatedSA.ID, p)
+				err = patchServiceAccount(cl, conf.APIURL, conf.APIKey, updatedSA.ID, p)
 				if err != nil {
 					return fmt.Errorf("sa put keypair: while patching service account: %w", err)
 				}
@@ -536,6 +543,7 @@ func saGetCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa get: %w", err)
@@ -547,7 +555,7 @@ func saGetCmd() *cobra.Command {
 
 			saName := args[0]
 
-			sa, err := getServiceAccount(conf.APIURL, conf.APIKey, saName)
+			sa, err := getServiceAccount(cl, conf.APIURL, conf.APIKey, saName)
 			if err != nil {
 				if errors.As(err, &NotFound{}) {
 					return fmt.Errorf("sa get: service account '%s' not found", saName)
@@ -602,6 +610,7 @@ func saRmCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
 			if interactive {
 				if len(args) > 0 {
 					return fmt.Errorf("sa rm -i: expected no arguments when using --interactive, got %s", args)
@@ -612,7 +621,7 @@ func saRmCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("sa rm -i: %w", err)
 				}
-				svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+				svcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
 				if err != nil {
 					return fmt.Errorf("sa rm -i: while listing service accounts: %w", err)
 				}
@@ -620,7 +629,7 @@ func saRmCmd() *cobra.Command {
 				// Use a simple prompt to select the service account to remove.
 				selected := rmInteractive(svcaccts)
 				for _, saID := range selected {
-					err = removeServiceAccount(conf.APIURL, conf.APIKey, saID)
+					err = removeServiceAccount(cl, conf.APIURL, conf.APIKey, saID)
 					if err != nil {
 						return fmt.Errorf("sa rm -i: while removing service account '%s': %w", saID, err)
 					}
@@ -640,7 +649,7 @@ func saRmCmd() *cobra.Command {
 				return fmt.Errorf("sa rm: %w", err)
 			}
 
-			err = removeServiceAccount(conf.APIURL, conf.APIKey, saName)
+			err = removeServiceAccount(cl, conf.APIURL, conf.APIKey, saName)
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}
@@ -663,6 +672,7 @@ func lsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
 			// Note: The following functions (GetTokenUsingFileConf and listObjects)
 			// should be implemented according to your needs.
 			conf, err := getToolConfig(cmd)
@@ -670,14 +680,14 @@ func lsCmd() *cobra.Command {
 				return fmt.Errorf("ls: %w", err)
 			}
 
-			confs, err := listConfigs(conf.APIURL, conf.APIKey)
+			confs, err := listConfigs(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("ls: while listing configurations: %w", err)
 			}
 
 			// Find service accounts so that we can show the client IDs instead of the
 			// IDs.
-			knownSvcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			knownSvcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("ls: fetching service accounts: %w", err)
 			}
@@ -756,11 +766,12 @@ func subcaLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("subca ls: %w", err)
 			}
-			providers, err := getSubCas(conf.APIURL, conf.APIKey)
+			providers, err := getSubCas(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("subca ls: while listing subCA providers: %w", err)
 			}
@@ -797,12 +808,13 @@ func subcaRmCmd() *cobra.Command {
 			}
 			providerNameOrID := args[0]
 
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
 
-			err = removeSubCaProvider(conf.APIURL, conf.APIKey, providerNameOrID)
+			err = removeSubCaProvider(cl, conf.APIURL, conf.APIKey, providerNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
@@ -850,11 +862,12 @@ func policyLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("policy ls: %w", err)
 			}
-			policies, err := getPolicies(conf.APIURL, conf.APIKey)
+			policies, err := getPolicies(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("policy ls: while listing policies: %w", err)
 			}
@@ -895,11 +908,13 @@ func policyRmCmd() *cobra.Command {
 				return fmt.Errorf("rm: expected a single argument (the Policy name), got %s", args)
 			}
 			policyNameOrID := args[0]
+
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			err = removePolicy(conf.APIURL, conf.APIKey, policyNameOrID)
+			err = removePolicy(cl, conf.APIURL, conf.APIKey, policyNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
@@ -910,9 +925,9 @@ func policyRmCmd() *cobra.Command {
 	return cmd
 }
 
-func removePolicy(apiURL, apiKey, policyName string) error {
+func removePolicy(cl http.Client, apiURL, apiKey, policyName string) error {
 	// Find the policy by name.
-	policy, err := getPolicy(apiURL, apiKey, policyName)
+	policy, err := getPolicy(cl, apiURL, apiKey, policyName)
 	if err != nil {
 		return fmt.Errorf("removePolicy: while getting policy by name %q: %w", policyName, err)
 	}
@@ -923,7 +938,7 @@ func removePolicy(apiURL, apiKey, policyName string) error {
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return fmt.Errorf("removePolicy: while making request: %w", err)
 	}
@@ -938,14 +953,14 @@ func removePolicy(apiURL, apiKey, policyName string) error {
 	}
 }
 
-func getSubCas(apiURL, apiKey string) ([]SubCa, error) {
+func getSubCas(cl http.Client, apiURL, apiKey string) ([]SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getSubCas: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getSubCas: while making request: %w", err)
 	}
@@ -973,14 +988,14 @@ func getSubCas(apiURL, apiKey string) ([]SubCa, error) {
 	return result.SubCaProviders, nil
 }
 
-func getSubCaByID(apiURL, apiKey, id string) (SubCa, error) {
+func getSubCaByID(cl http.Client, apiURL, apiKey, id string) (SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
 		return SubCa{}, fmt.Errorf("getSubCaByID: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return SubCa{}, fmt.Errorf("getSubCaByID: while making request: %w", err)
 	}
@@ -1008,29 +1023,29 @@ func getSubCaByID(apiURL, apiKey, id string) (SubCa, error) {
 	return result, nil
 }
 
-func removeSubCaProvider(apiURL, apiKey, nameOrID string) error {
+func removeSubCaProvider(cl http.Client, apiURL, apiKey, nameOrID string) error {
 	if looksLikeAnID(nameOrID) {
-		return removeSubCaProviderByID(apiURL, apiKey, nameOrID)
+		return removeSubCaProviderByID(cl, apiURL, apiKey, nameOrID)
 	}
 
-	subCA, err := getSubCa(apiURL, apiKey, nameOrID)
+	subCA, err := getSubCa(cl, apiURL, apiKey, nameOrID)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while getting SubCA provider by name '%s': %w", nameOrID, err)
 	}
 	if subCA.ID == "" {
 		return fmt.Errorf("removeSubCaProvider: SubCA provider '%s' not found", nameOrID)
 	}
-	return removeSubCaProviderByID(apiURL, apiKey, subCA.ID)
+	return removeSubCaProviderByID(cl, apiURL, apiKey, subCA.ID)
 }
 
-func removeSubCaProviderByID(apiURL, apiKey, id string) error {
+func removeSubCaProviderByID(cl http.Client, apiURL, apiKey, id string) error {
 	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while making request: %w", err)
 	}
@@ -1065,12 +1080,13 @@ func attachSaCmd() *cobra.Command {
 			}
 			confName := args[0]
 
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("attach-sa: %w", err)
 			}
 
-			err = attachSAToConf(conf.APIURL, conf.APIKey, confName, saName)
+			err = attachSAToConf(cl, conf.APIURL, conf.APIKey, confName, saName)
 			if err != nil {
 				return fmt.Errorf("attach-sa: %w", err)
 			}
@@ -1083,15 +1099,15 @@ func attachSaCmd() *cobra.Command {
 	return cmd
 }
 
-func attachSAToConf(apiURL, apiKey, confName, saName string) error {
+func attachSAToConf(cl http.Client, apiURL, apiKey, confName, saName string) error {
 	// Get configuration name by ID.
-	config, err := getConfig(apiURL, apiKey, confName)
+	config, err := getConfig(cl, apiURL, apiKey, confName)
 	if err != nil {
 		return fmt.Errorf("while fetching the ID of the Firefly configuration '%s': %w", confName, err)
 	}
 
 	// Find service accounts.
-	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
+	knownSvcaccts, err := getServiceAccounts(cl, apiURL, apiKey)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
@@ -1130,7 +1146,7 @@ func attachSAToConf(apiURL, apiKey, confName, saName string) error {
 	// Add the service account to the configuration.
 	config.ServiceAccountIDs = append(config.ServiceAccountIDs, sa.ID)
 	patch := fullToPatchConfig(config)
-	err = patchConfig(apiURL, apiKey, config.ID, patch)
+	err = patchConfig(cl, apiURL, apiKey, config.ID, patch)
 	if err != nil {
 		return fmt.Errorf("while patching Firefly configuration: %w", err)
 	}
@@ -1152,12 +1168,13 @@ func editCmd() *cobra.Command {
 				return fmt.Errorf("edit: expected a single argument (the Firefly configuration name), got %s", args)
 			}
 
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			err = editConfig(conf.APIURL, conf.APIKey, args[0])
+			err = editConfig(cl, conf.APIURL, conf.APIKey, args[0])
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
@@ -1200,6 +1217,7 @@ func putCmd() *cobra.Command {
 				defer file.Close()
 			}
 
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("put: %w", err)
@@ -1211,7 +1229,7 @@ func putCmd() *cobra.Command {
 			}
 
 			// Get service accounts.
-			svcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			svcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("put: while getting service accounts: %w", err)
 			}
@@ -1233,7 +1251,7 @@ func putCmd() *cobra.Command {
 			}
 
 			// Patch the original configuration with the new values.
-			err = createOrUpdateConfigAndDeps(conf.APIURL, conf.APIKey, svcaccts, updatedConfig)
+			err = createOrUpdateConfigAndDeps(cl, conf.APIURL, conf.APIKey, svcaccts, updatedConfig)
 			if err != nil {
 				return fmt.Errorf("put: while creating or updating the Firefly configuration, Sub CA, or Policies: %w", err)
 			}
@@ -1264,12 +1282,14 @@ func rmCmd() *cobra.Command {
 				return fmt.Errorf("rm: expected a single argument (the Firefly configuration name or ID), got %s", args)
 			}
 			nameOrID := args[0]
+
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
 			// Get the configuration by name or ID.
-			c, err := getConfig(conf.APIURL, conf.APIKey, nameOrID)
+			c, err := getConfig(cl, conf.APIURL, conf.APIKey, nameOrID)
 			if err != nil {
 				if errors.As(err, &NotFound{}) {
 					return fmt.Errorf("rm: Firefly configuration '%s' not found", nameOrID)
@@ -1277,7 +1297,7 @@ func rmCmd() *cobra.Command {
 				return fmt.Errorf("rm: while getting Firefly configuration by name or ID '%s': %w", nameOrID, err)
 			}
 			// Remove the configuration.
-			err = removeConfig(conf.APIURL, conf.APIKey, c.ID)
+			err = removeConfig(cl, conf.APIURL, conf.APIKey, c.ID)
 			if err != nil {
 				return fmt.Errorf("rm: while removing Firefly configuration '%s': %w", nameOrID, err)
 			}
@@ -1288,12 +1308,12 @@ func rmCmd() *cobra.Command {
 	return cmd
 }
 
-func getPolicy(apiURL, apiKey, nameOrID string) (Policy, error) {
+func getPolicy(cl http.Client, apiURL, apiKey, nameOrID string) (Policy, error) {
 	if looksLikeAnID(nameOrID) {
-		return getPolicyByID(apiURL, apiKey, nameOrID)
+		return getPolicyByID(cl, apiURL, apiKey, nameOrID)
 	}
 
-	policies, err := getPolicies(apiURL, apiKey)
+	policies, err := getPolicies(cl, apiURL, apiKey)
 	if err != nil {
 		return Policy{}, fmt.Errorf("getPolicy: while getting policies: %w", err)
 	}
@@ -1325,14 +1345,14 @@ func getPolicy(apiURL, apiKey, nameOrID string) (Policy, error) {
 	return found[0], nil
 }
 
-func getPolicyByID(apiURL, apiKey, id string) (Policy, error) {
+func getPolicyByID(cl http.Client, apiURL, apiKey, id string) (Policy, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies/"+id, nil)
 	if err != nil {
 		return Policy{}, fmt.Errorf("getPolicyByID: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return Policy{}, fmt.Errorf("getPolicyByID: while making request: %w", err)
 	}
@@ -1355,9 +1375,9 @@ func getPolicyByID(apiURL, apiKey, id string) (Policy, error) {
 	return result, nil
 }
 
-func getSubCa(apiURL, apiKey, name string) (SubCa, error) {
+func getSubCa(cl http.Client, apiURL, apiKey, name string) (SubCa, error) {
 	if looksLikeAnID(name) {
-		return getSubCaByID(apiURL, apiKey, name)
+		return getSubCaByID(cl, apiURL, apiKey, name)
 	}
 
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
@@ -1366,7 +1386,7 @@ func getSubCa(apiURL, apiKey, name string) (SubCa, error) {
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return SubCa{}, fmt.Errorf("getSubCa: while making request: %w", err)
 	}
@@ -1413,12 +1433,12 @@ func getSubCa(apiURL, apiKey, name string) (SubCa, error) {
 	return found[0], nil
 }
 
-func getConfig(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
+func getConfig(cl http.Client, apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
 	if looksLikeAnID(nameOrID) {
-		return getConfigByID(apiURL, apiKey, nameOrID)
+		return getConfigByID(cl, apiURL, apiKey, nameOrID)
 	}
 
-	confs, err := getConfigs(apiURL, apiKey)
+	confs, err := getConfigs(cl, apiURL, apiKey)
 	if err != nil {
 		return FireflyConfig{}, fmt.Errorf("getConfigByName:urations: %w", err)
 	}
@@ -1450,18 +1470,19 @@ func getConfig(apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
 	return found[0], nil
 }
 
-func getConfigs(apiURL, apiKey string) ([]FireflyConfig, error) {
+func getConfigs(cl http.Client, apiURL, apiKey string) ([]FireflyConfig, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getConfigs: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getConfigs: while making request: %w", err)
 	}
 	defer resp.Body.Close()
+
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// Continue below.
@@ -1481,12 +1502,12 @@ func getConfigs(apiURL, apiKey string) ([]FireflyConfig, error) {
 	return result.Configurations, nil
 }
 
-func removeConfig(apiURL, apiKey, nameOrID string) error {
+func removeConfig(cl http.Client, apiURL, apiKey, nameOrID string) error {
 	var id string
 	if looksLikeAnID(nameOrID) {
 		id = nameOrID
 	} else {
-		config, err := getConfig(apiURL, apiKey, nameOrID)
+		config, err := getConfig(cl, apiURL, apiKey, nameOrID)
 		if err != nil {
 			return fmt.Errorf("removeConfig:uration by name %q: %w", nameOrID, err)
 		}
@@ -1499,7 +1520,7 @@ func removeConfig(apiURL, apiKey, nameOrID string) error {
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return fmt.Errorf("removeConfig: while making request: %w", err)
 	}
@@ -1514,14 +1535,14 @@ func removeConfig(apiURL, apiKey, nameOrID string) error {
 	}
 }
 
-func getPolicies(apiURL, apiKey string) ([]Policy, error) {
+func getPolicies(cl http.Client, apiURL, apiKey string) ([]Policy, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getPolicies: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getPolicies: while making request: %w", err)
 	}
@@ -1559,17 +1580,18 @@ func getCmd() *cobra.Command {
 			}
 			idOrName := args[0]
 
+			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("get: %w", err)
 			}
 
-			knownSvcaccts, err := getServiceAccounts(conf.APIURL, conf.APIKey)
+			knownSvcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("get: while fetching service accounts: %w", err)
 			}
 
-			config, err := getConfig(conf.APIURL, conf.APIKey, idOrName)
+			config, err := getConfig(cl, conf.APIURL, conf.APIKey, idOrName)
 			if err != nil {
 				return fmt.Errorf("get: while getting original Firefly configuration: %w", err)
 			}
@@ -1620,7 +1642,7 @@ func hideMisleadingFields(c *FireflyConfig) {
 
 // createConfig creates a new Firefly configuration or updates an
 // existing one. Also deals with creating the subCA policies.
-func createConfig(apiURL, apiKey string, config FireflyConfigPatch) (string, error) {
+func createConfig(cl http.Client, apiURL, apiKey string, config FireflyConfigPatch) (string, error) {
 	body, err := json.Marshal(config)
 	if err != nil {
 		return "", fmt.Errorf("createConfig: while marshaling configuration: %w", err)
@@ -1634,7 +1656,7 @@ func createConfig(apiURL, apiKey string, config FireflyConfigPatch) (string, err
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("createConfig: while making request: %w", err)
 	}
@@ -1663,7 +1685,7 @@ func createConfig(apiURL, apiKey string, config FireflyConfigPatch) (string, err
 	return result.ID, nil
 }
 
-func createFireflyPolicy(apiURL, apiKey string, policy Policy) (string, error) {
+func createFireflyPolicy(cl http.Client, apiURL, apiKey string, policy Policy) (string, error) {
 	body, err := json.Marshal(policy)
 	if err != nil {
 		return "", fmt.Errorf("createFireflyPolicy: while marshaling policy: %w", err)
@@ -1676,7 +1698,7 @@ func createFireflyPolicy(apiURL, apiKey string, policy Policy) (string, error) {
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("createFireflyPolicy: while making request: %w", err)
 	}
@@ -1703,7 +1725,7 @@ func createFireflyPolicy(apiURL, apiKey string, policy Policy) (string, error) {
 	return result.ID, nil
 }
 
-func createSubCaProvider(apiURL, apiKey string, provider SubCa) (string, error) {
+func createSubCaProvider(cl http.Client, apiURL, apiKey string, provider SubCa) (string, error) {
 	body, err := json.Marshal(provider)
 	if err != nil {
 		return "", fmt.Errorf("createSubCaProvider: while marshaling provider: %w", err)
@@ -1716,7 +1738,7 @@ func createSubCaProvider(apiURL, apiKey string, provider SubCa) (string, error) 
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("createSubCaProvider: while making request: %w", err)
 	}
@@ -1748,7 +1770,7 @@ type Config struct {
 	ServiceAccountIDs []string
 }
 
-func listConfigs(apiURL, apiKey string) ([]Config, error) {
+func listConfigs(cl http.Client, apiURL, apiKey string) ([]Config, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while creating request: %w", err)
@@ -1756,24 +1778,11 @@ func listConfigs(apiURL, apiKey string) ([]Config, error) {
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while making request: %w", err)
 	}
 	defer resp.Body.Close()
-
-	var result struct {
-		Configurations []struct {
-			Name              string   `json:"name"`
-			ServiceAccountIDs []string `json:"serviceAccountIds"`
-		} `json:"configurations"`
-	}
-
-	b := new(bytes.Buffer)
-	_, err = io.Copy(b, resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while reading response: %w", err)
-	}
 
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -1782,13 +1791,19 @@ func listConfigs(apiURL, apiKey string) ([]Config, error) {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	if err := json.NewDecoder(b).Decode(&result); err != nil {
-		if b.Len() > 1000 {
-			// Only show the first 1000 characters of the body in the error
-			// message.
-			b.Truncate(1000)
-		}
-		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while decoding response: %w, body: %s", err, b.String())
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while reading response: %w", err)
+	}
+
+	var result struct {
+		Configurations []struct {
+			Name              string   `json:"name"`
+			ServiceAccountIDs []string `json:"serviceAccountIds"`
+		} `json:"configurations"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 
 	var confs []Config
@@ -1809,7 +1824,7 @@ func (e NotFound) Error() string {
 	return fmt.Sprintf("'%s' not found", e.NameOrID)
 }
 
-func getConfigByID(apiURL, apiKey, id string) (FireflyConfig, error) {
+func getConfigByID(cl http.Client, apiURL, apiKey, id string) (FireflyConfig, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id), nil)
 	if err != nil {
 		return FireflyConfig{}, err
@@ -1817,7 +1832,7 @@ func getConfigByID(apiURL, apiKey, id string) (FireflyConfig, error) {
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return FireflyConfig{}, err
 	}
@@ -1891,13 +1906,13 @@ func fullToPatchConfig(full FireflyConfig) FireflyConfigPatch {
 	}
 }
 
-func editConfig(apiURL, apiKey, name string) error {
-	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
+func editConfig(cl http.Client, apiURL, apiKey, name string) error {
+	knownSvcaccts, err := getServiceAccounts(cl, apiURL, apiKey)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
 
-	config, err := getConfig(apiURL, apiKey, name)
+	config, err := getConfig(cl, apiURL, apiKey, name)
 	if err != nil {
 		if errors.Is(err, NotFound{}) {
 			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl put config.yaml'", name)
@@ -1993,8 +2008,8 @@ edit:
 		goto edit
 	}
 
-	err = createOrUpdateConfigAndDeps(apiURL, apiKey, knownSvcaccts, modified)
-	if errors.Is(err, errPINRequired) {
+	err = createOrUpdateConfigAndDeps(cl, apiURL, apiKey, knownSvcaccts, modified)
+	if errors.Is(err, ErrPINRequired) {
 		logutil.Errorf("ERROR: The subCaProvider.pkcs11.pin field is required.")
 
 		// If the PIN is required, we need to ask the user to fill it in.
@@ -2045,12 +2060,12 @@ func svcAcctsComments(config FireflyConfig, allSvcAccts []ServiceAccount) map[st
 	return comments
 }
 
-var errPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
+var ErrPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
 
 // Also patches the nested SubCA provider and Firefly Policies. Use
 // errors.Is(err, errPINRequired) to check if the error is due to the missing
 // PIN.
-func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []ServiceAccount, updatedConfig FireflyConfig) error {
+func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existingSvcAccts []ServiceAccount, updatedConfig FireflyConfig) error {
 	// Start with creating or updating the Service Accounts.
 	for i := range updatedConfig.ServiceAccounts {
 		var id string
@@ -2065,7 +2080,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 		}
 		if existingSa.ID == "" {
 			// The service account does not have an ID, we need to create it.
-			resp, err := createServiceAccount(apiURL, apiKey, updatedConfig.ServiceAccounts[i])
+			resp, err := createServiceAccount(cl, apiURL, apiKey, updatedConfig.ServiceAccounts[i])
 			if err != nil {
 				return fmt.Errorf("while creating service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
 			}
@@ -2079,7 +2094,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 			updatedConfig.ServiceAccounts[i].Owner = existingSa.Owner
 			d := ANSIDiff(fullToPatchServiceAccount(existingSa), fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
 			if d != "" {
-				err = patchServiceAccount(apiURL, apiKey, id, fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
+				err = patchServiceAccount(cl, apiURL, apiKey, id, fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
 				if err != nil {
 					return fmt.Errorf("while patching service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
 				}
@@ -2093,7 +2108,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 		updatedConfig.ServiceAccountIDs = append(updatedConfig.ServiceAccountIDs, id)
 	}
 
-	knownSvcaccts, err := getServiceAccounts(apiURL, apiKey)
+	knownSvcaccts, err := getServiceAccounts(cl, apiURL, apiKey)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
@@ -2110,7 +2125,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 		}
 	}
 
-	templates, err := getIssuingTemplates(apiURL, apiKey)
+	templates, err := getIssuingTemplates(cl, apiURL, apiKey)
 	if err != nil {
 		return fmt.Errorf("while getting issuing templates: %w", err)
 	}
@@ -2130,7 +2145,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 	// and the SubCA provider, if needed.
 	for i := range updatedConfig.Policies {
 		// Get the original policy to check if it exists.
-		existingPolicy, err := getPolicy(apiURL, apiKey, updatedConfig.Policies[i].Name)
+		existingPolicy, err := getPolicy(cl, apiURL, apiKey, updatedConfig.Policies[i].Name)
 		switch {
 		case errors.As(err, &NotFound{}):
 			// We will create it below.
@@ -2142,7 +2157,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 
 		if existingPolicy.ID == "" {
 			// The policy does not exist, we need to create it.
-			id, err := createFireflyPolicy(apiURL, apiKey, updatedConfig.Policies[i])
+			id, err := createFireflyPolicy(cl, apiURL, apiKey, updatedConfig.Policies[i])
 			if err != nil {
 				return fmt.Errorf("while creating Firefly policy: %w", err)
 			}
@@ -2162,7 +2177,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 			logutil.Debugf("Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
 
 			// Patch the policy.
-			err = patchPolicy(apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
+			err = patchPolicy(cl, apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
 			if err != nil {
 				return fmt.Errorf("while patching Firefly policy #%d '%s': %w", i, updatedConfig.Policies[i].Name, err)
 			}
@@ -2170,7 +2185,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 	}
 
 	// Now, let's take care of the SubCA provider.
-	existingSubCa, err := getSubCa(apiURL, apiKey, updatedConfig.SubCaProvider.Name)
+	existingSubCa, err := getSubCa(cl, apiURL, apiKey, updatedConfig.SubCaProvider.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
 		// We will create the SubCA provider just below.
@@ -2190,7 +2205,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 
 	if existingSubCa.ID == "" {
 		// The SubCA provider does not exist, we need to create it.
-		id, err := createSubCaProvider(apiURL, apiKey, updatedConfig.SubCaProvider)
+		id, err := createSubCaProvider(cl, apiURL, apiKey, updatedConfig.SubCaProvider)
 		if err != nil {
 			return fmt.Errorf("while creating SubCA provider: %w", err)
 		}
@@ -2213,14 +2228,14 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 			// `subCaProvider`.
 
 			if !isZeroPKCS11(updatedConfig.SubCaProvider.PKCS11) && updatedConfig.SubCaProvider.PKCS11.PIN == "" {
-				return fmt.Errorf("while patching Firefly configuration's subCAProvider: %w", errPINRequired)
+				return fmt.Errorf("while patching Firefly configuration's subCAProvider: %w", ErrPINRequired)
 			}
 
 			// If the SubCA provider is different, we need to update it.
 			logutil.Debugf("SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
 
 			// Patch the SubCA provider.
-			err = patchSubCaProvider(apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
+			err = patchSubCaProvider(cl, apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
 			if err != nil {
 				return fmt.Errorf("while patching Firefly SubCA provider '%s': %w", updatedConfig.SubCaProvider.Name, err)
 			}
@@ -2230,7 +2245,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 	// If we reach this point, we have successfully dealt with service accounts,
 	// the sub CA, and policies. Let's see if the Firefly configuration needs to
 	// be created or updated.
-	existingConfig, err := getConfig(apiURL, apiKey, updatedConfig.Name)
+	existingConfig, err := getConfig(cl, apiURL, apiKey, updatedConfig.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
 		// Continue below since the nested sub CA and policies may not already
@@ -2240,7 +2255,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 	}
 	if existingConfig.ID == "" {
 		// The configuration does not exist, we need to create it.
-		confID, err := createConfig(apiURL, apiKey, fullToPatchConfig(updatedConfig))
+		confID, err := createConfig(cl, apiURL, apiKey, fullToPatchConfig(updatedConfig))
 		if err != nil {
 			return fmt.Errorf("while creating Firefly configuration: %w", err)
 		}
@@ -2256,7 +2271,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 			logutil.Debugf("Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
 
 			patch := fullToPatchConfig(updatedConfig)
-			err = patchConfig(apiURL, apiKey, existingConfig.ID, patch)
+			err = patchConfig(cl, apiURL, apiKey, existingConfig.ID, patch)
 			if err != nil {
 				return fmt.Errorf("while patching Firefly configuration: %w", err)
 			}
@@ -2266,7 +2281,7 @@ func createOrUpdateConfigAndDeps(apiURL, apiKey string, existingSvcAccts []Servi
 	return nil
 }
 
-func patchConfig(apiURL, apiKey, id string, patch FireflyConfigPatch) error {
+func patchConfig(cl http.Client, apiURL, apiKey, id string, patch FireflyConfigPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return err
@@ -2280,7 +2295,7 @@ func patchConfig(apiURL, apiKey, id string, patch FireflyConfigPatch) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -2310,7 +2325,7 @@ type SubCaProviderPatch struct {
 	ValidityPeriod     string `json:"validityPeriod"`
 }
 
-func patchSubCaProvider(apiURL, apiKey, id string, patch SubCaProviderPatch) error {
+func patchSubCaProvider(cl http.Client, apiURL, apiKey, id string, patch SubCaProviderPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return err
@@ -2324,7 +2339,7 @@ func patchSubCaProvider(apiURL, apiKey, id string, patch SubCaProviderPatch) err
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -2339,16 +2354,26 @@ func patchSubCaProvider(apiURL, apiKey, id string, patch SubCaProviderPatch) err
 	}
 }
 
+var APIKeyInvalid = errors.New("API key is invalid")
+
+// Use errors.Is(err, APIKeyInvalid{}) to check if the error is due to the API
+// key having a problem.
 func parseJSONErrorOrDumpBody(resp *http.Response) error {
 	body, _ := io.ReadAll(resp.Body)
 
-	var venafiErr VenafiError
-	if err := json.Unmarshal(body, &venafiErr); err != nil {
-		logutil.Debugf("parseJSONErrorOrDumpBody: while decoding JSON error response: %s", err)
-		return fmt.Errorf("unexpected error: %s", string(body))
+	// For some reason, Venafi Cloud returns a plain text error message when the
+	// API key is invalid.
+	if resp.Header.Get("Content-Type") == "text/plain" && bytes.Equal(body, []byte("Invalid api key")) {
+		return APIKeyInvalid
 	}
 
-	return venafiErr
+	var v VenafiError
+	err := json.Unmarshal(body, &v)
+	if err != nil {
+		return fmt.Errorf("unexpected error: '%s'", string(body))
+	}
+
+	return v
 }
 
 // Examples:
@@ -2419,7 +2444,7 @@ func fullToPatchPolicy(full Policy) PolicyPatch {
 }
 
 // https://api.venafi.cloud/v1/distributedissuers/policies/{id}
-func patchPolicy(apiURL, apiKey, id string, patch PolicyPatch) error {
+func patchPolicy(cl http.Client, apiURL, apiKey, id string, patch PolicyPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return err
@@ -2433,7 +2458,7 @@ func patchPolicy(apiURL, apiKey, id string, patch PolicyPatch) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -2494,7 +2519,7 @@ func equalStringSlices(a, b []string) bool {
 	return true
 }
 
-func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
+func getServiceAccounts(cl http.Client, apiURL, apiKey string) ([]ServiceAccount, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts", nil)
 	if err != nil {
 		return nil, err
@@ -2502,7 +2527,7 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -2528,12 +2553,12 @@ func getServiceAccounts(apiURL, apiKey string) ([]ServiceAccount, error) {
 	return result, nil
 }
 
-func removeServiceAccount(apiURL, apiKey, nameOrID string) error {
+func removeServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) error {
 	var id string
 	if looksLikeAnID(nameOrID) {
 		id = nameOrID
 	} else {
-		sa, err := getServiceAccount(apiURL, apiKey, nameOrID)
+		sa, err := getServiceAccount(cl, apiURL, apiKey, nameOrID)
 		if err != nil {
 			if errors.Is(err, NotFound{}) {
 				return fmt.Errorf("service account '%s' not found", nameOrID)
@@ -2550,7 +2575,7 @@ func removeServiceAccount(apiURL, apiKey, nameOrID string) error {
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -2585,12 +2610,12 @@ func findServiceAccount(nameOrID string, allSAs []ServiceAccount) (ServiceAccoun
 	return ServiceAccount{}, NotFound{NameOrID: nameOrID}
 }
 
-func getServiceAccount(apiURL, apiKey, nameOrID string) (ServiceAccount, error) {
+func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (ServiceAccount, error) {
 	if looksLikeAnID(nameOrID) {
-		return getServiceAccountByID(apiURL, apiKey, nameOrID)
+		return getServiceAccountByID(cl, apiURL, apiKey, nameOrID)
 	}
 
-	sas, err := getServiceAccounts(apiURL, apiKey)
+	sas, err := getServiceAccounts(cl, apiURL, apiKey)
 	if err != nil {
 		return ServiceAccount{}, fmt.Errorf("getServiceAccount: while getting service accounts: %w", err)
 	}
@@ -2626,7 +2651,7 @@ func getServiceAccount(apiURL, apiKey, nameOrID string) (ServiceAccount, error) 
 	`), nameOrID, b.String(), found[0].ID)
 }
 
-func getServiceAccountByID(apiURL, apiKey, id string) (ServiceAccount, error) {
+func getServiceAccountByID(cl http.Client, apiURL, apiKey, id string) (ServiceAccount, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
 	if err != nil {
 		return ServiceAccount{}, err
@@ -2634,7 +2659,7 @@ func getServiceAccountByID(apiURL, apiKey, id string) (ServiceAccount, error) {
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return ServiceAccount{}, err
 	}
@@ -2690,10 +2715,10 @@ func genECKeyPair() (string, string, error) {
 
 // Owner can be left empty, in which case the first team will be used as the
 // owner.
-func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateResp, error) {
+func createServiceAccount(cl http.Client, apiURL, apiKey string, sa ServiceAccount) (SACreateResp, error) {
 	// If no owner is specified, let's just use the first team we can find.
 	if sa.Owner == "" {
-		teams, err := getTeams(apiURL, apiKey)
+		teams, err := getTeams(cl, apiURL, apiKey)
 		if err != nil {
 			return SACreateResp{}, fmt.Errorf("createServiceAccount: while getting teams: %w", err)
 		}
@@ -2716,7 +2741,7 @@ func createServiceAccount(apiURL, apiKey string, sa ServiceAccount) (SACreateRes
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return SACreateResp{}, err
 	}
@@ -2768,10 +2793,10 @@ func fullToPatchServiceAccount(sa ServiceAccount) ServiceAccountPatch {
 	}
 }
 
-func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) error {
+func patchServiceAccount(cl http.Client, apiURL, apiKey, id string, patch ServiceAccountPatch) error {
 	// If no owner is specified, let's just use the first team we can find.
 	if patch.Owner == "" {
-		teams, err := getTeams(apiURL, apiKey)
+		teams, err := getTeams(cl, apiURL, apiKey)
 		if err != nil {
 			return fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
 		}
@@ -2795,7 +2820,7 @@ func patchServiceAccount(apiURL, apiKey, id string, patch ServiceAccountPatch) e
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return fmt.Errorf("patchServiceAccount: while sending request: %w", err)
 	}
@@ -2874,7 +2899,7 @@ type CertificateIssuingTemplate struct {
 	EveryoneIsConsumer          bool  `json:"everyoneIsConsumer"`
 }
 
-func getIssuingTemplates(apiURL, apiKey string) ([]CertificateIssuingTemplate, error) {
+func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]CertificateIssuingTemplate, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/certificateissuingtemplates", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while creating request: %w", err)
@@ -2882,7 +2907,7 @@ func getIssuingTemplates(apiURL, apiKey string) ([]CertificateIssuingTemplate, e
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while making request: %w", err)
 	}
@@ -2969,7 +2994,7 @@ type CheckResp struct {
 	} `json:"apiKey"`
 }
 
-func checkAPIKey(apiURL, apiKey string) (CheckResp, error) {
+func checkAPIKey(cl http.Client, apiURL, apiKey string) (CheckResp, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/useraccounts", apiURL), nil)
 	if err != nil {
 		return CheckResp{}, fmt.Errorf("while creating request for GET /v1/useraccounts: %w", err)
@@ -2977,7 +3002,7 @@ func checkAPIKey(apiURL, apiKey string) (CheckResp, error) {
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return CheckResp{}, fmt.Errorf("while making request to GET /v1/useraccounts: %w", err)
 	}
@@ -3018,14 +3043,14 @@ type Team struct {
 }
 
 // URL: https://api-dev210.qa.venafi.io/v1/teams?includeSystemGenerated=true
-func getTeams(apiURL, apiKey string) ([]Team, error) {
+func getTeams(cl http.Client, apiURL, apiKey string) ([]Team, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/teams?includeSystemGenerated=true", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getTeams: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getTeams: while making request: %w", err)
 	}
