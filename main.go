@@ -89,18 +89,6 @@ func main() {
 	}
 }
 
-func authCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:           "auth",
-		Short:         "Commands for authenticating and switching tenants.",
-		Long:          "Manage authentication for Venafi Cloud, including login and switch.",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-	}
-	cmd.AddCommand(authLoginCmd(), authSwitchCmd())
-	return cmd
-}
-
 type ClientAuthentication struct {
 	Type string   `json:"type"`
 	URLs []string `json:"urls"`
@@ -231,51 +219,6 @@ func isZeroPKCS11(p PKCS11) bool {
 type ToolConf struct {
 	APIURL string `json:"apiURL"`
 	APIKey string `json:"apiKey"`
-}
-
-func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
-	envAPIURL := os.Getenv("APIURL")
-	envAPIKey := os.Getenv("APIKEY")
-	flagAPIURL, _ := cmd.Flags().GetString("api-url")
-	flagAPIKey, _ := cmd.Flags().GetString("api-key")
-
-	// If any of $APIKEY, $APIURL, --api-key, or --api-url is set, we don't use
-	// the configuration file.
-	if flagAPIKey != "" || envAPIKey != "" || flagAPIURL != "" || envAPIURL != "" {
-		logutil.Debugf("one of $APIKEY, $APIURL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
-		// Priority: $APIURL > --api-url.
-		apiURL := envAPIURL
-		if apiURL == "" {
-			apiURL = flagAPIURL
-		}
-		apiKey := envAPIKey
-		if apiKey == "" {
-			apiKey = flagAPIKey
-		}
-
-		return ToolConf{
-			APIURL: apiURL,
-			APIKey: apiKey,
-		}, nil
-	}
-
-	logutil.Debugf("none of $APIKEY, $APIURL, --api-key, or --api-url is set, using the configuration file at ~/%s", configPath)
-
-	conf, err := LoadFileConf()
-	if err != nil {
-		return ToolConf{}, fmt.Errorf("loading configuration: %w", err)
-	}
-
-	// Find the current tenant.
-	current, ok := CurrentFrom(conf)
-	if !ok {
-		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl auth login")
-	}
-
-	return ToolConf{
-		APIURL: current.APIURL,
-		APIKey: current.APIKey,
-	}, nil
 }
 
 func saLsCmd() *cobra.Command {

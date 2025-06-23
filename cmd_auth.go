@@ -31,96 +31,16 @@ type Auth struct {
 	APIKey string `json:"apiKey"`
 }
 
-func LoadFileConf() (FileConf, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return FileConf{}, fmt.Errorf("while getting user's home directory: %w", err)
+func authCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "auth",
+		Short:         "Commands for authenticating and switching tenants.",
+		Long:          "Manage authentication for Venafi Cloud, including login and switch.",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
-
-	f, err := os.Open(path.Join(home, configPath))
-	if os.IsNotExist(err) {
-		return FileConf{}, nil
-	}
-	if err != nil {
-		return FileConf{}, fmt.Errorf("while opening ~/%s: %w", configPath, err)
-	}
-
-	var conf FileConf
-	if err := yaml.NewDecoder(f).Decode(&conf); err != nil {
-		return FileConf{}, fmt.Errorf("while decoding ~/%s: %w", configPath, err)
-	}
-
-	return conf, nil
-}
-
-func SaveFileConf(conf FileConf) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("while getting user's home directory: %w", err)
-	}
-
-	f, err := os.Create(path.Join(home, configPath))
-	if err != nil {
-		return fmt.Errorf("while creating ~/%s: %w", configPath, err)
-	}
-	defer f.Close()
-
-	if err := yaml.NewEncoder(f).Encode(conf); err != nil {
-		return fmt.Errorf("while encoding ~/%s: %w", configPath, err)
-	}
-
-	return nil
-}
-
-type LoginCmdFlags struct {
-	APIURL string
-	APIKey string
-}
-
-// Only meant to be used by the `auth login` command.
-func CurrentFrom(conf FileConf) (Auth, bool) {
-	if conf.CurrentURL != "" {
-		for _, auth := range conf.Auths {
-			if auth.URL == conf.CurrentURL {
-				return auth, true
-			}
-		}
-	}
-
-	return Auth{}, false
-}
-
-// Also requests a new token if the token is empty.
-func GetCredsUsingFileConf() (Auth, error) {
-	conf, err := LoadFileConf()
-	if err != nil {
-		return Auth{}, fmt.Errorf("loading configuration: %w", err)
-	}
-
-	if conf.CurrentURL == "" {
-		return Auth{}, fmt.Errorf("no current URL set in configuration. Please run `vcpctl auth login` to set it.")
-	}
-
-	// Find the auth for the current URL.
-	var auth Auth
-	for _, a := range conf.Auths {
-		if a.URL == conf.CurrentURL {
-			auth = a
-			break
-		}
-	}
-
-	if auth.URL == "" || auth.APIURL == "" || auth.APIKey == "" {
-		return Auth{}, fmt.Errorf("not authenticated. Please run `vcpctl auth login`.")
-	}
-
-	// Let's check if the API key is valid.
-	_, err = checkAPIKey(auth.APIURL, auth.APIKey)
-	if err == nil {
-		return auth, nil
-	}
-
-	return Auth{}, nil
+	cmd.AddCommand(authLoginCmd(), authSwitchCmd(), authAPIKeyCmd())
+	return cmd
 }
 
 // https://docs.venafi.cloud/vsatellite/r-VSatellite-deployNew-network-connections
@@ -134,7 +54,7 @@ var venafiRegions = []string{
 }
 
 func authLoginCmd() *cobra.Command {
-	var flags LoginCmdFlags
+	var apiURL, apiKey string
 	cmd := &cobra.Command{
 		Use:   "login [--api-url <url>] [--api-key <key>]",
 		Short: "Authenticate to Venafi Cloud tenant.",
@@ -150,22 +70,22 @@ func authLoginCmd() *cobra.Command {
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If the user provided the --api-url and --api-key flags, we use them.
-			if flags.APIURL != "" || flags.APIKey != "" {
-				if flags.APIURL == "" {
+			if apiURL != "" || apiKey != "" {
+				if apiURL == "" {
 					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
 				}
-				if flags.APIKey == "" {
+				if apiKey == "" {
 					return fmt.Errorf("the --api-key flag is required when using the --api-url flag")
 				}
 
-				resp, err := checkAPIKey(flags.APIURL, flags.APIKey)
+				resp, err := checkAPIKey(apiURL, apiKey)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
 				}
 
 				current := Auth{
-					APIURL: flags.APIURL,
-					APIKey: flags.APIKey,
+					APIURL: apiURL,
+					APIKey: apiKey,
 					URL:    fmt.Sprintf("https://%s.venafi.cloud", resp.Company.URLPrefix),
 				}
 
@@ -179,11 +99,11 @@ func authLoginCmd() *cobra.Command {
 			}
 
 			// Load the current configuration.
-			conf, err := LoadFileConf()
+			conf, err := loadFileConf()
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
-			current, ok := CurrentFrom(conf)
+			current, ok := currentFrom(conf)
 			if !ok {
 				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl auth login` to add one.")
 			}
@@ -251,9 +171,38 @@ func authLoginCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flags.APIURL, "api-url", "", "The API URL of the Venafi Cloud tenant. If not provided, you will be prompted to enter it.")
-	cmd.Flags().StringVar(&flags.APIKey, "api-key", "", "The API key for the Venafi Cloud tenant.")
+	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the Venafi Cloud tenant. If not provided, you will be prompted to enter it.")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the Venafi Cloud tenant. If not provided, you will be prompted to enter it.")
 
+	return cmd
+}
+
+func authAPIKeyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "api-key",
+		Short:         "Prints the API key for the current Venafi Cloud tenant in the configuration.",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envAPIKey := os.Getenv("APIKEY")
+			flagAPIKey, _ := cmd.Flags().GetString("api-key")
+			if envAPIKey != "" || flagAPIKey != "" {
+				logutil.Debugf("$APIKEY or --api-key has been passed but will be ignored. This command only prints the API key from the configuration file at %s", configPath)
+			}
+
+			conf, err := loadFileConf()
+			if err != nil {
+				return fmt.Errorf("loading configuration: %w", err)
+			}
+
+			auth, ok := currentFrom(conf)
+			if !ok {
+				return fmt.Errorf("not logged in. Log in with:\n    vcpctl auth login\n")
+			}
+			fmt.Println(auth.APIKey)
+			return nil
+		},
+	}
 	return cmd
 }
 
@@ -266,7 +215,7 @@ func authSwitchCmd() *cobra.Command {
 				you will be prompted to select one.
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf, err := LoadFileConf()
+			conf, err := loadFileConf()
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
@@ -286,7 +235,7 @@ func authSwitchCmd() *cobra.Command {
 			}
 
 			// If no tenant URL is provided, we prompt the user to select one.
-			current, ok := CurrentFrom(conf)
+			current, ok := currentFrom(conf)
 			if !ok {
 				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl auth login` to add one.")
 			}
@@ -310,7 +259,7 @@ func authSwitchCmd() *cobra.Command {
 				return fmt.Errorf("selecting tenant: %w", err)
 			}
 			conf.CurrentURL = current.URL
-			return SaveFileConf(conf)
+			return saveFileConf(conf)
 		},
 	}
 
@@ -319,7 +268,7 @@ func authSwitchCmd() *cobra.Command {
 
 // Meant for the `auth login` command.
 func saveCurrentTenant(auth Auth) error {
-	conf, err := LoadFileConf()
+	conf, err := loadFileConf()
 	if err != nil {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
@@ -329,7 +278,7 @@ func saveCurrentTenant(auth Auth) error {
 		if conf.Auths[i].URL == auth.URL {
 			conf.CurrentURL = auth.URL
 			conf.Auths[i] = auth
-			return SaveFileConf(conf)
+			return saveFileConf(conf)
 		}
 	}
 
@@ -342,7 +291,7 @@ func saveCurrentTenant(auth Auth) error {
 	}
 	conf.Auths = append(conf.Auths, newAuth)
 
-	return SaveFileConf(conf)
+	return saveFileConf(conf)
 }
 
 // Tenant name is the first segment of the URL used when a customer opens the
@@ -407,4 +356,105 @@ func toAPIURL(tenantURL string) (string, error) {
 	}
 
 	return respJSON.APIBaseURL, nil
+}
+
+func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
+	envAPIURL := os.Getenv("APIURL")
+	envAPIKey := os.Getenv("APIKEY")
+	flagAPIURL, _ := cmd.Flags().GetString("api-url")
+	flagAPIKey, _ := cmd.Flags().GetString("api-key")
+
+	// If any of $APIKEY, $APIURL, --api-key, or --api-url is set, we don't use
+	// the configuration file.
+	if flagAPIKey != "" || envAPIKey != "" || flagAPIURL != "" || envAPIURL != "" {
+		logutil.Debugf("one of $APIKEY, $APIURL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
+		// Priority: $APIURL > --api-url.
+		apiURL := envAPIURL
+		if apiURL == "" {
+			apiURL = flagAPIURL
+		}
+		apiKey := envAPIKey
+		if apiKey == "" {
+			apiKey = flagAPIKey
+		}
+
+		return ToolConf{
+			APIURL: apiURL,
+			APIKey: apiKey,
+		}, nil
+	}
+
+	logutil.Debugf("none of $APIKEY, $APIURL, --api-key, or --api-url is set, using the configuration file at ~/%s", configPath)
+
+	conf, err := loadFileConf()
+	if err != nil {
+		return ToolConf{}, fmt.Errorf("loading configuration: %w", err)
+	}
+
+	// Find the current tenant.
+	current, ok := currentFrom(conf)
+	if !ok {
+		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl auth login")
+	}
+
+	return ToolConf{
+		APIURL: current.APIURL,
+		APIKey: current.APIKey,
+	}, nil
+}
+
+// Only meant to be used by the `auth` commands.
+func loadFileConf() (FileConf, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return FileConf{}, fmt.Errorf("while getting user's home directory: %w", err)
+	}
+
+	f, err := os.Open(path.Join(home, configPath))
+	if os.IsNotExist(err) {
+		return FileConf{}, nil
+	}
+	if err != nil {
+		return FileConf{}, fmt.Errorf("while opening ~/%s: %w", configPath, err)
+	}
+
+	var conf FileConf
+	if err := yaml.NewDecoder(f).Decode(&conf); err != nil {
+		return FileConf{}, fmt.Errorf("while decoding ~/%s: %w", configPath, err)
+	}
+
+	return conf, nil
+}
+
+// Only meant to be used by the `auth` commands.
+func saveFileConf(conf FileConf) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("while getting user's home directory: %w", err)
+	}
+
+	f, err := os.Create(path.Join(home, configPath))
+	if err != nil {
+		return fmt.Errorf("while creating ~/%s: %w", configPath, err)
+	}
+	defer f.Close()
+
+	if err := yaml.NewEncoder(f).Encode(conf); err != nil {
+		return fmt.Errorf("while encoding ~/%s: %w", configPath, err)
+	}
+
+	return nil
+}
+
+// Only meant to be used by the `auth login` command.
+func currentFrom(conf FileConf) (Auth, bool) {
+	if conf.CurrentURL != "" {
+		for _, auth := range conf.Auths {
+			if auth.URL == conf.CurrentURL {
+				return auth, true
+			}
+		}
+	}
+
+	return Auth{}, false
 }
