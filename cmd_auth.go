@@ -123,62 +123,91 @@ func authLoginCmd() *cobra.Command {
 			}
 			current, ok := currentFrom(conf)
 			if !ok {
-				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl auth login` to add one.")
+				return fmt.Errorf("no current tenant found in configuration. Please run:\n    vcpctl auth login")
 			}
 
-			f := huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().
-						Prompt("Tenant URL: ").
-						Description("Enter the URL you use to log into the Venafi Cloud web UI. Example: https://ven-cert-manager-uk.venafi.cloud").
-						Value(&current.URL).
-						Validate(func(input string) error {
-							if strings.HasSuffix(input, "/") {
-								return fmt.Errorf("Tenant URL should not have a trailing slash")
-							}
+			// Let the user know if they are already authenticated.
+			if current.URL != "" {
+				_, err := checkAPIKey(cl, current.APIURL, current.APIKey)
+				if err == nil {
+					var continueAuth bool
+					f := huh.NewForm(huh.NewGroup(huh.NewConfirm().
+						Title("Already authenticated").
+						Description(fmt.Sprintf("You're already authenticated to '%s'. Do you want to continue editing the authentication details?", current.URL)).
+						Value(&continueAuth).
+						Affirmative("Yes").
+						Negative("No"),
+					))
+					if err := f.Run(); err != nil {
+						return fmt.Errorf("while asking if the user wants to continue: %w", err)
+					}
+					if !continueAuth {
+						return nil
+					}
+				}
+			}
 
-							apiURL, err := toAPIURL(cl, input)
-							switch {
-							case err == nil:
-								current.URL = input
-								current.APIURL = apiURL
-								return nil
-							case errors.As(err, &NotFound{}):
-								return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", input)
-							default:
-								return fmt.Errorf("while getting API URL for tenant '%s': %w", input, err)
-							}
-						}),
-					huh.NewInput().
-						Prompt("API Key: ").
-						EchoMode(huh.EchoModePassword).
-						DescriptionFunc(func() string {
-							if current.URL == "" {
-								return ""
-							}
-							return fmt.Sprintf("To get the API key, open: %s/platform-settings/user-preferences?key=api-keys", current.URL)
-						}, &current.URL).
-						Validate(func(input string) error {
-							if input == "" {
-								return fmt.Errorf("API key cannot be empty")
-							}
-							if strings.TrimSpace(input) != input {
-								return fmt.Errorf("API key cannot contain leading or trailing spaces")
-							}
-							if len(input) != 36 {
-								return fmt.Errorf("API key must be 36 characters long")
-							}
-							_, err = checkAPIKey(cl, current.APIURL, input)
-							if err != nil {
-								return err
-							}
+			var fields []huh.Field
 
-							return nil
-						}).
-						Value(&current.APIKey),
-				),
+			if os.Getenv("APIURL") != "" || os.Getenv("APIKEY") != "" {
+				fields = append(fields, huh.NewNote().
+					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl auth login'."),
+				)
+			}
+
+			fields = append(fields, huh.NewInput().
+				Prompt("Tenant URL: ").
+				Description("Enter the URL you use to log into the Venafi Cloud web UI. Example: https://ven-cert-manager-uk.venafi.cloud").
+				Value(&current.URL).
+				Validate(func(input string) error {
+					if strings.HasSuffix(input, "/") {
+						return fmt.Errorf("Tenant URL should not have a trailing slash")
+					}
+
+					apiURL, err := toAPIURL(cl, input)
+					switch {
+					case err == nil:
+						current.URL = input
+						current.APIURL = apiURL
+						return nil
+					case errors.As(err, &NotFound{}):
+						return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", input)
+					default:
+						return fmt.Errorf("while getting API URL for tenant '%s': %w", input, err)
+					}
+				}),
 			)
-			if err := f.Run(); err != nil {
+			fields = append(fields, huh.NewInput().
+				Prompt("API Key: ").
+				EchoMode(huh.EchoModePassword).
+				DescriptionFunc(func() string {
+					if current.URL == "" {
+						return ""
+					}
+					return fmt.Sprintf("To get the API key, open: %s/platform-settings/user-preferences?key=api-keys", current.URL)
+				}, &current.URL).
+				Validate(func(input string) error {
+					if input == "" {
+						return fmt.Errorf("API key cannot be empty")
+					}
+					if strings.TrimSpace(input) != input {
+						return fmt.Errorf("API key cannot contain leading or trailing spaces")
+					}
+					if len(input) != 36 {
+						return fmt.Errorf("API key must be 36 characters long")
+					}
+					_, err = checkAPIKey(cl, current.APIURL, input)
+					if err != nil {
+						return err
+					}
+
+					return nil
+				}).
+				Value(&current.APIKey),
+			)
+
+			err = huh.NewForm(huh.NewGroup(fields...)).Run()
+			if err != nil {
 				return err
 			}
 
@@ -298,15 +327,20 @@ func authSwitchCmd() *cobra.Command {
 					Key:   auth.URL,
 				})
 			}
-			f := huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[Auth]().
-						Options(opts...).
-						Description("Select the tenant you want to switch to.").
-						Value(&current),
-				),
+
+			var fields []huh.Field
+			if os.Getenv("APIURL") != "" || os.Getenv("APIKEY") != "" {
+				fields = append(fields, huh.NewNote().
+					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl auth login'."),
+				)
+			}
+			fields = append(fields, huh.NewSelect[Auth]().
+				Options(opts...).
+				Description("Select the tenant you want to switch to.").
+				Value(&current),
 			)
-			if err := f.Run(); err != nil {
+			err = huh.NewForm(huh.NewGroup(fields...)).Run()
+			if err != nil {
 				return fmt.Errorf("selecting tenant: %w", err)
 			}
 			conf.CurrentURL = current.URL
