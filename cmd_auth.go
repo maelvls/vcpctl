@@ -39,7 +39,7 @@ func authCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
-	cmd.AddCommand(authLoginCmd(), authSwitchCmd(), authAPIKeyCmd())
+	cmd.AddCommand(authLoginCmd(), authSwitchCmd(), authAPIKeyCmd(), authAPIURLCmd())
 	return cmd
 }
 
@@ -200,6 +200,35 @@ func authAPIKeyCmd() *cobra.Command {
 				return fmt.Errorf("not logged in. Log in with:\n    vcpctl auth login\n")
 			}
 			fmt.Println(auth.APIKey)
+			return nil
+		},
+	}
+	return cmd
+}
+
+func authAPIURLCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "api-url",
+		Short:         "Prints the API URL for the current Venafi Cloud tenant in the configuration.",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envAPIURL := os.Getenv("APIURL")
+			flagAPIURL, _ := cmd.Flags().GetString("api-url")
+			if envAPIURL != "" || flagAPIURL != "" {
+				logutil.Debugf("$APIURL or --api-url has been passed but will be ignored. This command only prints the API URL from the configuration file at %s", configPath)
+			}
+
+			conf, err := loadFileConf()
+			if err != nil {
+				return fmt.Errorf("loading configuration: %w", err)
+			}
+
+			auth, ok := currentFrom(conf)
+			if !ok {
+				return fmt.Errorf("not logged in. Log in with:\n    vcpctl auth login\n")
+			}
+			fmt.Println(auth.APIURL)
 			return nil
 		},
 	}
