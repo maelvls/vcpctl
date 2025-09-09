@@ -30,6 +30,7 @@ import (
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
+	"github.com/njayp/ophis"
 	"github.com/spf13/cobra"
 )
 
@@ -80,6 +81,8 @@ func main() {
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.AddCommand(authCmd(), lsCmd(), editCmd(), attachSaCmd(), putCmd(), rmCmd(), getCmd(), saCmd(), subcaCmd(), policyCmd())
+
+	rootCmd.AddCommand(ophis.Command(nil))
 
 	ctx := context.Background()
 	err := rootCmd.ExecuteContext(ctx)
