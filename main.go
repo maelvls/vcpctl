@@ -7,6 +7,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	_ "embed"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -1564,6 +1565,9 @@ func getPolicies(cl http.Client, apiURL, apiKey string) ([]Policy, error) {
 	}
 }
 
+//go:embed genschema/schema.json
+var jsonSchema []byte
+
 func getCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
@@ -1609,7 +1613,13 @@ func getCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			yamlData = appendSchemaComment(yamlData)
+
+			schemaFile, err := saveSchemaToWellKnownPath()
+			if err != nil {
+				return fmt.Errorf("get: while saving schema.json to disk so that YAML can reference it: %w", err)
+			}
+
+			yamlData = appendSchemaComment(yamlData, schemaFile)
 
 			coloredYAMLPrint(string(yamlData))
 
@@ -1939,7 +1949,15 @@ func editConfig(cl http.Client, apiURL, apiKey, name string) error {
 	if err != nil {
 		return err
 	}
-	yamlData = appendSchemaComment(yamlData)
+
+	schemaFile, err := saveSchemaToWellKnownPath()
+	if err != nil {
+		return fmt.Errorf("while saving schema.json to disk so that YAML can reference it: %w", err)
+	}
+	defer os.Remove(schemaFile)
+
+	yamlData = appendSchemaComment(yamlData, schemaFile)
+
 	tmpfile, err := os.CreateTemp("", "vcp-*.yaml")
 	if err != nil {
 		return err
@@ -3082,10 +3100,25 @@ func getTeams(cl http.Client, apiURL, apiKey string) ([]Team, error) {
 	return result.Teams, nil
 }
 
+// The temp schema.json file needs to be removed manually when no longer needed.
+func saveSchemaToWellKnownPath() (string, error) {
+	// Open the file /tmp/vcpctl.schema.json.
+	tmpSchemaFile, err := os.Create("/tmp/vcpctl.schema.json")
+	if err != nil {
+		return "", fmt.Errorf("while creating /tmp/vcpctl.schema.json so that it can be referenced from the YAML manifest and help you get squiggles in your editor: %w", err)
+	}
+	defer tmpSchemaFile.Close()
+
+	if _, err := tmpSchemaFile.Write(jsonSchema); err != nil {
+		return "", fmt.Errorf("while writing to /tmp/vcpctl.schema.json: %w", err)
+	}
+	return tmpSchemaFile.Name(), nil
+}
+
 // For anyone who uses the Red Hat YAML LSP server.
-func appendSchemaComment(b []byte) []byte {
+func appendSchemaComment(b []byte, schemaAbsPath string) []byte {
 	return appendLines(b,
-		"# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/genschema/schema.json",
+		"# yaml-language-server: $schema=file://"+schemaAbsPath,
 	)
 }
 
