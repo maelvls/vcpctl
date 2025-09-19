@@ -40,6 +40,7 @@
             "example": "123456789012",
             "type": "string"
           },
+          "minItems": 1,
           "type": "array"
         },
         "regions": {
@@ -98,6 +99,7 @@
             "format": "uuid",
             "type": "string"
           },
+          "minItems": 1,
           "type": "array"
         }
       },
@@ -256,6 +258,7 @@
             "example": "415104041262 or tokyo-rain-123",
             "type": "string"
           },
+          "minItems": 1,
           "type": "array"
         },
         "regions": {
@@ -323,6 +326,7 @@
                 "example": "[\"https://jwks.example.com\"]",
                 "type": "string"
               },
+              "minItems": 1,
               "type": "array"
             }
           },
@@ -372,6 +376,7 @@
             ],
             "type": "string"
           },
+          "minItems": 1,
           "type": "array"
         },
         "defaultValue": {
