@@ -466,9 +466,17 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		if apiURL == "" {
 			apiURL = flagAPIURL
 		}
+
 		apiKey := envAPIKey
 		if apiKey == "" {
 			apiKey = flagAPIKey
+		}
+
+		if apiURL == "" && apiKey != "" {
+			return ToolConf{}, fmt.Errorf("you have set the API key using $APIKEY or --api-key, but you haven't set the API URL. Please use --api-url or $APIURL. If you aren't sure, unset APIKEY and remove --api-key, then use `vcpctl auth login` which will figure it out for you.")
+		}
+		if apiKey == "" && apiURL != "" {
+			return ToolConf{}, fmt.Errorf("you have set the API URL using $APIURL or --api-url, but you haven't set the API key. Please use --api-key or $APIKEY. If you aren't sure, unset APIURL and remove --api-url, then use `vcpctl auth login` which will figure it out for you.")
 		}
 
 		return ToolConf{

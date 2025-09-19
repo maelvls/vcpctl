@@ -1774,6 +1774,13 @@ type Config struct {
 }
 
 func listConfigs(cl http.Client, apiURL, apiKey string) ([]Config, error) {
+	if apiURL == "" {
+		return nil, fmt.Errorf("listConfigs: apiURL is empty")
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("listConfigs: apiKey is empty")
+	}
+
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while creating request: %w", err)
