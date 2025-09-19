@@ -857,6 +857,6 @@
       "$ref": "#/$defs/ExtendedConfigurationInformation"
     }
   ],
-  "description": "Schema for the Firefly configuration.",
-  "title": "Firefly Configuration"
+  "description": "Schema for the CyberArk Workload Identity Manager configuration.",
+  "title": "CyberArk Workload Identity Manager Configuration"
 }
