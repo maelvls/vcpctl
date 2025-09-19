@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -12,9 +13,14 @@ import (
 )
 
 const (
-	wholeOpenAPI            = "https://developer.venafi.com/tlsprotectcloud/openapi/63869db3ff852b006f5cd0ec"
-	vcamanagementOpenAPIURL = "https://api.venafi.cloud/v3/api-docs/vcamanagement-service"
-	accountOpenAPIURL       = "https://api.venafi.cloud/v3/api-docs/account-service"
+	// At first, I was using the combined
+	// https://developer.venafi.com/tlsprotectcloud/openapi/63869db3ff852b006f5cd0ec
+	// link that I found by visiting
+	// https://developer.venafi.com/tlsprotectcloud/openapi/. But I found that
+	// this OpenAPI spec is outdated. Instead, I use some dev URLs and combine
+	// the relevant parts from the two services that I need.
+	vcamanagementOpenAPIURL = "https://api-dev124.qa.venafi.io/v3/api-docs/vcamanagement-service"
+	accountOpenAPIURL       = "https://api-dev124.qa.venafi.io/v3/api-docs/account-service"
 )
 
 // Usage:ServiceAccountDetails
@@ -31,13 +37,20 @@ func main() {
 
 	// Fetch and filter only relevant schema definitions from the upstream
 	// OpenAPI spec.
-	root, err := fetchSchema(wholeOpenAPI)
+	root1, err := fetchSchema(vcamanagementOpenAPIURL)
 	if err != nil {
 		panic(err)
 	}
 
-	components := root["components"].(map[string]any)
-	schemas := components["schemas"].(map[string]any)
+	root2, err := fetchSchema(accountOpenAPIURL)
+	if err != nil {
+		panic(err)
+	}
+
+	schemas := mergeDefs(
+		root1["components"].(map[string]any)["schemas"].(map[string]any),
+		root2["components"].(map[string]any)["schemas"].(map[string]any),
+	)
 
 	keep := make(map[string]struct{})
 	collectRefs(schemas, keep, "ExtendedConfigurationInformation", "ServiceAccountBaseObject")
@@ -63,9 +76,10 @@ func main() {
 	// Replace or add the $defs block with filtered upstream definitions.
 	schema["$defs"] = remaining
 
-	// Remove the cyclic references to ClientAuthenticationInformation.
-	removeAllOfFirst(schema, "JwtJwksAuthenticationInformation")
-	removeAllOfFirst(schema, "JwtOidcAuthenticationInformation")
+	// Remove the cyclic references to ClientAuthenticationInformation. See:
+	// https://venafi.atlassian.net/browse/VC-42247
+	// removeAllOfFirst(schema, "JwtJwksAuthenticationInformation")
+	// removeAllOfFirst(schema, "JwtOidcAuthenticationInformation")
 
 	// Re-encode as JSON and rewrite all $ref paths to use local $defs instead
 	// of components.
@@ -117,17 +131,8 @@ func removeAllOfFirst(schema map[string]any, defName string) {
 
 func mergeDefs(defs1, defs2 map[string]any) map[string]any {
 	merged := make(map[string]any)
-
-	for name, def := range defs1 {
-		merged[name] = def
-	}
-
-	for name, def := range defs2 {
-		if def == nil {
-			continue
-		}
-		merged[name] = def
-	}
+	maps.Copy(merged, defs1)
+	maps.Copy(merged, defs2)
 
 	return merged
 }
