@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/certificate-config.schema.json",
-  "title": "Firefly Configuration",
-  "description": "Schema for the Firefly configuration.",
+  "title": "CyberArk Workload Identity Manager Configuration",
+  "description": "Schema for the CyberArk Workload Identity Manager configuration.",
   "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
   "allOf": [
     {

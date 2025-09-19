@@ -35,7 +35,7 @@ func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "auth",
 		Short:         "Commands for authenticating and switching tenants.",
-		Long:          "Manage authentication for Venafi Cloud, including login and switch.",
+		Long:          "Manage authentication for CyberArk Certificate Manager, SaaS (formerly known as Venafi Control Plane and also known as Venafi Cloud), including login and switch.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
@@ -57,9 +57,9 @@ func authLoginCmd() *cobra.Command {
 	var apiURL, apiKey string
 	cmd := &cobra.Command{
 		Use:   "login [--api-url <url>] [--api-key <key>]",
-		Short: "Authenticate to Venafi Cloud tenant.",
+		Short: "Authenticate to a CyberArk Certificate Manager, SaaS tenant.",
 		Long: undent.Undent(`
-			Authenticate to a Venafi Cloud tenant. If the tenant is not specified,
+			Authenticate to a CyberArk Certificate Manager, SaaS tenant. If the tenant is not specified,
 			you will be prompted to enter it.
 
 			If you prefer avoiding prompts, you can either use --api-url and
@@ -161,7 +161,7 @@ func authLoginCmd() *cobra.Command {
 
 			fields = append(fields, huh.NewInput().
 				Prompt("Tenant URL: ").
-				Description("Enter the URL you use to log into the Venafi Cloud web UI. Example: https://ven-cert-manager-uk.venafi.cloud").
+				Description("Enter the URL you use to log into CyberArk Certificate Manager, SaaS. Example: https://ven-cert-manager-uk.venafi.cloud").
 				Value(&current.URL).
 				Validate(func(input string) error {
 					if strings.HasSuffix(input, "/") {
@@ -229,8 +229,8 @@ func authLoginCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the Venafi Cloud tenant. If not provided, you will be prompted to enter it.")
-	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the Venafi Cloud tenant. If not provided, you will be prompted to enter it.")
+	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it.")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it.")
 
 	return cmd
 }
@@ -238,7 +238,7 @@ func authLoginCmd() *cobra.Command {
 func authAPIKeyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "api-key",
-		Short:         "Prints the API key for the current Venafi Cloud tenant in the configuration.",
+		Short:         "Prints the API key for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -267,7 +267,7 @@ func authAPIKeyCmd() *cobra.Command {
 func authAPIURLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "api-url",
-		Short:         "Prints the API URL for the current Venafi Cloud tenant in the configuration.",
+		Short:         "Prints the API URL for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -296,9 +296,9 @@ func authAPIURLCmd() *cobra.Command {
 func authSwitchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch [tenant-url]",
-		Short: "Switch to a different Venafi Cloud tenant.",
+		Short: "Switch to a different CyberArk Certificate Manager, SaaS tenant.",
 		Long: undent.Undent(`
-				Switch to a different Venafi Cloud tenant. If the tenant is not specified,
+			Switch to a different CyberArk Certificate Manager, SaaS tenant. If the tenant is not specified,
 				you will be prompted to select one.
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {

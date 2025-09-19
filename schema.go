@@ -69,7 +69,7 @@ func validateFireflyConfig(input FireflyConfig) error {
 		str = append(str, cause.Error())
 	}
 	if len(str) == 1 {
-		return fmt.Errorf(str[0])
+		return fmt.Errorf("%s", str[0])
 	}
 	return fmt.Errorf("\n* %s", strings.Join(str, "\n *"))
 }

@@ -44,11 +44,11 @@ func main() {
 	var apiURLFlag, apiKeyFlag string
 	rootCmd := &cobra.Command{
 		Use:   "vcpctl",
-		Short: "A CLI tool for Venafi configurations",
+		Short: "A CLI tool for CyberArk Certificate Manager configurations",
 		Long: undent.Undent(`
-			vcpctl is a CLI tool for managing Venafi Control Plane configurations.
+			vcpctl is a CLI tool for managing CyberArk Certificate Manager, SaaS (formerly known as Venafi Control Plane and also known as Venafi Cloud) configurations.
 			To configure it, set the APIKEY environment variable to your
-			Venafi Control Plane API key. You can also set the APIURL environment variable
+			CyberArk Certificate Manager, SaaS API key. You can also set the APIURL environment variable
 			to override the default API URL.
 		`),
 		Example: undent.Undent(`
@@ -76,8 +76,8 @@ func main() {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given Venafi API URL. You can also set APIURL. Flag takes precedence. When using this flag, the configuration file is not used.")
-	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given Venafi API key. You can also set APIKEY. Flag takes precedence. When using this flag, the configuration file is not used.")
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set APIURL. Flag takes precedence. When using this flag, the configuration file is not used.")
+	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given CyberArk Certificate Manager, SaaS API key. You can also set APIKEY. Flag takes precedence. When using this flag, the configuration file is not used.")
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.AddCommand(authCmd(), lsCmd(), editCmd(), attachSaCmd(), putCmd(), rmCmd(), getCmd(), saCmd(), subcaCmd(), policyCmd())
@@ -235,7 +235,7 @@ func saLsCmd() *cobra.Command {
 		Short: "List Service Accounts",
 		Long: undent.Undent(`
 			List Service Accounts. Service Accounts are used to authenticate
-			applications that use the Firefly Configurations.
+			applications that use Workload Identity Manager configurations.
 
 			You can use -oid to only display the Service Account client IDs.
 		`),
@@ -343,7 +343,7 @@ func saPutCmd() *cobra.Command {
 		Use:   "put",
 		Short: "Creates or updates a Service Account",
 		Long: undent.Undent(`
-			Creates or updates a Service Account in Venafi Control Plane.
+			Creates or updates a Service Account in CyberArk Certificate Manager, SaaS.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
@@ -362,7 +362,7 @@ func saGenkeypairCmd() *cobra.Command {
 		Short: "Generates an EC private key and registers it to the given Service Account, or create it if it doesn't exist",
 		Long: undent.Undent(`
 			Generates an EC private key and registers it to the given Service
-			Account in Venafi Control Plane.
+			Account in CyberArk Certificate Manager, SaaS.
 
 			The private key is printed to stdout in PEM, you can use it to
 			create a Kubernetes secret, for example:
@@ -464,8 +464,8 @@ func saPutKeypairCmd() *cobra.Command {
 		Short: "Creates or updates the given Key Pair Authentication Service Account",
 		Long: undent.Undent(`
 			Creates or updates the given 'Private Key JWT' authentication
-			(also known as 'Key Pair Authentication') Service Account in the
-			Venafi Control Plane. Returns the Service Account's client ID.
+			(also known as 'Key Pair Authentication') Service Account in
+			CyberArk Certificate Manager, SaaS. Returns the Service Account's client ID.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
@@ -604,7 +604,7 @@ func saRmCmd() *cobra.Command {
 		Short: "Remove a Service Account",
 		Long: undent.Undent(`
 			Remove a Service Account. This will delete the Service Account from
-			Venafi Control Plane.
+			CyberArk Certificate Manager, SaaS.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa rm <sa-name>
@@ -664,13 +664,13 @@ func saRmCmd() *cobra.Command {
 	return cmd
 }
 
-// List Firefly configurations.
+// List Workload Identity Manager configurations.
 func lsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls",
-		Short: "List the Firefly Configurations present in Venafi Control Plane",
+		Short: "List Workload Identity Manager configurations in CyberArk Certificate Manager, SaaS",
 		Long: undent.Undent(`
-			List the Firefly Configurations present in Venafi Control Plane.
+			List Workload Identity Manager configurations in CyberArk Certificate Manager, SaaS.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -722,7 +722,7 @@ func lsCmd() *cobra.Command {
 				})
 			}
 
-			printTable([]string{"Firefly Configuration", "Attached Service Accounts"}, rows)
+			printTable([]string{"Workload Identity Manager Configuration", "Attached Service Accounts"}, rows)
 			return nil
 		},
 	}
@@ -736,7 +736,7 @@ func subcaCmd() *cobra.Command {
 		Long: undent.Undent(`
 			Manage SubCA Providers. SubCA Providers are used to issue certificates
 			from a SubCA. You can list, create, delete, and set a SubCA Provider
-			for a Firefly Configuration.
+			for a Workload Identity Manager configuration.
 
 			Example:
 			  vcpctl subca ls
@@ -800,8 +800,8 @@ func subcaRmCmd() *cobra.Command {
 		Short: "Remove a SubCA Provider",
 		Long: undent.Undent(`
 			Remove a SubCA Provider. This will delete the SubCA Provider from
-			Venafi Control Plane. You cannot remove a SubCA Provider that is
-			attached to a Firefly Configuration.
+			CyberArk Certificate Manager, SaaS. You cannot remove a SubCA Provider that is
+			attached to a Workload Identity Manager configuration.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -835,7 +835,7 @@ func policyCmd() *cobra.Command {
 		Long: undent.Undent(`
 			Manage Policies. Policies are used to define the rules for issuing
 			certificates. You can list, create, delete, and set a Policy for a
-			Firefly Configuration.
+			Workload Identity Manager configuration.
 		`),
 		Example: undent.Undent(`
 			vcpctl policy ls
@@ -897,9 +897,9 @@ func policyRmCmd() *cobra.Command {
 		Use:   "rm <policy-name-or-id>",
 		Short: "Remove a Policy",
 		Long: undent.Undent(`
-			Remove a Policy. This will delete the Policy from Venafi Control Plane.
-			You cannot remove a Policy that is attached to a Firefly Configuration.
-			You must first remove the Policy from the Firefly Configuration.
+			Remove a Policy. This will delete the Policy from CyberArk Certificate Manager, SaaS.
+			You cannot remove a Policy that is attached to a Workload Identity Manager configuration.
+			You must first remove the Policy from the Workload Identity Manager configuration.
 		`),
 		Example: undent.Undent(`
 			vcpctl policy rm <policy-name>
@@ -1067,9 +1067,9 @@ func attachSaCmd() *cobra.Command {
 	var saName string
 	cmd := &cobra.Command{
 		Use:   "attach-sa <config-name> --sa <sa-name>",
-		Short: "Attach a Service Account to a given Firefly Configuration",
+		Short: "Attach a Service Account to a Workload Identity Manager configuration",
 		Long: undent.Undent(`
-			Attach the given Service Account to the Firefly Configuration.
+			Attach the given Service Account to the Workload Identity Manager configuration.
 		`),
 		Example: undent.Undent(`
 			vcpctl attach-sa "config-name" --sa "sa-name"
@@ -1079,7 +1079,7 @@ func attachSaCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("attach-sa: expected a single argument (the Firefly configuration name), got %s", args)
+				return fmt.Errorf("attach-sa: expected a single argument (the Workload Identity Manager configuration name), got %s", args)
 			}
 			confName := args[0]
 
@@ -1097,7 +1097,7 @@ func attachSaCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&saName, "sa", "s", "", "Service Account name or client ID to attach to the Firefly Configuration")
+	cmd.Flags().StringVarP(&saName, "sa", "s", "", "Service Account name or client ID to attach to the Workload Identity Manager configuration")
 	_ = cmd.MarkFlagRequired("sa")
 	return cmd
 }
@@ -1106,7 +1106,7 @@ func attachSAToConf(cl http.Client, apiURL, apiKey, confName, saName string) err
 	// Get configuration name by ID.
 	config, err := getConfig(cl, apiURL, apiKey, confName)
 	if err != nil {
-		return fmt.Errorf("while fetching the ID of the Firefly configuration '%s': %w", confName, err)
+		return fmt.Errorf("while fetching the ID of the Workload Identity Manager configuration '%s': %w", confName, err)
 	}
 
 	// Find service accounts.
@@ -1151,7 +1151,7 @@ func attachSAToConf(cl http.Client, apiURL, apiKey, confName, saName string) err
 	patch := fullToPatchConfig(config)
 	err = patchConfig(cl, apiURL, apiKey, config.ID, patch)
 	if err != nil {
-		return fmt.Errorf("while patching Firefly configuration: %w", err)
+		return fmt.Errorf("while patching Workload Identity Manager configuration: %w", err)
 	}
 
 	return nil
@@ -1160,15 +1160,15 @@ func attachSAToConf(cl http.Client, apiURL, apiKey, confName, saName string) err
 func editCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "edit",
-		Short: "Edit a Firefly Configuration",
+		Short: "Edit a Workload Identity Manager configuration",
 		Long: undent.Undent(`
-			Edit a Firefly Configuration.
+			Edit a Workload Identity Manager configuration.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("edit: expected a single argument (the Firefly configuration name), got %s", args)
+				return fmt.Errorf("edit: expected a single argument (the Workload Identity Manager configuration name), got %s", args)
 			}
 
 			cl := http.Client{Transport: Transport}
@@ -1191,9 +1191,9 @@ func putCmd() *cobra.Command {
 	var filePath string
 	cmd := &cobra.Command{
 		Use:   "put",
-		Short: "Creates or updates a Firefly Configuration",
+		Short: "Create or update a Workload Identity Manager configuration",
 		Long: undent.Undent(`
-			Creates or updates a Firefly Configuration in Venafi Control Plane.
+			Create or update a Workload Identity Manager configuration in CyberArk Certificate Manager, SaaS.
 			The name in the config's 'name' field is used to identify the
 			configuration.
 		`),
@@ -1228,7 +1228,7 @@ func putCmd() *cobra.Command {
 
 			bytes, err := io.ReadAll(file)
 			if err != nil {
-				return fmt.Errorf("put: while reading Firefly configuration from '%s': %w", filePath, err)
+				return fmt.Errorf("put: while reading Workload Identity Manager configuration from '%s': %w", filePath, err)
 			}
 
 			// Get service accounts.
@@ -1237,42 +1237,42 @@ func putCmd() *cobra.Command {
 				return fmt.Errorf("put: while getting service accounts: %w", err)
 			}
 
-			// Read the Firefly configuration.
+			// Read the Workload Identity Manager configuration.
 			var updatedConfig FireflyConfig
 			if err := yaml.UnmarshalWithOptions(bytes, &updatedConfig, yaml.Strict()); err != nil {
-				return fmt.Errorf("put: while decoding Firefly configuration from '%s': %w", filePath, err)
+				return fmt.Errorf("put: while decoding Workload Identity Manager configuration from '%s': %w", filePath, err)
 			}
 			hideMisleadingFields(&updatedConfig)
 			populateServiceAccountsInConfig(&updatedConfig, svcaccts)
 
 			if err := validateFireflyConfig(updatedConfig); err != nil {
-				return fmt.Errorf("put: Firefly configuration validation failed: %w", err)
+				return fmt.Errorf("put: Workload Identity Manager configuration validation failed: %w", err)
 			}
 
 			if updatedConfig.Name == "" {
-				return fmt.Errorf("put: Firefly configuration must have a 'name' field set")
+				return fmt.Errorf("put: Workload Identity Manager configuration must have a 'name' field set")
 			}
 
 			// Patch the original configuration with the new values.
 			err = createOrUpdateConfigAndDeps(cl, conf.APIURL, conf.APIKey, svcaccts, updatedConfig)
 			if err != nil {
-				return fmt.Errorf("put: while creating or updating the Firefly configuration, Sub CA, or Policies: %w", err)
+				return fmt.Errorf("put: while creating or updating the Workload Identity Manager configuration, Sub CA, or Policies: %w", err)
 			}
 
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the Firefly Configuration file (YAML). Use '-' to read from stdin.")
+	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the Workload Identity Manager configuration file (YAML). Use '-' to read from stdin.")
 	return cmd
 }
 
 func rmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rm <config-name>",
-		Short: "Remove a Firefly Configuration",
+		Short: "Remove a Workload Identity Manager configuration",
 		Long: undent.Undent(`
-			Remove a Firefly Configuration. This will delete the configuration
-			from Venafi Control Plane.
+			Remove a Workload Identity Manager configuration. This will delete the configuration
+			from CyberArk Certificate Manager, SaaS.
 		`),
 		Example: undent.Undent(`
 			vcpctl rm my-config
@@ -1282,7 +1282,7 @@ func rmCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected a single argument (the Firefly configuration name or ID), got %s", args)
+				return fmt.Errorf("rm: expected a single argument (the Workload Identity Manager configuration name or ID), got %s", args)
 			}
 			nameOrID := args[0]
 
@@ -1295,16 +1295,16 @@ func rmCmd() *cobra.Command {
 			c, err := getConfig(cl, conf.APIURL, conf.APIKey, nameOrID)
 			if err != nil {
 				if errors.As(err, &NotFound{}) {
-					return fmt.Errorf("rm: Firefly configuration '%s' not found", nameOrID)
+					return fmt.Errorf("rm: Workload Identity Manager configuration '%s' not found", nameOrID)
 				}
-				return fmt.Errorf("rm: while getting Firefly configuration by name or ID '%s': %w", nameOrID, err)
+				return fmt.Errorf("rm: while getting Workload Identity Manager configuration by name or ID '%s': %w", nameOrID, err)
 			}
 			// Remove the configuration.
 			err = removeConfig(cl, conf.APIURL, conf.APIKey, c.ID)
 			if err != nil {
-				return fmt.Errorf("rm: while removing Firefly configuration '%s': %w", nameOrID, err)
+				return fmt.Errorf("rm: while removing Workload Identity Manager configuration '%s': %w", nameOrID, err)
 			}
-			logutil.Debugf("Firefly Configuration '%s' removed successfully.", nameOrID)
+			logutil.Debugf("Workload Identity Manager configuration '%s' removed successfully.", nameOrID)
 			return nil
 		},
 	}
@@ -1462,9 +1462,9 @@ func getConfig(cl http.Client, apiURL, apiKey, nameOrID string) (FireflyConfig, 
 			_, _ = b.WriteString(fmt.Sprintf("- %s (%s) created on %s\n", f.Name, f.ID, f.CreationDate))
 		}
 		return FireflyConfig{}, fmt.Errorf(undent.Undent(`
-			getConfigByName: duplicate Firefly Configurations found with name '%s':
+			getConfigByName: duplicate Workload Identity Manager configurations found with name '%s':
 			%s
-			Either use the Firefly Configuration ID instead of the name, or try
+			Either use the Workload Identity Manager configuration ID instead of the name, or try
 			removing the duplicates first with:
 			    vcpctl rm %s
 		`), nameOrID, b.String(), found[0].ID)
@@ -1567,10 +1567,10 @@ func getPolicies(cl http.Client, apiURL, apiKey string) ([]Policy, error) {
 func getCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
-		Short: "Get a Firefly Configuration from Venafi Control Plane",
+		Short: "Export a Workload Identity Manager configuration",
 		Long: undent.Undent(`
-			Get a Firefly Configuration from Venafi Control Plane. The config
-			will be written to stdout in YAML format.
+			Get a Workload Identity Manager configuration from CyberArk Certificate Manager, SaaS. The configuration
+			is written to stdout in YAML format.
 		`),
 		Example: undent.Undent(`
 			vcpctl get <config-name>
@@ -1579,7 +1579,7 @@ func getCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("get: expected a single argument (the Firefly configuration name), got %s", args)
+				return fmt.Errorf("get: expected a single argument (the Workload Identity Manager configuration name), got %s", args)
 			}
 			idOrName := args[0]
 
@@ -1596,7 +1596,7 @@ func getCmd() *cobra.Command {
 
 			config, err := getConfig(cl, conf.APIURL, conf.APIKey, idOrName)
 			if err != nil {
-				return fmt.Errorf("get: while getting original Firefly configuration: %w", err)
+				return fmt.Errorf("get: while getting original Workload Identity Manager configuration: %w", err)
 			}
 			populateServiceAccountsInConfig(&config, knownSvcaccts)
 			hideMisleadingFields(&config)
@@ -1643,7 +1643,7 @@ func hideMisleadingFields(c *FireflyConfig) {
 	}
 }
 
-// createConfig creates a new Firefly configuration or updates an
+// createConfig creates a new Workload Identity Manager configuration or updates an
 // existing one. Also deals with creating the subCA policies.
 func createConfig(cl http.Client, apiURL, apiKey string, config FireflyConfigPatch) (string, error) {
 	body, err := json.Marshal(config)
@@ -2026,7 +2026,7 @@ edit:
 		goto edit
 	}
 	if err != nil {
-		return fmt.Errorf("while merging and patching Firefly configuration: %w", err)
+		return fmt.Errorf("while merging and patching Workload Identity Manager configuration: %w", err)
 	}
 
 	return nil
@@ -2065,7 +2065,7 @@ func svcAcctsComments(config FireflyConfig, allSvcAccts []ServiceAccount) map[st
 
 var ErrPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
 
-// Also patches the nested SubCA provider and Firefly Policies. Use
+// Also patches the nested SubCA provider and Workload Identity Manager policies. Use
 // errors.Is(err, errPINRequired) to check if the error is due to the missing
 // PIN.
 func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existingSvcAccts []ServiceAccount, updatedConfig FireflyConfig) error {
@@ -2141,7 +2141,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 		}
 	}
 	if builtin.ID == "" {
-		return fmt.Errorf("built-in issuing template not found, please check your Venafi Control Plane configuration")
+		return fmt.Errorf("built-in issuing template not found, please check your CyberArk Certificate Manager, SaaS configuration")
 	}
 
 	// Before dealing with patching the configuration, let's patch the policies
@@ -2155,14 +2155,14 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 		case err == nil:
 			// Policy exists and might need to be patched. Continue below.
 		default:
-			return fmt.Errorf("while getting the existing Firefly policy '%s': %w", updatedConfig.Policies[i].Name, err)
+			return fmt.Errorf("while getting the existing Workload Identity Manager policy '%s': %w", updatedConfig.Policies[i].Name, err)
 		}
 
 		if existingPolicy.ID == "" {
 			// The policy does not exist, we need to create it.
 			id, err := createFireflyPolicy(cl, apiURL, apiKey, updatedConfig.Policies[i])
 			if err != nil {
-				return fmt.Errorf("while creating Firefly policy: %w", err)
+				return fmt.Errorf("while creating Workload Identity Manager policy: %w", err)
 			}
 			updatedConfig.Policies[i].ID = id
 			logutil.Debugf("Policy '%s' created with ID '%s'.", updatedConfig.Policies[i].Name, id)
@@ -2182,7 +2182,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			// Patch the policy.
 			err = patchPolicy(cl, apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
 			if err != nil {
-				return fmt.Errorf("while patching Firefly policy #%d '%s': %w", i, updatedConfig.Policies[i].Name, err)
+				return fmt.Errorf("while patching Workload Identity Manager policy #%d '%s': %w", i, updatedConfig.Policies[i].Name, err)
 			}
 		}
 	}
@@ -2231,7 +2231,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			// `subCaProvider`.
 
 			if !isZeroPKCS11(updatedConfig.SubCaProvider.PKCS11) && updatedConfig.SubCaProvider.PKCS11.PIN == "" {
-				return fmt.Errorf("while patching Firefly configuration's subCAProvider: %w", ErrPINRequired)
+				return fmt.Errorf("while patching Workload Identity Manager configuration's subCAProvider: %w", ErrPINRequired)
 			}
 
 			// If the SubCA provider is different, we need to update it.
@@ -2240,19 +2240,19 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			// Patch the SubCA provider.
 			err = patchSubCaProvider(cl, apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
 			if err != nil {
-				return fmt.Errorf("while patching Firefly SubCA provider '%s': %w", updatedConfig.SubCaProvider.Name, err)
+				return fmt.Errorf("while patching Workload Identity Manager SubCA provider '%s': %w", updatedConfig.SubCaProvider.Name, err)
 			}
 		}
 	}
 
 	// If we reach this point, we have successfully dealt with service accounts,
-	// the sub CA, and policies. Let's see if the Firefly configuration needs to
+	// the sub CA, and policies. Let's see if the Workload Identity Manager configuration needs to
 	// be created or updated.
 	existingConfig, err := getConfig(cl, apiURL, apiKey, updatedConfig.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
 		// Continue below since the nested sub CA and policies may not already
-		// exist, so the Firefly configuration may need to be patched.
+		// exist, so the Workload Identity Manager configuration may need to be patched.
 	case err != nil:
 		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
@@ -2260,7 +2260,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 		// The configuration does not exist, we need to create it.
 		confID, err := createConfig(cl, apiURL, apiKey, fullToPatchConfig(updatedConfig))
 		if err != nil {
-			return fmt.Errorf("while creating Firefly configuration: %w", err)
+			return fmt.Errorf("while creating Workload Identity Manager configuration: %w", err)
 		}
 
 		logutil.Debugf("Configuration '%s' created with ID '%s'.", updatedConfig.Name, confID)
@@ -2276,7 +2276,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			patch := fullToPatchConfig(updatedConfig)
 			err = patchConfig(cl, apiURL, apiKey, existingConfig.ID, patch)
 			if err != nil {
-				return fmt.Errorf("while patching Firefly configuration: %w", err)
+				return fmt.Errorf("while patching Workload Identity Manager configuration: %w", err)
 			}
 		}
 	}
@@ -2364,7 +2364,7 @@ var APIKeyInvalid = errors.New("API key is invalid")
 func parseJSONErrorOrDumpBody(resp *http.Response) error {
 	body, _ := io.ReadAll(resp.Body)
 
-	// For some reason, Venafi Cloud returns a plain text error message when the
+	// For some reason, CyberArk Certificate Manager, SaaS returns a plain text error message when the
 	// API key is invalid.
 	if resp.Header.Get("Content-Type") == "text/plain" && bytes.Equal(body, []byte("Invalid api key")) {
 		return APIKeyInvalid
@@ -2472,7 +2472,7 @@ func patchPolicy(cl http.Client, apiURL, apiKey, id string, patch PolicyPatch) e
 		// The patch was successful.
 		return nil
 	case http.StatusNotFound:
-		return fmt.Errorf("Firefly policy: %w", NotFound{NameOrID: id})
+		return fmt.Errorf("Workload Identity Manager policy: %w", NotFound{NameOrID: id})
 	default:
 		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}

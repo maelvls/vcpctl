@@ -2,19 +2,18 @@
 
 ## Overview
 
-To edit the Firefly configuration, Firefly Sub CA configuration, and Firefly
-Policies configuration, you can use the `vcpctl` command line tool.
+To edit the CyberArk Workload Identity Manager configuration (formerly known as Firefly), the associated Sub CA configuration, and policy configuration, you can use the `vcpctl` command line tool.
 
-First off, set the `APIKEY` and optionally `APIURL` environment variables:
+First off, set the `APIKEY` and optionally `APIURL` environment variables for CyberArk Certificate Manager, SaaS:
 
 ```bash
 export APIKEY=yourapikey
 export APIURL=https://api.uk.venafi.cloud
 ```
 
-Then you can use the `vcpctl` command to manage your Firefly configurations.
+Then you can use the `vcpctl` command to manage your Workload Identity Manager configurations.
 
-You can list the Firefly configurations and Firefly service accounts with:
+You can list Workload Identity Manager configurations and the related service accounts with:
 
 ```bash
 vcpctl ls
@@ -26,13 +25,13 @@ You can edit the configuration in your `$EDITOR` with the command:
 vcpctl edit test
 ```
 
-You can export a Firefly configuration along with its associated Sub CA, Policies, and Service Account with:
+You can export a Workload Identity Manager configuration along with its associated Sub CA, policies, and service account with:
 
 ```bash
 vcpctl get test
 ```
 
-You can create (and update) a Firefly configuration with:
+You can create (and update) a Workload Identity Manager configuration with:
 
 ```bash
 vcpctl put -f test.yaml
@@ -40,8 +39,8 @@ vcpctl put -f test.yaml
 
 > [!NOTE]
 >
-> The `put` and `edit` commands will create the missing Firefly Sub CA,
-> Firefly Policies, and Service Accounts.
+> The `put` and `edit` commands will create the missing Workload Identity Manager Sub CA,
+> policies, and service accounts.
 
 
 ## Schema of config.yaml
