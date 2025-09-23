@@ -98,8 +98,19 @@ func main() {
 }
 
 type ClientAuthentication struct {
-	Type string   `json:"type"`
-	URLs []string `json:"urls"`
+	Type     string                       `json:"type" yaml:"type"`
+	URLs     []string                     `json:"urls,omitempty" yaml:"urls,omitempty"`
+	Audience string                       `json:"audience,omitempty" yaml:"audience,omitempty"`
+	BaseURL  string                       `json:"baseUrl,omitempty" yaml:"baseUrl,omitempty"`
+	Clients  []ClientAuthenticationClient `json:"clients,omitempty" yaml:"clients,omitempty"`
+}
+
+type ClientAuthenticationClient struct {
+	Name             string   `json:"name,omitempty" yaml:"name,omitempty"`
+	Issuer           string   `json:"issuer,omitempty" yaml:"issuer,omitempty"`
+	JwksURI          string   `json:"jwksURI,omitempty" yaml:"jwksURI,omitempty"`
+	Subjects         []string `json:"subjects,omitempty" yaml:"subjects,omitempty"`
+	AllowedPolicyIDs []string `json:"allowedPolicyIds,omitempty" yaml:"allowedPolicyIds,omitempty"`
 }
 
 type CustomClaimsAliases struct {
