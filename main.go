@@ -36,8 +36,7 @@ import (
 )
 
 const (
-	userAgent     = "vcpctl/v0.0.1"
-	defaultAPIURL = "https://api.venafi.cloud"
+	userAgent = "vcpctl/v0.0.1"
 )
 
 // Replace the old flag-based main() with cobra execution.
@@ -989,7 +988,7 @@ func removePolicy(cl http.Client, apiURL, apiKey, policyName string) error {
 		// Successfully removed.
 		return nil
 	default:
-		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "removePolicy: http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -1010,7 +1009,7 @@ func getSubCas(cl http.Client, apiURL, apiKey string) ([]SubCa, error) {
 	case http.StatusOK:
 		// Continue.
 	default:
-		return nil, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -1046,7 +1045,7 @@ func getSubCaByID(cl http.Client, apiURL, apiKey, id string) (SubCa, error) {
 	case http.StatusNotFound:
 		return SubCa{}, &NotFound{NameOrID: id}
 	default:
-		return SubCa{}, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return SubCa{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result SubCa
@@ -1096,7 +1095,7 @@ func removeSubCaProviderByID(cl http.Client, apiURL, apiKey, id string) error {
 		// Successfully removed.
 		return nil
 	default:
-		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -1405,7 +1404,7 @@ func getPolicyByID(cl http.Client, apiURL, apiKey, id string) (Policy, error) {
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return Policy{}, fmt.Errorf("getPolicyByID: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return Policy{}, HTTPErrorf(resp, "getPolicyByID: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 	var result Policy
 	body, err := io.ReadAll(resp.Body)
@@ -1440,7 +1439,7 @@ func getSubCa(cl http.Client, apiURL, apiKey, name string) (SubCa, error) {
 	case http.StatusOK:
 		// Continue.
 	default:
-		return SubCa{}, fmt.Errorf("getSubCa: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return SubCa{}, HTTPErrorf(resp, "getSubCa: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -1531,7 +1530,7 @@ func getConfigs(cl http.Client, apiURL, apiKey string) ([]FireflyConfig, error) 
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, fmt.Errorf("getConfigs: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorf(resp, "getConfigs: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 	var result struct {
 		Configurations []FireflyConfig `json:"configurations"`
@@ -1575,7 +1574,7 @@ func removeConfig(cl http.Client, apiURL, apiKey, nameOrID string) error {
 	case http.StatusNotFound:
 		return &NotFound{NameOrID: nameOrID}
 	default:
-		return fmt.Errorf("removeConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "removeConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -1593,16 +1592,23 @@ func getPolicies(cl http.Client, apiURL, apiKey string) ([]Policy, error) {
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		var result struct {
-			Policies []Policy `json:"policies"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return nil, fmt.Errorf("getPolicies: while decoding response: %w", err)
-		}
-		return result.Policies, nil
+		// Continue below.
 	default:
 		return nil, parseJSONErrorOrDumpBody(resp)
 	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("getPolicies: while reading response body: %w", err)
+	}
+
+	var result struct {
+		Policies []Policy `json:"policies"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("getPolicies: while decoding response: %w, body was: %s", err, string(body))
+	}
+	return result.Policies, nil
 }
 
 //go:embed genschema/schema.json
@@ -1724,7 +1730,7 @@ func createConfig(cl http.Client, apiURL, apiKey string, config FireflyConfigPat
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return "", fmt.Errorf("createConfig: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return "", HTTPErrorf(resp, "createConfig: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -1766,7 +1772,7 @@ func createFireflyPolicy(cl http.Client, apiURL, apiKey string, policy Policy) (
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return "", fmt.Errorf("createFireflyPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return "", HTTPErrorf(resp, "createFireflyPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -1806,7 +1812,7 @@ func createSubCaProvider(cl http.Client, apiURL, apiKey string, provider SubCa) 
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return "", fmt.Errorf("createSubCaProvider: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return "", HTTPErrorf(resp, "createSubCaProvider: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -1853,7 +1859,7 @@ func listConfigs(cl http.Client, apiURL, apiKey string) ([]Config, error) {
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, fmt.Errorf("/v1/distributedissuers/configurations: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorf(resp, "/v1/distributedissuers/configurations: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -1907,7 +1913,7 @@ func getConfigByID(cl http.Client, apiURL, apiKey, id string) (FireflyConfig, er
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return FireflyConfig{}, fmt.Errorf("getConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return FireflyConfig{}, HTTPErrorf(resp, "getConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var fireflyConfig FireflyConfig
@@ -2021,6 +2027,10 @@ func editConfig(cl http.Client, apiURL, apiKey, name string) error {
 
 	info, _ := os.Stat(tmpfile.Name())
 	lastSaved := info.ModTime()
+	justSaved := func() {
+		info, _ := os.Stat(tmpfile.Name())
+		lastSaved = info.ModTime()
+	}
 edit:
 	// Open editor to let you edit YAML.
 	editor := os.Getenv("EDITOR")
@@ -2054,55 +2064,74 @@ edit:
 	}
 
 	var modified FireflyConfig
-	if err := yaml.UnmarshalWithOptions(modifiedRaw, &modified, yaml.Strict()); err != nil {
-		logutil.Debugf("the configuration you have modified is not valid:\n%s", err)
-		notice := "# NOTICE: Errors were found, please edit the configuration.\n" +
-			"# NOTICE: You can abort editing by emptying this file.\n" +
-			"# NOTICE:\n" +
-			"# NOTICE: " + strings.ReplaceAll(err.Error(), "\n", "\n# NOTICE: ") + "\n\n"
-		err = os.WriteFile(tmpfile.Name(), append([]byte(notice), modifiedRaw...), 0644)
+
+	err = yaml.UnmarshalWithOptions(modifiedRaw, &modified, yaml.Strict())
+	switch {
+	case errors.As(err, &FixableError{}):
+		err = addErrorNoticeToFile(tmpfile.Name(), err)
 		if err != nil {
-			return fmt.Errorf("while writing notice to file: %w", err)
+			return fmt.Errorf("while showing notice for fixable error: %w", err)
 		}
-		info, _ := os.Stat(tmpfile.Name())
-		lastSaved = info.ModTime()
+		justSaved()
 		goto edit
+	case err != nil:
+		return fmt.Errorf("while parsing modified Workload Identity Manager configuration: %w", err)
 	}
 
 	err = validateFireflyConfig(modified)
-	if err != nil {
-		logutil.Debugf("the configuration you have modified is not valid:\n%s", err)
-
-		modifiedRaw := removeNoticeFromYAML(string(modifiedRaw))
-		notice := "# NOTICE: Errors were found, please edit the configuration.\n" +
-			"# NOTICE: You can abort editing by emptying this file.\n" +
-			"# NOTICE:\n" +
-			"# NOTICE: " + strings.ReplaceAll(err.Error(), "\n", "\n# NOTICE: ") + "\n\n"
-		err = os.WriteFile(tmpfile.Name(), append([]byte(notice), modifiedRaw...), 0644)
+	switch {
+	case errors.As(err, &FixableError{}):
+		err = addErrorNoticeToFile(tmpfile.Name(), err)
 		if err != nil {
-			return fmt.Errorf("while writing notice to file: %w", err)
+			return fmt.Errorf("while showing notice for fixable error: %w", err)
 		}
-		info, _ := os.Stat(tmpfile.Name())
-		lastSaved = info.ModTime()
+		justSaved()
 		goto edit
+	case err != nil:
+		return fmt.Errorf("while validating modified Workload Identity Manager configuration: %w", err)
 	}
 
 	err = createOrUpdateConfigAndDeps(cl, apiURL, apiKey, knownSvcaccts, modified)
-	if errors.Is(err, ErrPINRequired) {
-		logutil.Errorf("ERROR: The subCaProvider.pkcs11.pin field is required.")
-
-		// If the PIN is required, we need to ask the user to fill it in.
-		modifiedRaw := removeNoticeFromYAML(string(modifiedRaw))
-		notice := "# NOTICE: Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
-			"# NOTICE: You can abort by emptying this file and closing it. Please re-edit the configuration to fill in the PKCS11 pin.\n\n"
-		err = os.WriteFile(tmpfile.Name(), append([]byte(notice), modifiedRaw...), 0644)
+	switch {
+	// In case we were returned a 400 Bad Request or if it's a fixable error,
+	// let's give a chance to the user to fix the problem.
+	case errors.As(err, &FixableError{}), IsHTTPBadRequest(err):
+		err = addErrorNoticeToFile(tmpfile.Name(), err)
 		if err != nil {
-			return fmt.Errorf("while writing notice to file: %w", err)
+			return fmt.Errorf("while showing notice for fixable error: %w", err)
 		}
+		justSaved()
 		goto edit
-	}
-	if err != nil {
+	case err != nil:
 		return fmt.Errorf("while merging and patching Workload Identity Manager configuration: %w", err)
+	}
+
+	return nil
+}
+
+func addErrorNoticeToFile(tmpfile string, err error) error {
+	if err == nil {
+		logutil.Errorf("addErrorNoticeToFile: err is nil")
+		return nil
+	}
+
+	// Read and parse the modified YAML.
+	modifiedRaw, rerr := os.ReadFile(tmpfile)
+	if rerr != nil {
+		logutil.Errorf("while reading temporary file to show notice: %s", rerr)
+		return fmt.Errorf("while reading temporary file to show notice: %w", rerr)
+	}
+
+	logutil.Debugf("the configuration you have modified has an issue:\n%s", err)
+
+	modifiedRaw = removeNoticeFromYAML(modifiedRaw)
+	notice := "# NOTICE: Errors were found, please edit the configuration.\n" +
+		"# NOTICE: You can abort editing by emptying this file.\n" +
+		"# NOTICE:\n" +
+		"# NOTICE: " + strings.ReplaceAll(err.Error(), "\n", "\n# NOTICE: ") + "\n\n"
+	err = os.WriteFile(tmpfile, append([]byte(notice), modifiedRaw...), 0644)
+	if err != nil {
+		return fmt.Errorf("while writing notice to temporary file: %w", err)
 	}
 
 	return nil
@@ -2111,8 +2140,8 @@ edit:
 var re = regexp.MustCompile(`(?m)^# NOTICE:.*\n`)
 
 // Remove the NOTICE lines from the YAML data.
-func removeNoticeFromYAML(yamlData string) string {
-	return re.ReplaceAllString(yamlData, "")
+func removeNoticeFromYAML(yamlData []byte) []byte {
+	return re.ReplaceAll(yamlData, []byte{})
 }
 
 // Doesn't work anymore since `serviceAccountIds` is hidden in the 'get', 'put,
@@ -2230,10 +2259,10 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			policyName := updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicies[pi]
 			policy, err := getPolicy(cl, apiURL, apiKey, policyName)
 			if err != nil {
-				return fmt.Errorf("while getting policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d]: %w", policyName, ci, pi, err)
+				return Fixable(fmt.Errorf("while getting policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d]: %w", policyName, ci, pi, err))
 			}
 			if policy.ID == "" {
-				return fmt.Errorf("policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d] not found", policyName, ci, pi)
+				return Fixable(fmt.Errorf("policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d] not found", policyName, ci, pi))
 			}
 			updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicyIDs = append(updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicyIDs, policy.ID)
 		}
@@ -2329,7 +2358,11 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			// `subCaProvider`.
 
 			if !isZeroPKCS11(updatedConfig.SubCaProvider.PKCS11) && updatedConfig.SubCaProvider.PKCS11.PIN == "" {
-				return fmt.Errorf("while patching Workload Identity Manager configuration's subCAProvider: %w", ErrPINRequired)
+				return Fixable(fmt.Errorf(
+					"while patching Workload Identity Manager configuration's subCAProvider:\n" +
+						"Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
+						"You can abort by emptying this file and closing it. Please re-edit the configuration to fill in the PKCS11 pin.\n",
+				))
 			}
 
 			// If the SubCA provider is different, we need to update it.
@@ -2382,6 +2415,23 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 	return nil
 }
 
+// To check whether an error is fixable by the user, wrap it with Fixable(err).
+// Then, check with errors.As(err, Fixable{}).
+func Fixable(err error) error {
+	return FixableError{Err: err}
+}
+
+type FixableError struct {
+	Err error
+}
+
+func (f FixableError) Error() string {
+	return f.Err.Error()
+}
+func (f FixableError) Unwrap() error {
+	return f.Err
+}
+
 func patchConfig(cl http.Client, apiURL, apiKey, id string, patch FireflyConfigPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
@@ -2407,7 +2457,7 @@ func patchConfig(cl http.Client, apiURL, apiKey, id string, patch FireflyConfigP
 		// The patch was successful.
 		return nil
 	default:
-		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -2451,7 +2501,7 @@ func patchSubCaProvider(cl http.Client, apiURL, apiKey, id string, patch SubCaPr
 		// The patch was successful.
 		return nil
 	default:
-		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -2572,7 +2622,7 @@ func patchPolicy(cl http.Client, apiURL, apiKey, id string, patch PolicyPatch) e
 	case http.StatusNotFound:
 		return fmt.Errorf("Workload Identity Manager policy: %w", NotFound{NameOrID: id})
 	default:
-		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -2638,7 +2688,7 @@ func getServiceAccounts(cl http.Client, apiURL, apiKey string) ([]ServiceAccount
 	case http.StatusOK:
 		// The request was successful. Continue below to decode the response.
 	default:
-		return nil, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	body := new(bytes.Buffer)
@@ -2689,7 +2739,7 @@ func removeServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) error
 		// The deletion was successful.
 		return nil
 	default:
-		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -2770,7 +2820,7 @@ func getServiceAccountByID(cl http.Client, apiURL, apiKey, id string) (ServiceAc
 	case http.StatusOK:
 		// The request was successful. Continue below to decode the response.
 	default:
-		return ServiceAccount{}, fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return ServiceAccount{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result ServiceAccount
@@ -2854,7 +2904,7 @@ func createServiceAccount(cl http.Client, apiURL, apiKey string, sa ServiceAccou
 	case http.StatusConflict:
 		return SACreateResp{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
 	default:
-		return SACreateResp{}, fmt.Errorf("http %s: please check the Status account fields: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return SACreateResp{}, HTTPErrorf(resp, "http %s: please check the Status account fields: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result SACreateResp
@@ -2933,7 +2983,7 @@ func patchServiceAccount(cl http.Client, apiURL, apiKey, id string, patch Servic
 	case http.StatusNotFound:
 		return fmt.Errorf("service account: %w", NotFound{NameOrID: id})
 	default:
-		return fmt.Errorf("http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	return nil
@@ -3018,7 +3068,7 @@ func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]CertificateIs
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, fmt.Errorf("got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorf(resp, "got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
@@ -3113,22 +3163,58 @@ func checkAPIKey(cl http.Client, apiURL, apiKey string) (CheckResp, error) {
 	case http.StatusOK:
 	// The request was successful, the token is valid. Continue below.
 	case http.StatusUnauthorized:
-		return CheckResp{}, fmt.Errorf("unauthorized: please check your API key")
+		return CheckResp{}, HTTPErrorf(resp, "please check your API key")
 	case http.StatusForbidden:
-		return CheckResp{}, fmt.Errorf("forbidden: please check your API key and permissions")
+		return CheckResp{}, HTTPErrorf(resp, "please check your API key and permissions")
+	default:
+		return CheckResp{}, HTTPErrorf(resp, "while checking API key, got unexpected http %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return CheckResp{}, fmt.Errorf("while reading response body: %w", err)
 	}
-
 	var result CheckResp
 	if err := json.Unmarshal(body, &result); err != nil {
 		return CheckResp{}, fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
 	}
 
 	return result, nil
+}
+
+type HTTPError struct {
+	Err error
+
+	Status     string
+	StatusCode int
+	Body       string
+}
+
+// Body must not have been read yet.
+func HTTPErrorf(resp *http.Response, format string, values ...any) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("while reading response body: %w", err)
+	}
+
+	return HTTPError{
+		Err:        fmt.Errorf(format, values...),
+		Status:     resp.Status,
+		StatusCode: resp.StatusCode,
+		Body:       string(body),
+	}
+}
+
+func IsHTTPBadRequest(err error) bool {
+	var httpErr HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusBadRequest
+	}
+	return false
+}
+
+func (e HTTPError) Error() string {
+	return e.Err.Error()
 }
 
 type Team struct {
@@ -3161,7 +3247,7 @@ func getTeams(cl http.Client, apiURL, apiKey string) ([]Team, error) {
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, fmt.Errorf("getTeams: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorf(resp, "getTeams: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {

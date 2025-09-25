@@ -62,14 +62,14 @@ func validateFireflyConfig(input FireflyConfig) error {
 	// Let's make it clearer.
 	var errAs *jsonschema.ValidationError
 	if ok := errors.As(err, &errAs); !ok {
-		return fmt.Errorf("validating JSON: %w", err)
+		return Fixable(fmt.Errorf("validating JSON: %w", err))
 	}
 	var str []string
 	for _, cause := range errAs.Causes {
 		str = append(str, cause.Error())
 	}
 	if len(str) == 1 {
-		return fmt.Errorf("%s", str[0])
+		return Fixable(fmt.Errorf("%s", str[0]))
 	}
-	return fmt.Errorf("\n* %s", strings.Join(str, "\n *"))
+	return Fixable(fmt.Errorf("\n* %s", strings.Join(str, "\n *")))
 }
