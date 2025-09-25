@@ -1219,7 +1219,7 @@ func putCmd() *cobra.Command {
 			var file *os.File
 			switch filePath {
 			case "":
-				return fmt.Errorf("put: no file specified, use --file or -f to specify a file path")
+				return fmt.Errorf("put: no file specified, use --file or -f to specify a file path. You can use '-f -' to read from stdin.")
 			case "-":
 				filePath = "/dev/stdin"
 				file = os.Stdin
