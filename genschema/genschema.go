@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/maelvls/vcpctl/logutil"
@@ -92,6 +93,11 @@ func main() {
 	removeAllOfFirst(schema, "JwtJwksAuthenticationInformation")
 	removeAllOfFirst(schema, "JwtOidcAuthenticationInformation")
 	removeAllOfFirst(schema, "JwtStandardClaimsAuthenticationInformation")
+
+	// Since we are hiding the `allowedPolicyIds` field in 'get', 'put', and
+	// 'edit' commands, we also need to remove it from the `required` list in
+	// the schema so that it doesn't cause validation errors.
+	removeFromRequired(schema, "allowedPolicyIds")
 
 	// Re-encode as JSON and rewrite all $ref paths to use local $defs instead
 	// of components.
@@ -214,6 +220,29 @@ func walk(node any, visit func(string)) {
 	case []any:
 		for _, item := range n {
 			walk(item, visit)
+		}
+	}
+}
+
+func removeFromRequired(schema any, fieldToRemove string) {
+	switch v := schema.(type) {
+	case map[string]any:
+		// Check if this object has a "required" array.
+		if required, ok := v["required"].([]any); ok {
+			v["required"] = slices.DeleteFunc(required, func(req any) bool {
+				reqStr, ok := req.(string)
+				return ok && reqStr == fieldToRemove
+			})
+		}
+
+		// Recursively process all nested objects
+		for _, value := range v {
+			removeFromRequired(value, fieldToRemove)
+		}
+	case []any:
+		// Recursively process array elements
+		for _, item := range v {
+			removeFromRequired(item, fieldToRemove)
 		}
 	}
 }

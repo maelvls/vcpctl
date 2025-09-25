@@ -106,11 +106,20 @@ type ClientAuthentication struct {
 }
 
 type ClientAuthenticationClient struct {
-	Name             string   `json:"name,omitempty" yaml:"name,omitempty"`
-	Issuer           string   `json:"issuer,omitempty" yaml:"issuer,omitempty"`
-	JwksURI          string   `json:"jwksURI,omitempty" yaml:"jwksURI,omitempty"`
-	Subjects         []string `json:"subjects,omitempty" yaml:"subjects,omitempty"`
+	Name     string   `json:"name,omitempty" yaml:"name,omitempty"`
+	Issuer   string   `json:"issuer,omitempty" yaml:"issuer,omitempty"`
+	JwksURI  string   `json:"jwksURI,omitempty" yaml:"jwksURI,omitempty"`
+	Subjects []string `json:"subjects,omitempty" yaml:"subjects,omitempty"`
+
+	// This field is returned by the API but is hidden in the 'put', 'get', and
+	// 'edit' commands, since UUIDs are not very user-friendly. Instead, the
+	// user will see actual policy names in the 'allowedPolicies' field below.
 	AllowedPolicyIDs []string `json:"allowedPolicyIds,omitempty" yaml:"allowedPolicyIds,omitempty"`
+
+	// This field is only used for the 'put', 'get', and 'edit' commands. It is
+	// not returned by the API. It is a list of policy names, and aims to
+	// provide a more user-friendly representation of the policies.
+	AllowedPolicies []string `json:"allowedPolicies,omitempty" yaml:"allowedPolicies,omitempty"`
 }
 
 type CustomClaimsAliases struct {
@@ -154,9 +163,28 @@ func populateServiceAccountsInConfig(config *FireflyConfig, sa []ServiceAccount)
 			config.ServiceAccounts = append(config.ServiceAccounts, saItem)
 		}
 	}
+
+	// Let's hide the IDs so that the user only sees the Service Accounts names.
 	config.ServiceAccountIDs = nil
 }
 
+// Turn `clientAuthentication.clients[].allowedPolicyIds` into
+// `clientAuthentication.clients[].allowedPolicies` with the real policy names.
+func populatePoliciesInConfig(config *FireflyConfig, knownPolicies []Policy) {
+	// If the Policy already exists in the config, update it.
+	for _, policy := range knownPolicies {
+		for i, client := range config.ClientAuthentication.Clients {
+			if slices.Contains(client.AllowedPolicyIDs, policy.ID) {
+				config.ClientAuthentication.Clients[i].AllowedPolicies = append(config.ClientAuthentication.Clients[i].AllowedPolicies, policy.Name)
+			}
+		}
+	}
+
+	// Let's hide the IDs so that the user only sees the policy names.
+	for i := range config.ClientAuthentication.Clients {
+		config.ClientAuthentication.Clients[i].AllowedPolicyIDs = nil
+	}
+}
 
 type Policy struct {
 	ID                string       `json:"id,omitempty"`
@@ -1609,12 +1637,17 @@ func getCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get: while fetching service accounts: %w", err)
 			}
+			knownPolicies, err := getPolicies(cl, conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("get: while fetching policies: %w", err)
+			}
 
 			config, err := getConfig(cl, conf.APIURL, conf.APIKey, idOrName)
 			if err != nil {
 				return fmt.Errorf("get: while getting original Workload Identity Manager configuration: %w", err)
 			}
 			populateServiceAccountsInConfig(&config, knownSvcaccts)
+			populatePoliciesInConfig(&config, knownPolicies)
 			hideMisleadingFields(&config)
 
 			yamlData, err := yaml.MarshalWithOptions(
@@ -1943,6 +1976,10 @@ func editConfig(cl http.Client, apiURL, apiKey, name string) error {
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
+	knownPolicies, err := getPolicies(cl, apiURL, apiKey)
+	if err != nil {
+		return fmt.Errorf("while fetching policies: %w", err)
+	}
 
 	config, err := getConfig(cl, apiURL, apiKey, name)
 	if err != nil {
@@ -1951,7 +1988,9 @@ func editConfig(cl http.Client, apiURL, apiKey, name string) error {
 		}
 		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
+
 	populateServiceAccountsInConfig(&config, knownSvcaccts)
+	populatePoliciesInConfig(&config, knownPolicies)
 	hideMisleadingFields(&config)
 
 	yamlData, err := yaml.MarshalWithOptions(
@@ -2076,6 +2115,8 @@ func removeNoticeFromYAML(yamlData string) string {
 	return re.ReplaceAllString(yamlData, "")
 }
 
+// Doesn't work anymore since `serviceAccountIds` is hidden in the 'get', 'put,
+// and 'edit' commands.
 func svcAcctsComments(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
 	var comments = make(map[string][]*yaml.Comment)
 
@@ -2179,6 +2220,26 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 	}
 	if builtin.ID == "" {
 		return fmt.Errorf("built-in issuing template not found, please check your CyberArk Certificate Manager, SaaS configuration")
+	}
+
+	// Now, let's turn the `clientAuthentication.clients[].allowedPolicies`
+	// (which was just meant for readability) into
+	// `clientAuthentication.clients[].allowedPolicyIds`.
+	for ci := range updatedConfig.ClientAuthentication.Clients {
+		for pi := range updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicies {
+			policyName := updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicies[pi]
+			policy, err := getPolicy(cl, apiURL, apiKey, policyName)
+			if err != nil {
+				return fmt.Errorf("while getting policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d]: %w", policyName, ci, pi, err)
+			}
+			if policy.ID == "" {
+				return fmt.Errorf("policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d] not found", policyName, ci, pi)
+			}
+			updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicyIDs = append(updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicyIDs, policy.ID)
+		}
+		// Clear the AllowedPolicies slice, since we don't want to send it to the
+		// API.
+		updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicies = nil
 	}
 
 	// Before dealing with patching the configuration, let's patch the policies

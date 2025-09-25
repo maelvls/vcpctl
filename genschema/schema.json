@@ -425,7 +425,6 @@
         }
       },
       "required": [
-        "allowedPolicyIds",
         "issuer",
         "name",
         "subjects"
