@@ -19,8 +19,9 @@ const (
 	// https://developer.venafi.com/tlsprotectcloud/openapi/. But I found that
 	// this OpenAPI spec is outdated. Instead, I use some dev URLs and combine
 	// the relevant parts from the two services that I need.
-	vcamanagementOpenAPIURL = "https://api-dev124.qa.venafi.io/v3/api-docs/vcamanagement-service"
-	accountOpenAPIURL       = "https://api-dev124.qa.venafi.io/v3/api-docs/account-service"
+	vcamanagementOpenAPIURL = "https://api.venafi.cloud/v3/api-docs/vcamanagement-service"
+	accountOpenAPIURL       = "https://api.venafi.cloud/v3/api-docs/account-service"
+	unifiedOpenAPIURL       = "https://developer.venafi.com/tlsprotectcloud/openapi/63869db3ff852b006f5cd0ec"
 )
 
 // Usage:ServiceAccountDetails
@@ -35,6 +36,11 @@ func main() {
 	templateFile := os.Args[1]
 	outputFile := os.Args[2]
 
+	root0, err := fetchSchema(unifiedOpenAPIURL)
+	if err != nil {
+		panic(err)
+	}
+
 	// Fetch and filter only relevant schema definitions from the upstream
 	// OpenAPI spec.
 	root1, err := fetchSchema(vcamanagementOpenAPIURL)
@@ -47,7 +53,9 @@ func main() {
 		panic(err)
 	}
 
+	// Merge the "schemas" blocks from all three specs.
 	schemas := mergeDefs(
+		root0["components"].(map[string]any)["schemas"].(map[string]any),
 		root1["components"].(map[string]any)["schemas"].(map[string]any),
 		root2["components"].(map[string]any)["schemas"].(map[string]any),
 	)
@@ -59,7 +67,7 @@ func main() {
 	for k := range keep {
 		str = append(str, k)
 	}
-	str = append(str, "ExtendedConfigurationInformation")
+
 	logutil.Infof("reachable schemas: %s", strings.Join(str, ", "))
 
 	// drop everything else
@@ -77,9 +85,13 @@ func main() {
 	schema["$defs"] = remaining
 
 	// Remove the cyclic references to ClientAuthenticationInformation. See:
-	// https://venafi.atlassian.net/browse/VC-42247
-	// removeAllOfFirst(schema, "JwtJwksAuthenticationInformation")
-	// removeAllOfFirst(schema, "JwtOidcAuthenticationInformation")
+	// https://github.com/oasdiff/oasdiff/issues/442 and
+	// https://venafi.atlassian.net/browse/VC-42247. Note that it's a bug in the
+	// Go implementation of the openapi parser rather than a fault in the
+	// OpenAPI spec itself.
+	removeAllOfFirst(schema, "JwtJwksAuthenticationInformation")
+	removeAllOfFirst(schema, "JwtOidcAuthenticationInformation")
+	removeAllOfFirst(schema, "JwtStandardClaimsAuthenticationInformation")
 
 	// Re-encode as JSON and rewrite all $ref paths to use local $defs instead
 	// of components.
@@ -96,23 +108,10 @@ func main() {
 	fmt.Println("schema.json updated.")
 }
 
-// readSchema loads and unmarshals the local JSON Schema from a file path.
-func readSchema(path string) (map[string]any, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var schema map[string]any
-	if err := json.Unmarshal(data, &schema); err != nil {
-		return nil, err
-	}
-	return schema, nil
-}
-
 // removeAllOfFirst deletes the first element of the `allOf` array from a given
 // $defs type. Used to work around the cyclic reference found in
-// JwtJwksAuthenticationInformation and JwtOidcAuthenticationInformation.
+// JwtJwksAuthenticationInformation and JwtOidcAuthenticationInformation and
+// JwtStandardClaimsAuthenticationInformation.
 func removeAllOfFirst(schema map[string]any, defName string) {
 	defs, ok := schema["$defs"].(map[string]any)
 	if !ok {
@@ -129,10 +128,25 @@ func removeAllOfFirst(schema map[string]any, defName string) {
 	target["allOf"] = allOf[1:]
 }
 
-func mergeDefs(defs1, defs2 map[string]any) map[string]any {
+// readSchema loads and unmarshals the local JSON Schema from a file path.
+func readSchema(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var schema map[string]any
+	if err := json.Unmarshal(data, &schema); err != nil {
+		return nil, err
+	}
+	return schema, nil
+}
+
+func mergeDefs(defs1, defs2, defs3 map[string]any) map[string]any {
 	merged := make(map[string]any)
 	maps.Copy(merged, defs1)
 	maps.Copy(merged, defs2)
+	maps.Copy(merged, defs3)
 
 	return merged
 }
@@ -152,7 +166,11 @@ func fetchSchema(url string) (map[string]any, error) {
 	return result, nil
 }
 
-// Recursively finds all $ref dependencies from a root schema.
+// Recursively finds all $ref dependencies from a root schema. A schema name is,
+// for example, "MySchema" in the reference "#/components/schemas/MySchema". The
+// `schemas` value must be the value of the key "schemas" in the OpenAPI spec.
+//
+// The `seen` map is the output of the function.
 func collectRefs(schemas map[string]any, seen map[string]struct{}, names ...string) {
 	for _, name := range names {
 		if _, ok := seen[name]; ok {
@@ -166,11 +184,17 @@ func collectRefs(schemas map[string]any, seen map[string]struct{}, names ...stri
 		}
 
 		walk(node, func(ref string) {
-			if strings.HasPrefix(ref, "#/components/schemas/") {
-				target := strings.TrimPrefix(ref, "#/components/schemas/")
+			if target, isARef := strings.CutPrefix(ref, "#/components/schemas/"); isARef {
 				collectRefs(schemas, seen, target)
 			}
 		})
+	}
+
+	// Check that all names were found.
+	for _, name := range names {
+		if _, ok := seen[name]; !ok {
+			logutil.Errorf("warning: schema for %q not found", name)
+		}
 	}
 }
 
