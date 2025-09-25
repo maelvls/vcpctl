@@ -1232,6 +1232,10 @@ func putCmd() *cobra.Command {
 				defer file.Close()
 			}
 
+			if len(args) != 0 {
+				return fmt.Errorf("put: expected no arguments. For context, the name of the configuration is read from the 'name' field in the provided YAML manifest.")
+			}
+
 			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
