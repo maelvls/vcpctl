@@ -150,16 +150,13 @@ type FireflyConfig struct {
 func populateServiceAccountsInConfig(config *FireflyConfig, sa []ServiceAccount) {
 	// If the Service Account already exists in the config, update it.
 	for _, saItem := range sa {
-		for i, saID := range config.ServiceAccountIDs {
-			if saItem.ID == saID {
-				config.ServiceAccounts = append(config.ServiceAccounts, saItem)
-				config.ServiceAccountIDs[i] = saItem.ID
-				break
-			}
+		if slices.Contains(config.ServiceAccountIDs, saItem.ID) {
+			config.ServiceAccounts = append(config.ServiceAccounts, saItem)
 		}
 	}
 	config.ServiceAccountIDs = nil
 }
+
 
 type Policy struct {
 	ID                string       `json:"id,omitempty"`
