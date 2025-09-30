@@ -2,9 +2,10 @@ package main
 
 import (
 	"bytes"
-	json "encoding/json/v2"
 	jsontext "encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"os"
@@ -63,7 +64,11 @@ func main() {
 	)
 
 	keep := make(map[string]struct{})
-	collectRefs(schemas, keep, "ExtendedConfigurationInformation", "ServiceAccountBaseObject")
+	collectRefs(schemas, keep,
+		"ExtendedConfigurationInformation",
+		"ServiceAccountBaseObject",
+		"PolicyInformation",
+	)
 
 	var str []string
 	for k := range keep {
@@ -84,7 +89,13 @@ func main() {
 	}
 
 	// Replace or add the $defs block with filtered upstream definitions.
-	schema["$defs"] = remaining
+	if existing, ok := schema["$defs"].(map[string]any); ok {
+		for k, v := range remaining {
+			existing[k] = v
+		}
+	} else {
+		schema["$defs"] = remaining
+	}
 
 	// Remove the cyclic references to ClientAuthenticationInformation. See:
 	// https://github.com/oasdiff/oasdiff/issues/442 and
@@ -167,7 +178,11 @@ func fetchSchema(url string) (map[string]any, error) {
 	defer resp.Body.Close()
 
 	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("json decode: %w", err)
 	}
 	return result, nil

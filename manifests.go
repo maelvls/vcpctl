@@ -15,17 +15,15 @@ import (
 const (
 	kindServiceAccount = "ServiceAccount"
 	kindIssuerPolicy   = "WIMIssuerPolicy"
+	kindSubCaProvider  = "SubCAProvider"
 	kindConfiguration  = "WIMConfiguration"
-	legacyKindPolicy   = "Policy"
-	legacyKindIssuer   = "IssuerPolicy"
 )
 
 var manifestKindOrder = map[string]int{
 	kindServiceAccount: 0,
 	kindIssuerPolicy:   1,
-	legacyKindPolicy:   1,
-	legacyKindIssuer:   1,
-	kindConfiguration:  2,
+	kindSubCaProvider:  2,
+	kindConfiguration:  3,
 }
 
 type serviceAccountManifest struct {
@@ -38,6 +36,12 @@ type policyManifest struct {
 	APIVersion      string `yaml:"apiVersion,omitempty"`
 	Kind            string `yaml:"kind"`
 	manifest.Policy `yaml:",inline"`
+}
+
+type subCaProviderManifest struct {
+	APIVersion     string `yaml:"apiVersion,omitempty"`
+	Kind           string `yaml:"kind"`
+	manifest.SubCa `yaml:",inline"`
 }
 
 type configurationManifest struct {
@@ -94,13 +98,14 @@ done:
 
 	// No 'kind' present anywhere: fall back to legacy single-document parsing.
 	var (
-		manifestResult     manifest.Config
-		serviceAccounts    []manifest.ServiceAccount
-		policies           []manifest.Policy
-		configSeen         bool
-		lastKindOrderValue = -1
-		saByName           = make(map[string]struct{})
-		policiesByName     = make(map[string]struct{})
+		manifestResult       manifest.Config
+		serviceAccounts      []manifest.ServiceAccount
+		policies             []manifest.Policy
+		subCaProvidersByName = make(map[string]manifest.SubCa)
+		configSeen           bool
+		lastKindOrderValue   = -1
+		saByName             = make(map[string]struct{})
+		policiesByName       = make(map[string]struct{})
 	)
 
 	for _, doc := range docs {
@@ -118,6 +123,9 @@ done:
 		if order > lastKindOrderValue {
 			lastKindOrderValue = order
 		}
+		if err := validateManifestDocument(doc.index, kind, doc.data); err != nil {
+			return api.Config{}, err
+		}
 
 		switch kind {
 		case kindServiceAccount:
@@ -134,7 +142,7 @@ done:
 			}
 			saByName[name] = struct{}{}
 			serviceAccounts = append(serviceAccounts, docManifest.ServiceAccount)
-		case kindIssuerPolicy, legacyKindPolicy, legacyKindIssuer:
+		case kindIssuerPolicy:
 			var docManifest policyManifest
 			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
 				return api.Config{}, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", doc.index, err)
@@ -148,6 +156,19 @@ done:
 			}
 			policiesByName[name] = struct{}{}
 			policies = append(policies, docManifest.Policy)
+		case kindSubCaProvider:
+			var docManifest subCaProviderManifest
+			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
+				return api.Config{}, fmt.Errorf("while decoding SubCAProvider manifest #%d: %w", doc.index, err)
+			}
+			name := strings.TrimSpace(docManifest.SubCa.Name)
+			if name == "" {
+				return api.Config{}, Fixable(fmt.Errorf("SubCAProvider manifest #%d must set 'name'", doc.index))
+			}
+			if _, exists := subCaProvidersByName[name]; exists {
+				return api.Config{}, Fixable(fmt.Errorf("duplicate SubCAProvider named %q (manifest #%d)", name, doc.index))
+			}
+			subCaProvidersByName[name] = docManifest.SubCa
 		case kindConfiguration:
 			if configSeen {
 				return api.Config{}, Fixable(fmt.Errorf("only one WIMConfiguration manifest is allowed (found another at #%d)", doc.index))
@@ -162,7 +183,17 @@ done:
 			if len(docManifest.Config.Policies) > 0 {
 				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest must not embed policies directly; define them in dedicated WIMIssuerPolicy manifests"))
 			}
+			subCaName := strings.TrimSpace(docManifest.Config.SubCaProviderName)
+			if subCaName == "" {
+				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d must reference a SubCAProvider via 'subCaProvider'", doc.index))
+			}
+			provider, ok := subCaProvidersByName[subCaName]
+			if !ok {
+				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d references unknown SubCAProvider %q", doc.index, subCaName))
+			}
+			docManifest.Config.SubCaProviderName = subCaName
 			manifestResult = docManifest.Config
+			manifestResult.SubCaProvider = provider
 			configSeen = true
 		}
 	}
@@ -213,6 +244,18 @@ func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
 		doc, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
 		if err != nil {
 			return nil, fmt.Errorf("while encoding WIMIssuerPolicy %q: %w", policy.Name, err)
+		}
+		docs = append(docs, doc)
+	}
+
+	if manifestCfg.SubCaProvider.Name != "" {
+		manifest := subCaProviderManifest{
+			Kind:  kindSubCaProvider,
+			SubCa: manifestCfg.SubCaProvider,
+		}
+		doc, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
+		if err != nil {
+			return nil, fmt.Errorf("while encoding SubCAProvider %q: %w", manifestCfg.SubCaProvider.Name, err)
 		}
 		docs = append(docs, doc)
 	}

@@ -1,25 +1,95 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/certificate-config.schema.json",
-  "title": "CyberArk Workload Identity Manager Configuration",
-  "description": "Schema for the CyberArk Workload Identity Manager configuration.",
+  "$id": "https://example.com/wim-manifest.schema.json",
+  "title": "CyberArk Workload Identity Manager Manifests",
+  "description": "Schema describing the YAML manifests consumed by vcpctl.",
   "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
-  "allOf": [
-    {
+  "oneOf": [
+    { "$ref": "#/$defs/ServiceAccountManifest" },
+    { "$ref": "#/$defs/WIMIssuerPolicyManifest" },
+    { "$ref": "#/$defs/SubCAProviderManifest" },
+    { "$ref": "#/$defs/WIMConfigurationManifest" }
+  ],
+  "$defs": {
+    "ServiceAccountManifest": {
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "apiVersion": { "type": "string" },
+            "kind": { "const": "ServiceAccount" }
+          },
+          "required": ["kind", "name", "scopes"]
+        },
+        { "$ref": "#/$defs/ServiceAccountBaseObject" }
+      ]
+    },
+    "WIMIssuerPolicyManifest": {
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "apiVersion": { "type": "string" },
+            "kind": { "const": "WIMIssuerPolicy" }
+          },
+          "required": ["kind", "name", "subject", "sans", "keyUsages", "keyAlgorithm", "validityPeriod"]
+        },
+        { "$ref": "#/$defs/PolicyInformation" }
+      ]
+    },
+    "SubCAProviderManifest": {
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "apiVersion": { "type": "string" },
+            "kind": { "const": "SubCAProvider" }
+          },
+          "required": ["kind", "name", "caType", "validityPeriod", "commonName", "organization", "country", "locality", "stateOrProvince", "keyAlgorithm", "pkcs11"]
+        },
+        { "$ref": "#/$defs/SubCaProviderInformation" }
+      ]
+    },
+    "ManifestClientAuthentication": {
+      "anyOf": [
+        { "type": "object", "maxProperties": 0 },
+        { "$ref": "#/$defs/ClientAuthenticationInformation" }
+      ]
+    },
+    "ManifestCloudProviders": {
+      "type": "object"
+    },
+    "WIMConfigurationManifest": {
       "type": "object",
       "properties": {
+        "apiVersion": { "type": "string" },
+        "kind": { "const": "WIMConfiguration" },
+        "name": { "type": "string" },
+        "clientAuthentication": { "$ref": "#/$defs/ManifestClientAuthentication" },
+        "clientAuthorization": { "$ref": "#/$defs/ClientAuthorizationInformation" },
+        "cloudProviders": { "$ref": "#/$defs/ManifestCloudProviders" },
+        "minTlsVersion": {
+          "enum": ["TLS12", "TLS13"],
+          "description": "Minimum required TLS protocol version"
+        },
+        "subCaProvider": {
+          "type": "string",
+          "description": "Name of a SubCAProvider manifest defined in the same file"
+        },
+        "advancedSettings": { "$ref": "#/$defs/AdvancedSettingsInformation" },
         "serviceAccounts": {
-          "type": "array",
-          "items": {
-            "allOf": [
-              { "$ref": "#/$defs/ServiceAccountBaseObject" },
-              { "required": ["name", "scopes"], "type": "object" }
-            ]
-          }
+          "description": "Service accounts are defined in dedicated ServiceAccount manifests.",
+          "maxItems": 0,
+          "type": "array"
+        },
+        "policies": {
+          "description": "Policies are defined in dedicated WIMIssuerPolicy manifests.",
+          "maxItems": 0,
+          "type": "array"
         }
-      }
-    },
-    { "$ref": "#/$defs/ExtendedConfigurationInformation" }
-  ],
-  "$defs": {}
+      },
+      "required": ["kind", "name", "cloudProviders", "minTlsVersion", "subCaProvider"]
+    }
+  }
 }
+

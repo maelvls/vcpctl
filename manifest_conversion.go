@@ -27,6 +27,7 @@ func apiToManifestConfig(in api.Config) manifest.Config {
 		CloudProviders:       copyStringAnyMap(in.CloudProviders),
 		MinTLSVersion:        in.MinTLSVersion,
 		Policies:             apiPoliciesToManifest(in.Policies),
+		SubCaProviderName:    in.SubCaProvider.Name,
 		SubCaProvider:        apiToManifestSubCa(in.SubCaProvider),
 		AdvancedSettings:     apiToManifestAdvancedSettings(in.AdvancedSettings),
 		ServiceAccounts:      apiServiceAccountsToManifest(in.ServiceAccounts),

@@ -126,6 +126,24 @@ keyAlgorithm:
     - EC_P256
   defaultValue: EC_P256
 ---
+kind: SubCAProvider
+name: demo
+caType: BUILTIN
+validityPeriod: P90D
+commonName: demo
+organization: DemoOrg
+country: US
+locality: City
+organizationalUnit: Unit
+stateOrProvince: State
+keyAlgorithm: EC_P256
+pkcs11:
+  allowedClientLibraries: []
+  partitionLabel: ""
+  partitionSerialNumber: ""
+  pin: ""
+  signingEnabled: false
+---
 kind: WIMConfiguration
 name: demo
 clientAuthentication: {}
@@ -136,23 +154,7 @@ clientAuthorization:
     allowedPolicies: ""
 cloudProviders: {}
 minTlsVersion: TLS13
-subCaProvider:
-  name: demo
-  caType: BUILTIN
-  validityPeriod: P90D
-  commonName: demo
-  organization: DemoOrg
-  country: US
-  locality: City
-  organizationalUnit: Unit
-  stateOrProvince: State
-  keyAlgorithm: EC_P256
-  pkcs11:
-    allowedClientLibraries: []
-    partitionLabel: ""
-    partitionSerialNumber: ""
-    pin: ""
-    signingEnabled: false
+subCaProvider: demo
 advancedSettings:
   enableIssuanceAuditLog: true
   includeRawCertDataInAuditLog: false
@@ -179,31 +181,36 @@ func TestParseFireflyConfigManifests_MultiDocument(t *testing.T) {
 	if cfg.Policies[0].Name != "policy-1" {
 		t.Fatalf("unexpected policy name: %q", cfg.Policies[0].Name)
 	}
+	if cfg.SubCaProvider.Name != "demo" {
+		t.Fatalf("unexpected SubCA provider name: %q", cfg.SubCaProvider.Name)
+	}
 }
 
 func TestParseFireflyConfigManifests_OrderValidation(t *testing.T) {
-	input := `kind: WIMConfiguration
+	input := `kind: SubCAProvider
+name: x
+caType: BUILTIN
+validityPeriod: P1D
+commonName: x
+organization: X
+country: US
+locality: X
+organizationalUnit: X
+stateOrProvince: X
+keyAlgorithm: EC_P256
+pkcs11:
+  allowedClientLibraries: []
+  partitionLabel: ""
+  partitionSerialNumber: ""
+  pin: ""
+  signingEnabled: false
+---
+kind: WIMConfiguration
 name: out-of-order
 cloudProviders: {}
 minTlsVersion: TLS13
 clientAuthentication: {}
-subCaProvider:
-  name: x
-  caType: BUILTIN
-  validityPeriod: P1D
-  commonName: x
-  organization: X
-  country: US
-  locality: X
-  organizationalUnit: X
-  stateOrProvince: X
-  keyAlgorithm: EC_P256
-  pkcs11:
-    allowedClientLibraries: []
-    partitionLabel: ""
-    partitionSerialNumber: ""
-    pin: ""
-    signingEnabled: false
+subCaProvider: x
 advancedSettings:
   enableIssuanceAuditLog: true
   includeRawCertDataInAuditLog: false
@@ -230,23 +237,7 @@ func TestParseFireflyConfigManifests_MissingKind(t *testing.T) {
 cloudProviders: {}
 minTlsVersion: TLS13
 clientAuthentication: {}
-subCaProvider:
-  name: legacy
-  caType: BUILTIN
-  validityPeriod: P30D
-  commonName: legacy
-  organization: LegacyOrg
-  country: US
-  locality: City
-  organizationalUnit: Unit
-  stateOrProvince: State
-  keyAlgorithm: EC_P256
-  pkcs11:
-    allowedClientLibraries: []
-    partitionLabel: ""
-    partitionSerialNumber: ""
-    pin: ""
-    signingEnabled: false
+subCaProvider: legacy
 advancedSettings:
   enableIssuanceAuditLog: true
   includeRawCertDataInAuditLog: false
@@ -277,8 +268,8 @@ func TestRenderFireflyConfigManifests(t *testing.T) {
 		t.Fatalf("unexpected render error: %v", err)
 	}
 	segments := strings.Split(string(out), "---\n")
-	if len(segments) != 3 {
-		t.Fatalf("expected 3 documents, got %d", len(segments))
+	if len(segments) != 4 {
+		t.Fatalf("expected 4 documents, got %d", len(segments))
 	}
 	if !strings.Contains(segments[0], "kind: ServiceAccount") {
 		t.Fatalf("expected first document to be ServiceAccount, got:\n%s", segments[0])
@@ -286,7 +277,10 @@ func TestRenderFireflyConfigManifests(t *testing.T) {
 	if !strings.Contains(segments[1], "kind: WIMIssuerPolicy") {
 		t.Fatalf("expected second document to be WIMIssuerPolicy, got:\n%s", segments[1])
 	}
-	if !strings.Contains(segments[2], "kind: WIMConfiguration") {
-		t.Fatalf("expected third document to be WIMConfiguration, got:\n%s", segments[2])
+	if !strings.Contains(segments[2], "kind: SubCAProvider") {
+		t.Fatalf("expected third document to be SubCAProvider, got:\n%s", segments[2])
+	}
+	if !strings.Contains(segments[3], "kind: WIMConfiguration") {
+		t.Fatalf("expected fourth document to be WIMConfiguration, got:\n%s", segments[3])
 	}
 }

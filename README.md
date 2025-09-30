@@ -79,6 +79,24 @@ keyAlgorithm:
     - EC_P256
   defaultValue: EC_P256
 ---
+kind: SubCAProvider
+name: demo
+caType: BUILTIN
+validityPeriod: P90D
+commonName: demo
+organization: DemoOrg
+country: US
+locality: City
+organizationalUnit: Unit
+stateOrProvince: State
+keyAlgorithm: EC_P256
+pkcs11:
+  allowedClientLibraries: []
+  partitionLabel: ""
+  partitionSerialNumber: ""
+  pin: ""
+  signingEnabled: false
+---
 kind: WIMConfiguration
 name: wim-demo
 clientAuthentication: {}
@@ -89,23 +107,7 @@ clientAuthorization:
     allowedPolicies: ""
 cloudProviders: {}
 minTlsVersion: TLS13
-subCaProvider:
-  name: demo
-  caType: BUILTIN
-  validityPeriod: P90D
-  commonName: demo
-  organization: DemoOrg
-  country: US
-  locality: City
-  organizationalUnit: Unit
-  stateOrProvince: State
-  keyAlgorithm: EC_P256
-  pkcs11:
-    allowedClientLibraries: []
-    partitionLabel: ""
-    partitionSerialNumber: ""
-    pin: ""
-    signingEnabled: false
+subCaProvider: demo
 advancedSettings:
   enableIssuanceAuditLog: true
   includeRawCertDataInAuditLog: false

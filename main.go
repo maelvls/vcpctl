@@ -1173,10 +1173,6 @@ func putCmd() *cobra.Command {
 			hideMisleadingFields(&updatedConfig)
 			populateServiceAccountsInConfig(&updatedConfig, svcaccts)
 
-			if err := validateFireflyConfig(updatedConfig); err != nil {
-				return fmt.Errorf("put: Workload Identity Manager configuration validation failed: %w", err)
-			}
-
 			if updatedConfig.Name == "" {
 				return fmt.Errorf("put: Workload Identity Manager configuration must have a 'name' field set")
 			}
@@ -1921,19 +1917,6 @@ edit:
 		goto edit
 	case err != nil:
 		return fmt.Errorf("while parsing modified Workload Identity Manager manifests: %w", err)
-	}
-
-	err = validateFireflyConfig(modified)
-	switch {
-	case errors.As(err, &FixableError{}):
-		err = addErrorNoticeToFile(tmpfile.Name(), err)
-		if err != nil {
-			return fmt.Errorf("while showing notice for fixable error: %w", err)
-		}
-		justSaved()
-		goto edit
-	case err != nil:
-		return fmt.Errorf("while validating modified Workload Identity Manager configuration: %w", err)
 	}
 
 	err = createOrUpdateConfigAndDeps(cl, apiURL, apiKey, knownSvcaccts, modified)
@@ -2773,7 +2756,7 @@ func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]api.Certifica
 		return nil, fmt.Errorf("getIssuingTemplates: while reading response body: %w", err)
 	}
 
-err = json.Unmarshal(body, &result)
+	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}

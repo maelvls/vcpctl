@@ -7,9 +7,13 @@ type Config struct {
 	CloudProviders       map[string]any       `json:"cloudProviders" yaml:"cloudProviders"`
 	MinTLSVersion        string               `json:"minTlsVersion" yaml:"minTlsVersion"`
 	Policies             []Policy             `json:"policies,omitempty" yaml:"policies,omitempty"`
-	SubCaProvider        SubCa                `json:"subCaProvider" yaml:"subCaProvider"`
+	SubCaProviderName    string               `json:"subCaProvider" yaml:"subCaProvider"`
 	AdvancedSettings     AdvancedSettings     `json:"advancedSettings,omitempty" yaml:"advancedSettings,omitempty"`
 	ServiceAccounts      []ServiceAccount     `json:"serviceAccounts,omitempty" yaml:"serviceAccounts,omitempty"`
+
+	// SubCaProvider holds the manifest referenced by SubCaProviderName
+	// after manifests have been parsed. It is not serialized back to YAML.
+	SubCaProvider SubCa `json:"-" yaml:"-"`
 }
 
 type ClientAuthentication struct {
