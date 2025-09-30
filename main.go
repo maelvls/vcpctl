@@ -8,7 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	_ "embed"
-	"encoding/json"
+	json "encoding/json/v2"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -28,6 +28,7 @@ import (
 	"github.com/goccy/go-yaml/printer"
 	"github.com/google/go-cmp/cmp"
 	"github.com/maelvls/undent"
+	api "github.com/maelvls/vcpctl/internal/api"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
@@ -96,66 +97,8 @@ func main() {
 	}
 }
 
-type ClientAuthentication struct {
-	Type     string                       `json:"type" yaml:"type"`
-	URLs     []string                     `json:"urls,omitempty" yaml:"urls,omitempty"`
-	Audience string                       `json:"audience,omitempty" yaml:"audience,omitempty"`
-	BaseURL  string                       `json:"baseUrl,omitempty" yaml:"baseUrl,omitempty"`
-	Clients  []ClientAuthenticationClient `json:"clients,omitempty" yaml:"clients,omitempty"`
-}
-
-type ClientAuthenticationClient struct {
-	Name     string   `json:"name,omitempty" yaml:"name,omitempty"`
-	Issuer   string   `json:"issuer,omitempty" yaml:"issuer,omitempty"`
-	JwksURI  string   `json:"jwksURI,omitempty" yaml:"jwksURI,omitempty"`
-	Subjects []string `json:"subjects,omitempty" yaml:"subjects,omitempty"`
-
-	// This field is returned by the API but is hidden in the 'put', 'get', and
-	// 'edit' commands, since UUIDs are not very user-friendly. Instead, the
-	// user will see actual policy names in the 'allowedPolicies' field below.
-	AllowedPolicyIDs []string `json:"allowedPolicyIds,omitempty" yaml:"allowedPolicyIds,omitempty"`
-
-	// This field is only used for the 'put', 'get', and 'edit' commands. It is
-	// not returned by the API. It is a list of policy names, and aims to
-	// provide a more user-friendly representation of the policies.
-	AllowedPolicies []string `json:"allowedPolicies,omitempty" yaml:"allowedPolicies,omitempty"`
-}
-
-type CustomClaimsAliases struct {
-	Configuration    string `json:"configuration"`
-	AllowAllPolicies string `json:"allowAllPolicies"`
-	AllowedPolicies  string `json:"allowedPolicies"`
-}
-
-type ClientAuthorization struct {
-	CustomClaimsAliases CustomClaimsAliases `json:"customClaimsAliases"`
-}
-
-// From https://developer.venafi.com/tlsprotectcloud/reference/configurations_getbyid
-type FireflyConfig struct {
-	Name                 string               `json:"name"`
-	ClientAuthentication ClientAuthentication `json:"clientAuthentication,omitempty"`
-	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization,omitempty"`
-	CloudProviders       map[string]any       `json:"cloudProviders"`
-	MinTLSVersion        string               `json:"minTlsVersion"`
-	Policies             []Policy             `json:"policies"`
-	SubCaProvider        SubCa                `json:"subCaProvider"`
-	AdvancedSettings     AdvancedSettings     `json:"advancedSettings,omitempty"`
-
-	// These fields are returned by the API but are hidden in the 'put', 'get',
-	// and 'edit' commands.
-	ID                string   `json:"id,omitempty"`
-	CreationDate      string   `json:"creationDate,omitempty"`
-	ModificationDate  string   `json:"modificationDate,omitempty"`
-	ServiceAccountIDs []string `json:"serviceAccountIds,omitempty"`
-
-	// These fields are only used for the 'put', 'get', and 'edit' commands.
-	// They are not returned by the API.
-	ServiceAccounts []ServiceAccount `json:"serviceAccounts,omitempty"`
-}
-
 // Turn `serviceAccountIds` into `serviceAccounts` in the config.
-func populateServiceAccountsInConfig(config *FireflyConfig, sa []ServiceAccount) {
+func populateServiceAccountsInConfig(config *api.Config, sa []api.ServiceAccount) {
 	// If the Service Account already exists in the config, update it.
 	for _, saItem := range sa {
 		if slices.Contains(config.ServiceAccountIDs, saItem.ID) {
@@ -169,7 +112,7 @@ func populateServiceAccountsInConfig(config *FireflyConfig, sa []ServiceAccount)
 
 // Turn `clientAuthentication.clients[].allowedPolicyIds` into
 // `clientAuthentication.clients[].allowedPolicies` with the real policy names.
-func populatePoliciesInConfig(config *FireflyConfig, knownPolicies []Policy) {
+func populatePoliciesInConfig(config *api.Config, knownPolicies []api.Policy) {
 	// If the Policy already exists in the config, update it.
 	for _, policy := range knownPolicies {
 		for i, client := range config.ClientAuthentication.Clients {
@@ -185,64 +128,6 @@ func populatePoliciesInConfig(config *FireflyConfig, knownPolicies []Policy) {
 	}
 }
 
-type Policy struct {
-	ID                string       `json:"id,omitempty"`
-	Name              string       `json:"name"`
-	ValidityPeriod    string       `json:"validityPeriod"`
-	Subject           Subject      `json:"subject"`
-	SANs              SANs         `json:"sans"`
-	KeyUsages         []string     `json:"keyUsages"`
-	ExtendedKeyUsages []string     `json:"extendedKeyUsages"`
-	KeyAlgorithm      KeyAlgorithm `json:"keyAlgorithm"`
-	CreationDate      string       `json:"creationDate,omitempty"`
-	ModificationDate  string       `json:"modificationDate,omitempty"`
-}
-
-type KeyAlgorithm struct {
-	AllowedValues []string `json:"allowedValues"`
-	DefaultValue  string   `json:"defaultValue"`
-}
-
-type SANs struct {
-	DNSNames                   CommonName `json:"dnsNames" yaml:"dnsNames,flow"`
-	IPAddresses                CommonName `json:"ipAddresses" yaml:"ipAddresses,flow"`
-	RFC822Names                CommonName `json:"rfc822Names" yaml:"rfc822Names,flow"`
-	UniformResourceIdentifiers CommonName `json:"uniformResourceIdentifiers" yaml:"uniformResourceIdentifiers,flow"`
-}
-
-type CommonName struct {
-	Type           string   `json:"type"`
-	AllowedValues  []string `json:"allowedValues"`
-	DefaultValues  []string `json:"defaultValues"`
-	MinOccurrences int      `json:"minOccurrences"`
-	MaxOccurrences int      `json:"maxOccurrences"`
-}
-
-type SubCa struct {
-	ID                 string `json:"id,omitempty"`
-	Name               string `json:"name"`
-	CaType             string `json:"caType"`
-	CaAccountID        string `json:"caAccountId" yaml:"caAccountId,omitempty"`
-	CaProductOptionID  string `json:"caProductOptionId" yaml:"caProductOptionId,omitempty"`
-	ValidityPeriod     string `json:"validityPeriod"`
-	CommonName         string `json:"commonName"`
-	Organization       string `json:"organization"`
-	Country            string `json:"country"`
-	Locality           string `json:"locality"`
-	OrganizationalUnit string `json:"organizationalUnit"`
-	StateOrProvince    string `json:"stateOrProvince"`
-	KeyAlgorithm       string `json:"keyAlgorithm"`
-	PKCS11             PKCS11 `json:"pkcs11"`
-}
-
-type PKCS11 struct {
-	AllowedClientLibraries []string `json:"allowedClientLibraries"`
-	PartitionLabel         string   `json:"partitionLabel"`
-	PartitionSerialNumber  string   `json:"partitionSerialNumber"`
-	PIN                    string   `json:"pin"`
-	SigningEnabled         bool     `json:"signingEnabled"`
-}
-
 // In Go, you can't compare structs that contain slices, maps, or functions
 // directly, so it was impossible to do:
 //
@@ -250,7 +135,7 @@ type PKCS11 struct {
 //
 // Alternatively, we could use reflect.DeepEqual, but that would have been
 // overkill.
-func isZeroPKCS11(p PKCS11) bool {
+func isZeroPKCS11(p api.PKCS11) bool {
 	return len(p.AllowedClientLibraries) == 0 &&
 		p.PartitionLabel == "" &&
 		p.PartitionSerialNumber == "" &&
@@ -295,7 +180,7 @@ func saLsCmd() *cobra.Command {
 
 			switch outputFormat {
 			case "json":
-				b, err := json.MarshalIndent(svcaccts, "", "  ")
+				b, err := marshalIndent(svcaccts, "", "  ")
 				if err != nil {
 					return fmt.Errorf("sa ls: while marshaling service accounts to JSON: %w", err)
 				}
@@ -475,7 +360,7 @@ func saGenkeypairCmd() *cobra.Command {
 			case "pem":
 				fmt.Println(ecKey)
 			case "json":
-				bytes, err := json.MarshalIndent(struct {
+				bytes, err := marshalIndent(struct {
 					ClientID   string `json:"client_id"`
 					PrivateKey string `json:"private_key"`
 				}{ClientID: existingSA.ID, PrivateKey: ecKey}, "", "  ")
@@ -530,7 +415,7 @@ func saPutKeypairCmd() *cobra.Command {
 			}
 
 			if existingSA.ID == "" {
-				resp, err := createServiceAccount(cl, conf.APIURL, conf.APIKey, ServiceAccount{
+				resp, err := createServiceAccount(cl, conf.APIURL, conf.APIKey, api.ServiceAccount{
 					Name:               saName,
 					CredentialLifetime: 365, // days
 					Scopes:             scopes,
@@ -992,7 +877,7 @@ func removePolicy(cl http.Client, apiURL, apiKey, policyName string) error {
 	}
 }
 
-func getSubCas(cl http.Client, apiURL, apiKey string) ([]SubCa, error) {
+func getSubCas(cl http.Client, apiURL, apiKey string) ([]api.SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getSubCas: while creating request: %w", err)
@@ -1013,7 +898,7 @@ func getSubCas(cl http.Client, apiURL, apiKey string) ([]SubCa, error) {
 	}
 
 	var result struct {
-		SubCaProviders []SubCa `json:"subCaProviders"`
+		SubCaProviders []api.SubCa `json:"subCaProviders"`
 	}
 
 	bytes, err := io.ReadAll(resp.Body)
@@ -1027,37 +912,37 @@ func getSubCas(cl http.Client, apiURL, apiKey string) ([]SubCa, error) {
 	return result.SubCaProviders, nil
 }
 
-func getSubCaByID(cl http.Client, apiURL, apiKey, id string) (SubCa, error) {
+func getSubCaByID(cl http.Client, apiURL, apiKey, id string) (api.SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCaByID: while creating request: %w", err)
+		return api.SubCa{}, fmt.Errorf("getSubCaByID: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := cl.Do(req)
 	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCaByID: while making request: %w", err)
+		return api.SubCa{}, fmt.Errorf("getSubCaByID: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// Continue.
 	case http.StatusNotFound:
-		return SubCa{}, &NotFound{NameOrID: id}
+		return api.SubCa{}, &NotFound{NameOrID: id}
 	default:
-		return SubCa{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.SubCa{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var result SubCa
+	var result api.SubCa
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCaByID: while reading response body: %w", err)
+		return api.SubCa{}, fmt.Errorf("getSubCaByID: while reading response body: %w", err)
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return SubCa{}, fmt.Errorf("getSubCaByID: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+		return api.SubCa{}, fmt.Errorf("getSubCaByID: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 	if result.ID == "" {
-		return SubCa{}, fmt.Errorf("getSubCaByID: SubCA provider '%s' not found", id)
+		return api.SubCa{}, fmt.Errorf("getSubCaByID: SubCA provider '%s' not found", id)
 	}
 	return result, nil
 }
@@ -1151,7 +1036,7 @@ func attachSAToConf(cl http.Client, apiURL, apiKey, confName, saName string) err
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
 
-	var sa *ServiceAccount
+	var sa *api.ServiceAccount
 	// First, check if saName is actually a client ID (direct match with ID).
 	for _, knownSa := range knownSvcaccts {
 		if knownSa.ID == saName {
@@ -1354,32 +1239,32 @@ func rmCmd() *cobra.Command {
 	return cmd
 }
 
-func getPolicy(cl http.Client, apiURL, apiKey, nameOrID string) (Policy, error) {
+func getPolicy(cl http.Client, apiURL, apiKey, nameOrID string) (api.Policy, error) {
 	if looksLikeAnID(nameOrID) {
 		return getPolicyByID(cl, apiURL, apiKey, nameOrID)
 	}
 
 	policies, err := getPolicies(cl, apiURL, apiKey)
 	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicy: while getting policies: %w", err)
+		return api.Policy{}, fmt.Errorf("getPolicy: while getting policies: %w", err)
 	}
 
 	// Find the policy by name. Error out if duplicate names are found.
-	var found []Policy
+	var found []api.Policy
 	for _, cur := range policies {
 		if cur.Name == nameOrID {
 			found = append(found, cur)
 		}
 	}
 	if len(found) == 0 {
-		return Policy{}, NotFound{NameOrID: nameOrID}
+		return api.Policy{}, NotFound{NameOrID: nameOrID}
 	}
 	if len(found) > 1 {
 		b := strings.Builder{}
 		for _, cur := range found {
 			_, _ = b.WriteString(fmt.Sprintf("- %s (%s) created on %s\n", cur.Name, cur.ID, cur.CreationDate))
 		}
-		return Policy{}, fmt.Errorf(undent.Undent(`
+		return api.Policy{}, fmt.Errorf(undent.Undent(`
 			getPolicy: duplicate policies found with name '%s':
 			%s
 			Please use an ID instead, or try to remove one of the service accounts
@@ -1391,50 +1276,50 @@ func getPolicy(cl http.Client, apiURL, apiKey, nameOrID string) (Policy, error) 
 	return found[0], nil
 }
 
-func getPolicyByID(cl http.Client, apiURL, apiKey, id string) (Policy, error) {
+func getPolicyByID(cl http.Client, apiURL, apiKey, id string) (api.Policy, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies/"+id, nil)
 	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicyByID: while creating request: %w", err)
+		return api.Policy{}, fmt.Errorf("getPolicyByID: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := cl.Do(req)
 	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicyByID: while making request: %w", err)
+		return api.Policy{}, fmt.Errorf("getPolicyByID: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return Policy{}, HTTPErrorf(resp, "getPolicyByID: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.Policy{}, HTTPErrorf(resp, "getPolicyByID: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
-	var result Policy
+	var result api.Policy
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicyByID: while reading %s response body: %w", resp.Status, err)
+		return api.Policy{}, fmt.Errorf("getPolicyByID: while reading %s response body: %w", resp.Status, err)
 	}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicyByID: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+		return api.Policy{}, fmt.Errorf("getPolicyByID: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 	return result, nil
 }
 
-func getSubCa(cl http.Client, apiURL, apiKey, name string) (SubCa, error) {
+func getSubCa(cl http.Client, apiURL, apiKey, name string) (api.SubCa, error) {
 	if looksLikeAnID(name) {
 		return getSubCaByID(cl, apiURL, apiKey, name)
 	}
 
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
 	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCa: while creating request: %w", err)
+		return api.SubCa{}, fmt.Errorf("getSubCa: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := cl.Do(req)
 	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCa: while making request: %w", err)
+		return api.SubCa{}, fmt.Errorf("getSubCa: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1442,32 +1327,32 @@ func getSubCa(cl http.Client, apiURL, apiKey, name string) (SubCa, error) {
 	case http.StatusOK:
 		// Continue.
 	default:
-		return SubCa{}, HTTPErrorf(resp, "getSubCa: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.SubCa{}, HTTPErrorf(resp, "getSubCa: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	var result struct {
-		SubCaProviders []SubCa `json:"subCaProviders"`
+		SubCaProviders []api.SubCa `json:"subCaProviders"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return SubCa{}, fmt.Errorf("getSubCa: while decoding response: %w", err)
+	if err := decodeJSON(resp.Body, &result); err != nil {
+		return api.SubCa{}, fmt.Errorf("getSubCa: while decoding response: %w", err)
 	}
 
 	// Error out if a duplicate name is found.
-	var found []SubCa
+	var found []api.SubCa
 	for _, provider := range result.SubCaProviders {
 		if provider.Name == name {
 			found = append(found, provider)
 		}
 	}
 	if len(found) == 0 {
-		return SubCa{}, fmt.Errorf("subCA provider: %w", NotFound{NameOrID: name})
+		return api.SubCa{}, fmt.Errorf("subCA provider: %w", NotFound{NameOrID: name})
 	}
 	if len(found) > 1 {
 		b := strings.Builder{}
 		for _, cur := range found {
 			_, _ = b.WriteString(fmt.Sprintf("- %s (%s)\n", cur.Name, cur.ID))
 		}
-		return SubCa{}, fmt.Errorf(undent.Undent(`
+		return api.SubCa{}, fmt.Errorf(undent.Undent(`
 			getSubCa: duplicate sub CAs found with name '%s':
 			%s
 			Either use the subCA ID instead of the name, or remove one of the
@@ -1479,32 +1364,32 @@ func getSubCa(cl http.Client, apiURL, apiKey, name string) (SubCa, error) {
 	return found[0], nil
 }
 
-func getConfig(cl http.Client, apiURL, apiKey, nameOrID string) (FireflyConfig, error) {
+func getConfig(cl http.Client, apiURL, apiKey, nameOrID string) (api.Config, error) {
 	if looksLikeAnID(nameOrID) {
 		return getConfigByID(cl, apiURL, apiKey, nameOrID)
 	}
 
 	confs, err := getConfigs(cl, apiURL, apiKey)
 	if err != nil {
-		return FireflyConfig{}, fmt.Errorf("getConfigByName:urations: %w", err)
+		return api.Config{}, fmt.Errorf("getConfigByName:urations: %w", err)
 	}
 
 	// We need to error out if duplicate names are found.
-	var found []FireflyConfig
+	var found []api.Config
 	for _, cur := range confs {
 		if cur.Name == nameOrID || cur.ID == nameOrID {
 			found = append(found, cur)
 		}
 	}
 	if len(found) == 0 {
-		return FireflyConfig{}, NotFound{NameOrID: nameOrID}
+		return api.Config{}, NotFound{NameOrID: nameOrID}
 	}
 	if len(found) > 1 {
 		b := strings.Builder{}
 		for _, f := range found {
 			_, _ = b.WriteString(fmt.Sprintf("- %s (%s) created on %s\n", f.Name, f.ID, f.CreationDate))
 		}
-		return FireflyConfig{}, fmt.Errorf(undent.Undent(`
+		return api.Config{}, fmt.Errorf(undent.Undent(`
 			getConfigByName: duplicate Workload Identity Manager configurations found with name '%s':
 			%s
 			Either use the Workload Identity Manager configuration ID instead of the name, or try
@@ -1516,7 +1401,7 @@ func getConfig(cl http.Client, apiURL, apiKey, nameOrID string) (FireflyConfig, 
 	return found[0], nil
 }
 
-func getConfigs(cl http.Client, apiURL, apiKey string) ([]FireflyConfig, error) {
+func getConfigs(cl http.Client, apiURL, apiKey string) ([]api.Config, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getConfigs: while creating request: %w", err)
@@ -1536,7 +1421,7 @@ func getConfigs(cl http.Client, apiURL, apiKey string) ([]FireflyConfig, error) 
 		return nil, HTTPErrorf(resp, "getConfigs: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 	var result struct {
-		Configurations []FireflyConfig `json:"configurations"`
+		Configurations []api.Config `json:"configurations"`
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -1581,7 +1466,7 @@ func removeConfig(cl http.Client, apiURL, apiKey, nameOrID string) error {
 	}
 }
 
-func getPolicies(cl http.Client, apiURL, apiKey string) ([]Policy, error) {
+func getPolicies(cl http.Client, apiURL, apiKey string) ([]api.Policy, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getPolicies: while creating request: %w", err)
@@ -1606,7 +1491,7 @@ func getPolicies(cl http.Client, apiURL, apiKey string) ([]Policy, error) {
 	}
 
 	var result struct {
-		Policies []Policy `json:"policies"`
+		Policies []api.Policy `json:"policies"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("getPolicies: while decoding response: %w, body was: %s", err, string(body))
@@ -1681,7 +1566,7 @@ func getCmd() *cobra.Command {
 // Zero out the config ID, subCA provider ID, and policy IDs in the
 // configuration. Service account IDs are kept. Useful for removing misleading
 // fields before marshalling to YAML.
-func hideMisleadingFields(c *FireflyConfig) {
+func hideMisleadingFields(c *api.Config) {
 	// Zero out all IDs in the configuration, so that we can use it to create
 	// a new configuration without any IDs.
 	c.ID = ""
@@ -1705,7 +1590,7 @@ func hideMisleadingFields(c *FireflyConfig) {
 
 // createConfig creates a new Workload Identity Manager configuration or updates an
 // existing one. Also deals with creating the subCA policies.
-func createConfig(cl http.Client, apiURL, apiKey string, config FireflyConfigPatch) (string, error) {
+func createConfig(cl http.Client, apiURL, apiKey string, config api.ConfigPatch) (string, error) {
 	body, err := json.Marshal(config)
 	if err != nil {
 		return "", fmt.Errorf("createConfig: while marshaling configuration: %w", err)
@@ -1748,7 +1633,7 @@ func createConfig(cl http.Client, apiURL, apiKey string, config FireflyConfigPat
 	return result.ID, nil
 }
 
-func createFireflyPolicy(cl http.Client, apiURL, apiKey string, policy Policy) (string, error) {
+func createFireflyPolicy(cl http.Client, apiURL, apiKey string, policy api.Policy) (string, error) {
 	body, err := json.Marshal(policy)
 	if err != nil {
 		return "", fmt.Errorf("createFireflyPolicy: while marshaling policy: %w", err)
@@ -1788,7 +1673,7 @@ func createFireflyPolicy(cl http.Client, apiURL, apiKey string, policy Policy) (
 	return result.ID, nil
 }
 
-func createSubCaProvider(cl http.Client, apiURL, apiKey string, provider SubCa) (string, error) {
+func createSubCaProvider(cl http.Client, apiURL, apiKey string, provider api.SubCa) (string, error) {
 	body, err := json.Marshal(provider)
 	if err != nil {
 		return "", fmt.Errorf("createSubCaProvider: while marshaling provider: %w", err)
@@ -1894,17 +1779,17 @@ func (e NotFound) Error() string {
 	return fmt.Sprintf("'%s' not found", e.NameOrID)
 }
 
-func getConfigByID(cl http.Client, apiURL, apiKey, id string) (FireflyConfig, error) {
+func getConfigByID(cl http.Client, apiURL, apiKey, id string) (api.Config, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id), nil)
 	if err != nil {
-		return FireflyConfig{}, err
+		return api.Config{}, err
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := cl.Do(req)
 	if err != nil {
-		return FireflyConfig{}, err
+		return api.Config{}, err
 	}
 	defer resp.Body.Close()
 
@@ -1912,58 +1797,24 @@ func getConfigByID(cl http.Client, apiURL, apiKey, id string) (FireflyConfig, er
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return FireflyConfig{}, HTTPErrorf(resp, "getConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.Config{}, HTTPErrorf(resp, "getConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var fireflyConfig FireflyConfig
-	if err := json.NewDecoder(resp.Body).Decode(&fireflyConfig); err != nil {
-		return FireflyConfig{}, err
+	var fireflyConfig api.Config
+	if err := decodeJSON(resp.Body, &fireflyConfig); err != nil {
+		return api.Config{}, err
 	}
 
 	return fireflyConfig, nil
 }
 
-type AdvancedSettings struct {
-	EnableIssuanceAuditLog       bool `json:"enableIssuanceAuditLog"`
-	IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog"`
-	RequireFIPSCompliantBuild    bool `json:"requireFIPSCompliantBuild"`
-}
-
-// The PATCH request body only allows for a subset of the fields in the full
-// configuration. Here is the subset that can be modified, as per
-// https://developer.venafi.com/tlsprotectcloud/reference/configurations_update.
-//
-//	name: ...
-//	clientAuthentication: ...
-//	clientAuthorization: ...
-//	cloudProviders: ...
-//	minTlsVersion: ...
-//	serviceAccountIds: ...
-//	policyIds: ...
-//	subCaProviderId: ...
-//	advancedSettings: ...
-type FireflyConfigPatch struct {
-	Name                 string               `json:"name"`
-	ClientAuthentication ClientAuthentication `json:"clientAuthentication,omitempty"`
-	ClientAuthorization  ClientAuthorization  `json:"clientAuthorization,omitempty"`
-	CloudProviders       map[string]any       `json:"cloudProviders"`
-	MinTLSVersion        string               `json:"minTlsVersion"`
-	ServiceAccountIDs    []string             `json:"serviceAccountIds"`
-	PolicyIDs            []string             `json:"policyIds"`
-	SubCaProviderID      string               `json:"subCaProviderId"`
-	// The advancedSettings field is not supported yet with the PATCH verb, so
-	// it is not included. Please add it as soon as it appears in the API:
-	// https://developer.venafi.com/tlsprotectcloud/reference/configurations_update
-	AdvancedSettings AdvancedSettings `json:"advancedSettings,omitempty"`
-}
-
-func fullToPatchConfig(full FireflyConfig) FireflyConfigPatch {
+func fullToPatchConfig(full api.Config) api.ConfigPatch {
 	policyIDs := make([]string, len(full.Policies))
 	for i, p := range full.Policies {
 		policyIDs[i] = p.ID
 	}
 
-	return FireflyConfigPatch{
+	return api.ConfigPatch{
 		Name:                 full.Name,
 		ClientAuthentication: full.ClientAuthentication,
 		ClientAuthorization:  full.ClientAuthorization,
@@ -2145,7 +1996,7 @@ var ErrPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patch
 // Also patches the nested SubCA provider and Workload Identity Manager policies. Use
 // errors.Is(err, errPINRequired) to check if the error is due to the missing
 // PIN.
-func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existingSvcAccts []ServiceAccount, updatedConfig FireflyConfig) error {
+func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existingSvcAccts []api.ServiceAccount, updatedConfig api.Config) error {
 	// Start with creating or updating the Service Accounts.
 	for i := range updatedConfig.ServiceAccounts {
 		var id string
@@ -2210,7 +2061,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 		return fmt.Errorf("while getting issuing templates: %w", err)
 	}
 	// Find the built-in issuing template.
-	var builtin CertificateIssuingTemplate
+	var builtin api.CertificateIssuingTemplate
 	for _, template := range templates {
 		if template.CertificateAuthority == "BUILTIN" {
 			builtin = template
@@ -2402,7 +2253,7 @@ func (f FixableError) Unwrap() error {
 	return f.Err
 }
 
-func patchConfig(cl http.Client, apiURL, apiKey, id string, patch FireflyConfigPatch) error {
+func patchConfig(cl http.Client, apiURL, apiKey, id string, patch api.ConfigPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return err
@@ -2431,22 +2282,7 @@ func patchConfig(cl http.Client, apiURL, apiKey, id string, patch FireflyConfigP
 	}
 }
 
-// From: https://developer.venafi.com/tlsprotectcloud/reference/subcaproviders_update
-type SubCaProviderPatch struct {
-	CaProductOptionID  string `json:"caProductOptionId"`
-	CommonName         string `json:"commonName"`
-	Country            string `json:"country"`
-	KeyAlgorithm       string `json:"keyAlgorithm"`
-	Locality           string `json:"locality"`
-	Name               string `json:"name"`
-	Organization       string `json:"organization"`
-	OrganizationalUnit string `json:"organizationalUnit"`
-	PKCS11             PKCS11 `json:"pkcs11,omitempty"`
-	StateOrProvince    string `json:"stateOrProvince"`
-	ValidityPeriod     string `json:"validityPeriod"`
-}
-
-func patchSubCaProvider(cl http.Client, apiURL, apiKey, id string, patch SubCaProviderPatch) error {
+func patchSubCaProvider(cl http.Client, apiURL, apiKey, id string, patch api.SubCaProviderPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return err
@@ -2516,8 +2352,8 @@ func (e VenafiError) Error() string {
 	return fmt.Sprintf("\n* %s", strings.Join(msgs, "\n* "))
 }
 
-func fullToPatchSubCAProvider(full SubCa) SubCaProviderPatch {
-	return SubCaProviderPatch{
+func fullToPatchSubCAProvider(full api.SubCa) api.SubCaProviderPatch {
+	return api.SubCaProviderPatch{
 		CaProductOptionID:  full.CaProductOptionID,
 		CommonName:         full.CommonName,
 		Country:            full.Country,
@@ -2532,28 +2368,8 @@ func fullToPatchSubCAProvider(full SubCa) SubCaProviderPatch {
 	}
 }
 
-// From https://developer.venafi.com/tlsprotectcloud/reference/policies_update
-type PolicyPatch struct {
-	Name              string       `json:"name"`
-	KeyAlgorithm      KeyAlgorithm `json:"keyAlgorithm"`
-	KeyUsages         []string     `json:"keyUsages"`
-	ExtendedKeyUsages []string     `json:"extendedKeyUsages"`
-	SANs              SANs         `json:"sans"`
-	Subject           Subject      `json:"subject"`
-	ValidityPeriod    string       `json:"validityPeriod"` // ISO8601 Period Format, e.g. "P90D"
-}
-
-type Subject struct {
-	CommonName         CommonName `json:"commonName" yaml:"commonName,flow"`
-	Country            CommonName `json:"country" yaml:"country,flow"`
-	Locality           CommonName `json:"locality" yaml:"locality,flow"`
-	Organization       CommonName `json:"organization" yaml:"organization,flow"`
-	OrganizationalUnit CommonName `json:"organizationalUnit" yaml:"organizationalUnit,flow"`
-	StateOrProvince    CommonName `json:"stateOrProvince" yaml:"stateOrProvince,flow"`
-}
-
-func fullToPatchPolicy(full Policy) PolicyPatch {
-	return PolicyPatch{
+func fullToPatchPolicy(full api.Policy) api.PolicyPatch {
+	return api.PolicyPatch{
 		Name:              full.Name,
 		KeyAlgorithm:      full.KeyAlgorithm,
 		KeyUsages:         full.KeyUsages,
@@ -2565,7 +2381,7 @@ func fullToPatchPolicy(full Policy) PolicyPatch {
 }
 
 // https://api.venafi.cloud/v1/distributedissuers/policies/{id}
-func patchPolicy(cl http.Client, apiURL, apiKey, id string, patch PolicyPatch) error {
+func patchPolicy(cl http.Client, apiURL, apiKey, id string, patch api.PolicyPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return err
@@ -2596,38 +2412,6 @@ func patchPolicy(cl http.Client, apiURL, apiKey, id string, patch PolicyPatch) e
 	}
 }
 
-type ServiceAccount struct {
-	AuthenticationType string   `json:"authenticationType,omitempty"`
-	CredentialLifetime int      `json:"credentialLifetime,omitempty"`
-	Enabled            bool     `json:"enabled,omitempty"`
-	ID                 string   `json:"id,omitempty"`
-	Name               string   `json:"name,omitempty"`
-	Owner              string   `json:"owner,omitempty"`
-	Scopes             []string `json:"scopes,omitempty"`
-	Applications       []string `json:"applications,omitempty"`
-	Audience           string   `json:"audience,omitempty"`
-	IssuerURL          string   `json:"issuerURL,omitempty"`
-	JwksURI            string   `json:"jwksURI,omitempty"`
-	Subject            string   `json:"subject,omitempty"`
-	PublicKey          string   `json:"publicKey,omitempty"`
-}
-
-func (sa ServiceAccount) Equal(other ServiceAccount) bool {
-	return sa.ID == other.ID &&
-		sa.Name == other.Name &&
-		sa.AuthenticationType == other.AuthenticationType &&
-		sa.CredentialLifetime == other.CredentialLifetime &&
-		sa.Enabled == other.Enabled &&
-		sa.Owner == other.Owner &&
-		equalStringSlices(sa.Scopes, other.Scopes) &&
-		equalStringSlices(sa.Applications, other.Applications) &&
-		sa.Audience == other.Audience &&
-		sa.IssuerURL == other.IssuerURL &&
-		sa.JwksURI == other.JwksURI &&
-		sa.Subject == other.Subject &&
-		sa.PublicKey == other.PublicKey
-}
-
 func equalStringSlices(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -2640,7 +2424,7 @@ func equalStringSlices(a, b []string) bool {
 	return true
 }
 
-func getServiceAccounts(cl http.Client, apiURL, apiKey string) ([]ServiceAccount, error) {
+func getServiceAccounts(cl http.Client, apiURL, apiKey string) ([]api.ServiceAccount, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts", nil)
 	if err != nil {
 		return nil, err
@@ -2666,7 +2450,7 @@ func getServiceAccounts(cl http.Client, apiURL, apiKey string) ([]ServiceAccount
 		return nil, fmt.Errorf("while reading service accounts: %w", err)
 	}
 
-	var result []ServiceAccount
+	var result []api.ServiceAccount
 	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
 		return nil, fmt.Errorf("while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
 	}
@@ -2713,14 +2497,14 @@ func removeServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) error
 	}
 }
 
-func findServiceAccount(nameOrID string, allSAs []ServiceAccount) (ServiceAccount, error) {
+func findServiceAccount(nameOrID string, allSAs []api.ServiceAccount) (api.ServiceAccount, error) {
 	if looksLikeAnID(nameOrID) {
 		for _, sa := range allSAs {
 			if sa.ID == nameOrID {
 				return sa, nil
 			}
 		}
-		return ServiceAccount{}, NotFound{NameOrID: nameOrID}
+		return api.ServiceAccount{}, NotFound{NameOrID: nameOrID}
 	}
 
 	for _, sa := range allSAs {
@@ -2728,21 +2512,21 @@ func findServiceAccount(nameOrID string, allSAs []ServiceAccount) (ServiceAccoun
 			return sa, nil
 		}
 	}
-	return ServiceAccount{}, NotFound{NameOrID: nameOrID}
+	return api.ServiceAccount{}, NotFound{NameOrID: nameOrID}
 }
 
-func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (ServiceAccount, error) {
+func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (api.ServiceAccount, error) {
 	if looksLikeAnID(nameOrID) {
 		return getServiceAccountByID(cl, apiURL, apiKey, nameOrID)
 	}
 
 	sas, err := getServiceAccounts(cl, apiURL, apiKey)
 	if err != nil {
-		return ServiceAccount{}, fmt.Errorf("getServiceAccount: while getting service accounts: %w", err)
+		return api.ServiceAccount{}, fmt.Errorf("getServiceAccount: while getting service accounts: %w", err)
 	}
 
 	// Error out if a duplicate service account name is found.
-	var found []ServiceAccount
+	var found []api.ServiceAccount
 	for _, sa := range sas {
 		if sa.Name == nameOrID {
 			found = append(found, sa)
@@ -2750,7 +2534,7 @@ func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (Service
 	}
 
 	if len(found) == 0 {
-		return ServiceAccount{}, NotFound{NameOrID: nameOrID}
+		return api.ServiceAccount{}, NotFound{NameOrID: nameOrID}
 	}
 	if len(found) == 1 {
 		return found[0], nil
@@ -2762,7 +2546,7 @@ func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (Service
 	for _, sa := range found {
 		_, _ = b.WriteString(fmt.Sprintf("  - %s (%s)\n", sa.Name, sa.ID))
 	}
-	return ServiceAccount{}, fmt.Errorf(undent.Undent(`
+	return api.ServiceAccount{}, fmt.Errorf(undent.Undent(`
 		getServiceAccount: duplicate service account name '%s' found.
 		The conflicting service accounts are:
 		%s
@@ -2772,17 +2556,17 @@ func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (Service
 	`), nameOrID, b.String(), found[0].ID)
 }
 
-func getServiceAccountByID(cl http.Client, apiURL, apiKey, id string) (ServiceAccount, error) {
+func getServiceAccountByID(cl http.Client, apiURL, apiKey, id string) (api.ServiceAccount, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
 	if err != nil {
-		return ServiceAccount{}, err
+		return api.ServiceAccount{}, err
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := cl.Do(req)
 	if err != nil {
-		return ServiceAccount{}, err
+		return api.ServiceAccount{}, err
 	}
 	defer resp.Body.Close()
 
@@ -2790,20 +2574,14 @@ func getServiceAccountByID(cl http.Client, apiURL, apiKey, id string) (ServiceAc
 	case http.StatusOK:
 		// The request was successful. Continue below to decode the response.
 	default:
-		return ServiceAccount{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.ServiceAccount{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var result ServiceAccount
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return ServiceAccount{}, fmt.Errorf("getServiceAccountByID: while decoding response: %w", err)
+	var result api.ServiceAccount
+	if err := decodeJSON(resp.Body, &result); err != nil {
+		return api.ServiceAccount{}, fmt.Errorf("getServiceAccountByID: while decoding response: %w", err)
 	}
 	return result, nil
-}
-
-type SACreateResp struct {
-	ID         string `json:"id"`
-	PublicKey  string `json:"publicKey"`
-	PrivateKey string `json:"privateKey"`
 }
 
 // Returns the PEM-encoded private and public keys.
@@ -2836,15 +2614,15 @@ func genECKeyPair() (string, string, error) {
 
 // Owner can be left empty, in which case the first team will be used as the
 // owner.
-func createServiceAccount(cl http.Client, apiURL, apiKey string, sa ServiceAccount) (SACreateResp, error) {
+func createServiceAccount(cl http.Client, apiURL, apiKey string, sa api.ServiceAccount) (api.SACreateResp, error) {
 	// If no owner is specified, let's just use the first team we can find.
 	if sa.Owner == "" {
 		teams, err := getTeams(cl, apiURL, apiKey)
 		if err != nil {
-			return SACreateResp{}, fmt.Errorf("createServiceAccount: while getting teams: %w", err)
+			return api.SACreateResp{}, fmt.Errorf("createServiceAccount: while getting teams: %w", err)
 		}
 		if len(teams) == 0 {
-			return SACreateResp{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
+			return api.SACreateResp{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
 		}
 		sa.Owner = teams[0].ID
 		logutil.Debugf("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
@@ -2852,19 +2630,19 @@ func createServiceAccount(cl http.Client, apiURL, apiKey string, sa ServiceAccou
 
 	saJSON, err := json.Marshal(sa)
 	if err != nil {
-		return SACreateResp{}, err
+		return api.SACreateResp{}, err
 	}
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/serviceaccounts", apiURL), bytes.NewReader(saJSON))
 	if err != nil {
-		return SACreateResp{}, err
+		return api.SACreateResp{}, err
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := cl.Do(req)
 	if err != nil {
-		return SACreateResp{}, err
+		return api.SACreateResp{}, err
 	}
 	defer resp.Body.Close()
 
@@ -2872,34 +2650,20 @@ func createServiceAccount(cl http.Client, apiURL, apiKey string, sa ServiceAccou
 	case http.StatusCreated, http.StatusOK:
 		// The creation was successful. Continue below to decode the response.
 	case http.StatusConflict:
-		return SACreateResp{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
+		return api.SACreateResp{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
 	default:
-		return SACreateResp{}, HTTPErrorf(resp, "http %s: please check the Status account fields: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.SACreateResp{}, HTTPErrorf(resp, "http %s: please check the Status account fields: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var result SACreateResp
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return SACreateResp{}, fmt.Errorf("createServiceAccount: while decoding response: %w", err)
+	var result api.SACreateResp
+	if err := decodeJSON(resp.Body, &result); err != nil {
+		return api.SACreateResp{}, fmt.Errorf("createServiceAccount: while decoding response: %w", err)
 	}
 	return result, nil
 }
 
-type ServiceAccountPatch struct {
-	Applications       []string `json:"applications,omitempty"`
-	Audience           string   `json:"audience,omitempty"`
-	CredentialLifetime int      `json:"credentialLifetime,omitempty"`
-	IssuerURL          string   `json:"issuerURL,omitempty"`
-	JwksURI            string   `json:"jwksURI,omitempty"`
-	Name               string   `json:"name,omitempty"`
-	Owner              string   `json:"owner,omitempty"`
-	Scopes             []string `json:"scopes,omitempty"`
-	Subject            string   `json:"subject,omitempty"`
-	PublicKey          string   `json:"publicKey,omitempty"`
-	Enabled            bool     `json:"enabled,omitempty"`
-}
-
-func fullToPatchServiceAccount(sa ServiceAccount) ServiceAccountPatch {
-	return ServiceAccountPatch{
+func fullToPatchServiceAccount(sa api.ServiceAccount) api.ServiceAccountPatch {
+	return api.ServiceAccountPatch{
 		Applications:       sa.Applications,
 		Audience:           sa.Audience,
 		CredentialLifetime: sa.CredentialLifetime,
@@ -2914,7 +2678,7 @@ func fullToPatchServiceAccount(sa ServiceAccount) ServiceAccountPatch {
 	}
 }
 
-func patchServiceAccount(cl http.Client, apiURL, apiKey, id string, patch ServiceAccountPatch) error {
+func patchServiceAccount(cl http.Client, apiURL, apiKey, id string, patch api.ServiceAccountPatch) error {
 	// If no owner is specified, let's just use the first team we can find.
 	if patch.Owner == "" {
 		teams, err := getTeams(cl, apiURL, apiKey)
@@ -2979,48 +2743,7 @@ func ANSIDiff(x, y any, opts ...cmp.Option) string {
 	return strings.Join(ss, "\n")
 }
 
-type CertificateIssuingTemplate struct {
-	ID                                  string `json:"id"`
-	CompanyID                           string `json:"companyId"`
-	CertificateAuthority                string `json:"certificateAuthority"`
-	Name                                string `json:"name"`
-	CertificateAuthorityAccountID       string `json:"certificateAuthorityAccountId"`
-	CertificateAuthorityProductOptionID string `json:"certificateAuthorityProductOptionId"`
-	Product                             struct {
-		CertificateAuthority string   `json:"certificateAuthority"`
-		ProductName          string   `json:"productName"`
-		ProductTypes         []string `json:"productTypes"`
-		ValidityPeriod       string   `json:"validityPeriod"`
-	} `json:"product"`
-	Priority                  int       `json:"priority,omitempty"`
-	SystemGenerated           bool      `json:"systemGenerated"`
-	CreationDate              time.Time `json:"creationDate"`
-	ModificationDate          time.Time `json:"modificationDate"`
-	Status                    string    `json:"status"`
-	Reason                    string    `json:"reason"`
-	ReferencingApplicationIds []any     `json:"referencingApplicationIds"`
-	SubjectCNRegexes          []string  `json:"subjectCNRegexes"`
-	SubjectORegexes           []string  `json:"subjectORegexes"`
-	SubjectOURegexes          []string  `json:"subjectOURegexes"`
-	SubjectSTRegexes          []string  `json:"subjectSTRegexes"`
-	SubjectLRegexes           []string  `json:"subjectLRegexes"`
-	SubjectCValues            []string  `json:"subjectCValues"`
-	SanRegexes                []string  `json:"sanRegexes"`
-	SanDNSNameRegexes         []string  `json:"sanDnsNameRegexes"`
-	KeyTypes                  []struct {
-		KeyType    string `json:"keyType"`
-		KeyLengths []int  `json:"keyLengths"`
-	} `json:"keyTypes"`
-	KeyReuse                    bool  `json:"keyReuse"`
-	ExtendedKeyUsageValues      []any `json:"extendedKeyUsageValues"`
-	CsrUploadAllowed            bool  `json:"csrUploadAllowed"`
-	KeyGeneratedByVenafiAllowed bool  `json:"keyGeneratedByVenafiAllowed"`
-	ResourceConsumerUserIds     []any `json:"resourceConsumerUserIds"`
-	ResourceConsumerTeamIds     []any `json:"resourceConsumerTeamIds"`
-	EveryoneIsConsumer          bool  `json:"everyoneIsConsumer"`
-}
-
-func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]CertificateIssuingTemplate, error) {
+func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]api.CertificateIssuingTemplate, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/certificateissuingtemplates", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while creating request: %w", err)
@@ -3042,7 +2765,7 @@ func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]CertificateIs
 	}
 
 	var result struct {
-		CertificateIssuingTemplates []CertificateIssuingTemplate `json:"certificateIssuingTemplates"`
+		CertificateIssuingTemplates []api.CertificateIssuingTemplate `json:"certificateIssuingTemplates"`
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -3050,7 +2773,7 @@ func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]CertificateIs
 		return nil, fmt.Errorf("getIssuingTemplates: while reading response body: %w", err)
 	}
 
-	err = json.NewDecoder(bytes.NewReader(body)).Decode(&result)
+err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
@@ -3223,7 +2946,7 @@ func getTeams(cl http.Client, apiURL, apiKey string) ([]Team, error) {
 	var result struct {
 		Teams []Team `json:"teams"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := decodeJSON(resp.Body, &result); err != nil {
 		return nil, fmt.Errorf("getTeams: while decoding response: %w", err)
 	}
 	return result.Teams, nil
@@ -3328,7 +3051,7 @@ func coloredYAMLPrint(yamlBytes string) {
 }
 
 // Returns a list of IDs.
-func rmInteractive(in []ServiceAccount) []string {
+func rmInteractive(in []api.ServiceAccount) []string {
 	type item struct {
 		Name, ID string
 	}

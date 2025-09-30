@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -405,7 +405,7 @@ func toTenantID(cl http.Client, tenantName string) (apiURL, tenantID string, _ e
 		var respJSON struct {
 			CompanyID string `json:"companyId"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&resp); err != nil {
+		if err := decodeJSON(resp.Body, &resp); err != nil {
 			continue
 		}
 

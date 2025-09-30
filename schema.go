@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	_ "embed"
-	"encoding/json"
+	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
 
+	api "github.com/maelvls/vcpctl/internal/api"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -16,7 +17,7 @@ import (
 //go:embed "genschema/schema.json"
 var schemaJSON []byte
 
-func validateFireflyConfig(input FireflyConfig) error {
+func validateFireflyConfig(input api.Config) error {
 	// Work around some issues with the OpenAPI schema:
 	// 	- at '/cloudProviders': got null, want object
 	// 	- at '/serviceAccountIds': got null, want array

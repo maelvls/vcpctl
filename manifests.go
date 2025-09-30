@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
+	api "github.com/maelvls/vcpctl/internal/api"
+	manifest "github.com/maelvls/vcpctl/internal/manifest"
 )
 
 const (
@@ -27,27 +29,27 @@ var manifestKindOrder = map[string]int{
 }
 
 type serviceAccountManifest struct {
-	APIVersion     string `yaml:"apiVersion,omitempty"`
-	Kind           string `yaml:"kind"`
-	ServiceAccount `yaml:",inline"`
+	APIVersion              string `yaml:"apiVersion,omitempty"`
+	Kind                    string `yaml:"kind"`
+	manifest.ServiceAccount `yaml:",inline"`
 }
 
 type policyManifest struct {
-	APIVersion string `yaml:"apiVersion,omitempty"`
-	Kind       string `yaml:"kind"`
-	Policy     `yaml:",inline"`
+	APIVersion      string `yaml:"apiVersion,omitempty"`
+	Kind            string `yaml:"kind"`
+	manifest.Policy `yaml:",inline"`
 }
 
 type configurationManifest struct {
-	APIVersion    string `yaml:"apiVersion,omitempty"`
-	Kind          string `yaml:"kind"`
-	FireflyConfig `yaml:",inline"`
+	APIVersion      string `yaml:"apiVersion,omitempty"`
+	Kind            string `yaml:"kind"`
+	manifest.Config `yaml:",inline"`
 }
 
-func parseFireflyConfigManifests(raw []byte) (FireflyConfig, error) {
+func parseFireflyConfigManifests(raw []byte) (api.Config, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
-		return FireflyConfig{}, Fixable(fmt.Errorf("manifest is empty"))
+		return api.Config{}, Fixable(fmt.Errorf("manifest is empty"))
 	}
 
 	dec := yaml.NewDecoder(bytes.NewReader(raw))
@@ -66,7 +68,7 @@ func parseFireflyConfigManifests(raw []byte) (FireflyConfig, error) {
 		case errors.Is(err, io.EOF):
 			goto done
 		case err != nil:
-			return FireflyConfig{}, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
+			return api.Config{}, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
 		}
 
 		if value == nil {
@@ -77,7 +79,7 @@ func parseFireflyConfigManifests(raw []byte) (FireflyConfig, error) {
 		// Re-marshal the document so we can run strict decoding later.
 		docBytes, err := yaml.Marshal(value)
 		if err != nil {
-			return FireflyConfig{}, fmt.Errorf("while normalizing manifest #%d: %w", i+1, err)
+			return api.Config{}, fmt.Errorf("while normalizing manifest #%d: %w", i+1, err)
 		}
 
 		kind := extractManifestKind(docBytes)
@@ -87,14 +89,14 @@ func parseFireflyConfigManifests(raw []byte) (FireflyConfig, error) {
 
 done:
 	if len(docs) == 0 {
-		return FireflyConfig{}, Fixable(fmt.Errorf("manifest is empty"))
+		return api.Config{}, Fixable(fmt.Errorf("manifest is empty"))
 	}
 
 	// No 'kind' present anywhere: fall back to legacy single-document parsing.
 	var (
-		result             FireflyConfig
-		serviceAccounts    []ServiceAccount
-		policies           []Policy
+		manifestResult     manifest.Config
+		serviceAccounts    []manifest.ServiceAccount
+		policies           []manifest.Policy
 		configSeen         bool
 		lastKindOrderValue = -1
 		saByName           = make(map[string]struct{})
@@ -104,14 +106,14 @@ done:
 	for _, doc := range docs {
 		kind := doc.kind
 		if kind == "" {
-			return FireflyConfig{}, Fixable(fmt.Errorf("manifest #%d is missing 'kind'", doc.index))
+			return api.Config{}, Fixable(fmt.Errorf("manifest #%d is missing 'kind'", doc.index))
 		}
 		order, ok := manifestKindOrder[kind]
 		if !ok {
-			return FireflyConfig{}, Fixable(fmt.Errorf("manifest #%d has unsupported kind %q", doc.index, kind))
+			return api.Config{}, Fixable(fmt.Errorf("manifest #%d has unsupported kind %q", doc.index, kind))
 		}
 		if order < lastKindOrderValue {
-			return FireflyConfig{}, Fixable(fmt.Errorf("manifest #%d (%s) appears after a manifest that depends on it; please reorder the documents", doc.index, kind))
+			return api.Config{}, Fixable(fmt.Errorf("manifest #%d (%s) appears after a manifest that depends on it; please reorder the documents", doc.index, kind))
 		}
 		if order > lastKindOrderValue {
 			lastKindOrderValue = order
@@ -119,61 +121,61 @@ done:
 
 		switch kind {
 		case kindServiceAccount:
-			var manifest serviceAccountManifest
-			if err := yaml.UnmarshalWithOptions(doc.data, &manifest, yaml.Strict()); err != nil {
-				return FireflyConfig{}, fmt.Errorf("while decoding ServiceAccount manifest #%d: %w", doc.index, err)
+			var docManifest serviceAccountManifest
+			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
+				return api.Config{}, fmt.Errorf("while decoding ServiceAccount manifest #%d: %w", doc.index, err)
 			}
-			name := strings.TrimSpace(manifest.Name)
+			name := strings.TrimSpace(docManifest.Name)
 			if name == "" {
-				return FireflyConfig{}, Fixable(fmt.Errorf("ServiceAccount manifest #%d must set 'name'", doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("ServiceAccount manifest #%d must set 'name'", doc.index))
 			}
 			if _, exists := saByName[name]; exists {
-				return FireflyConfig{}, Fixable(fmt.Errorf("duplicate ServiceAccount named %q (manifest #%d)", name, doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("duplicate ServiceAccount named %q (manifest #%d)", name, doc.index))
 			}
 			saByName[name] = struct{}{}
-			serviceAccounts = append(serviceAccounts, manifest.ServiceAccount)
+			serviceAccounts = append(serviceAccounts, docManifest.ServiceAccount)
 		case kindIssuerPolicy, legacyKindPolicy, legacyKindIssuer:
-			var manifest policyManifest
-			if err := yaml.UnmarshalWithOptions(doc.data, &manifest, yaml.Strict()); err != nil {
-				return FireflyConfig{}, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", doc.index, err)
+			var docManifest policyManifest
+			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
+				return api.Config{}, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", doc.index, err)
 			}
-			name := strings.TrimSpace(manifest.Policy.Name)
+			name := strings.TrimSpace(docManifest.Policy.Name)
 			if name == "" {
-				return FireflyConfig{}, Fixable(fmt.Errorf("WIMIssuerPolicy manifest #%d must set 'name'", doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("WIMIssuerPolicy manifest #%d must set 'name'", doc.index))
 			}
 			if _, exists := policiesByName[name]; exists {
-				return FireflyConfig{}, Fixable(fmt.Errorf("duplicate policy named %q (manifest #%d)", name, doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("duplicate policy named %q (manifest #%d)", name, doc.index))
 			}
 			policiesByName[name] = struct{}{}
-			policies = append(policies, manifest.Policy)
+			policies = append(policies, docManifest.Policy)
 		case kindConfiguration:
 			if configSeen {
-				return FireflyConfig{}, Fixable(fmt.Errorf("only one WIMConfiguration manifest is allowed (found another at #%d)", doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("only one WIMConfiguration manifest is allowed (found another at #%d)", doc.index))
 			}
-			var manifest configurationManifest
-			if err := yaml.UnmarshalWithOptions(doc.data, &manifest, yaml.Strict()); err != nil {
-				return FireflyConfig{}, fmt.Errorf("while decoding WIMConfiguration manifest #%d: %w", doc.index, err)
+			var docManifest configurationManifest
+			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
+				return api.Config{}, fmt.Errorf("while decoding WIMConfiguration manifest #%d: %w", doc.index, err)
 			}
-			if len(manifest.FireflyConfig.ServiceAccounts) > 0 {
-				return FireflyConfig{}, Fixable(fmt.Errorf("WIMConfiguration manifest must not embed serviceAccounts directly; define them in dedicated ServiceAccount manifests"))
+			if len(docManifest.Config.ServiceAccounts) > 0 {
+				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest must not embed serviceAccounts directly; define them in dedicated ServiceAccount manifests"))
 			}
-			if len(manifest.FireflyConfig.Policies) > 0 {
-				return FireflyConfig{}, Fixable(fmt.Errorf("WIMConfiguration manifest must not embed policies directly; define them in dedicated WIMIssuerPolicy manifests"))
+			if len(docManifest.Config.Policies) > 0 {
+				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest must not embed policies directly; define them in dedicated WIMIssuerPolicy manifests"))
 			}
-			result = manifest.FireflyConfig
+			manifestResult = docManifest.Config
 			configSeen = true
 		}
 	}
 
 	if !configSeen {
-		return FireflyConfig{}, Fixable(fmt.Errorf("no WIMConfiguration manifest found"))
+		return api.Config{}, Fixable(fmt.Errorf("no WIMConfiguration manifest found"))
 	}
 
 	// Attach the collected dependencies back onto the configuration.
-	result.ServiceAccounts = append(result.ServiceAccounts, serviceAccounts...)
-	result.Policies = append(result.Policies, policies...)
+	manifestResult.ServiceAccounts = append(manifestResult.ServiceAccounts, serviceAccounts...)
+	manifestResult.Policies = append(manifestResult.Policies, policies...)
 
-	return result, nil
+	return manifestToAPIConfig(manifestResult), nil
 }
 
 func extractManifestKind(b []byte) string {
@@ -187,10 +189,11 @@ func extractManifestKind(b []byte) string {
 	return strings.TrimSpace(h.Kind)
 }
 
-func renderFireflyConfigManifests(cfg FireflyConfig) ([]byte, error) {
+func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
+	manifestCfg := apiToManifestConfig(cfg)
 	var docs [][]byte
 
-	for _, sa := range cfg.ServiceAccounts {
+	for _, sa := range manifestCfg.ServiceAccounts {
 		manifest := serviceAccountManifest{
 			Kind:           kindServiceAccount,
 			ServiceAccount: sa,
@@ -202,7 +205,7 @@ func renderFireflyConfigManifests(cfg FireflyConfig) ([]byte, error) {
 		docs = append(docs, doc)
 	}
 
-	for _, policy := range cfg.Policies {
+	for _, policy := range manifestCfg.Policies {
 		manifest := policyManifest{
 			Kind:   kindIssuerPolicy,
 			Policy: policy,
@@ -214,13 +217,12 @@ func renderFireflyConfigManifests(cfg FireflyConfig) ([]byte, error) {
 		docs = append(docs, doc)
 	}
 
-	configDoc := cfg
+	configDoc := manifestCfg
 	configDoc.ServiceAccounts = nil
 	configDoc.Policies = nil
-	configDoc.ServiceAccountIDs = nil
 	manifest := configurationManifest{
-		Kind:          kindConfiguration,
-		FireflyConfig: configDoc,
+		Kind:   kindConfiguration,
+		Config: configDoc,
 	}
 	configBytes, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
 	if err != nil {

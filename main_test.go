@@ -1,12 +1,13 @@
 package main
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
+	api "github.com/maelvls/vcpctl/internal/api"
 )
 
 func Test_withoutANSI(t *testing.T) {
@@ -53,7 +54,7 @@ func TestClientAuthenticationJWTStandardClaims(t *testing.T) {
         - Policy
 `)
 
-	var cfg FireflyConfig
+	var cfg api.Config
 	if err := yaml.UnmarshalWithOptions(input, &cfg, yaml.Strict()); err != nil {
 		t.Fatalf("unexpected error while unmarshalling YAML: %v", err)
 	}
