@@ -126,7 +126,7 @@ keyAlgorithm:
     - EC_P256
   defaultValue: EC_P256
 ---
-kind: SubCAProvider
+kind: WIMSubCAProvider
 name: demo
 caType: BUILTIN
 validityPeriod: P90D
@@ -187,7 +187,7 @@ func TestParseFireflyConfigManifests_MultiDocument(t *testing.T) {
 }
 
 func TestParseFireflyConfigManifests_OrderValidation(t *testing.T) {
-	input := `kind: SubCAProvider
+	input := `kind: WIMSubCAProvider
 name: x
 caType: BUILTIN
 validityPeriod: P1D
@@ -277,8 +277,8 @@ func TestRenderFireflyConfigManifests(t *testing.T) {
 	if !strings.Contains(segments[1], "kind: WIMIssuerPolicy") {
 		t.Fatalf("expected second document to be WIMIssuerPolicy, got:\n%s", segments[1])
 	}
-	if !strings.Contains(segments[2], "kind: SubCAProvider") {
-		t.Fatalf("expected third document to be SubCAProvider, got:\n%s", segments[2])
+	if !strings.Contains(segments[2], "kind: WIMSubCAProvider") {
+		t.Fatalf("expected third document to be WIMSubCAProvider, got:\n%s", segments[2])
 	}
 	if !strings.Contains(segments[3], "kind: WIMConfiguration") {
 		t.Fatalf("expected fourth document to be WIMConfiguration, got:\n%s", segments[3])

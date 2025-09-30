@@ -224,7 +224,7 @@
         }
       ]
     },
-    "SubCAProviderManifest": {
+    "WIMSubCAProviderManifest": {
       "allOf": [
         {
           "type": "object",
@@ -233,7 +233,7 @@
               "type": "string"
             },
             "kind": {
-              "const": "SubCAProvider"
+              "const": "WIMSubCAProvider"
             }
           },
           "required": [
@@ -295,7 +295,7 @@
         },
         "subCaProvider": {
           "type": "string",
-          "description": "Name of a SubCAProvider manifest defined in the same file"
+          "description": "Name of a WIMSubCAProvider manifest defined in the same file"
         }
       },
       "required": [
@@ -1090,7 +1090,7 @@
       "$ref": "#/$defs/WIMIssuerPolicyManifest"
     },
     {
-      "$ref": "#/$defs/SubCAProviderManifest"
+      "$ref": "#/$defs/WIMSubCAProviderManifest"
     },
     {
       "$ref": "#/$defs/WIMConfigurationManifest"

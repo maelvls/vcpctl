@@ -34,17 +34,17 @@ vcpctl get test
 You can create (and update) a Workload Identity Manager configuration with:
 
 ```bash
-vcpctl put -f test.yaml
+vcpctl apply -f test.yaml
 ```
 
 > [!NOTE]
 >
-> The `put` and `edit` commands expect a kubectl-style multi-document manifest. Declare
+> The `apply` and `edit` commands expect a kubectl-style multi-document manifest. Declare
 > `ServiceAccount` resources first, followed by `WIMIssuerPolicy` resources, and finish
 > with a single `WIMConfiguration` resource. All dependencies (service accounts, issuer
 > policies, and the Sub CA) are created or patched automatically.
 
-Example manifest consumed by `vcpctl put`:
+Example manifest consumed by `vcpctl apply`:
 
 ```yaml
 kind: ServiceAccount
@@ -79,7 +79,7 @@ keyAlgorithm:
     - EC_P256
   defaultValue: EC_P256
 ---
-kind: SubCAProvider
+kind: WIMSubCAProvider
 name: demo
 caType: BUILTIN
 validityPeriod: P90D

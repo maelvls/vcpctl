@@ -45,16 +45,18 @@ func main() {
 	var apiURLFlag, apiKeyFlag string
 	rootCmd := &cobra.Command{
 		Use:   "vcpctl",
-		Short: "A CLI tool for CyberArk Certificate Manager configurations",
+		Short: "CLI tool for managing WIM (formerly Firefly) configs in CyberArk Certificate Manager, SaaS",
 		Long: undent.Undent(`
-			vcpctl is a CLI tool for managing CyberArk Certificate Manager, SaaS (formerly known as Venafi Control Plane and also known as Venafi Cloud) configurations.
-			To configure it, set the APIKEY environment variable to your
-			CyberArk Certificate Manager, SaaS API key. You can also set the APIURL environment variable
-			to override the default API URL.
-		`),
+			vcpctl is a CLI tool for managing WIM (Workload Identity Manager,
+			formerly Firefly) configurations in CyberArk Certificate Manager, SaaS
+			(formerly known as Venafi Control Plane and Venafi Cloud).
+            To configure it, set the APIKEY environment variable to your
+            CyberArk Certificate Manager, SaaS API key. You can also set the
+            APIURL environment variable to override the default API URL.
+        `),
 		Example: undent.Undent(`
 			vcpctl ls
-			vcpctl put -f config.yaml
+			vcpctl apply -f config.yaml
 			vcpctl edit <config-name>
 			vcpctl get <config-name> > config.yaml
 			vcpctl attach-sa <config-name> --sa <sa-name>
@@ -81,7 +83,19 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given CyberArk Certificate Manager, SaaS API key. You can also set APIKEY. Flag takes precedence. When using this flag, the configuration file is not used.")
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
-	rootCmd.AddCommand(authCmd(), lsCmd(), editCmd(), attachSaCmd(), putCmd(), rmCmd(), getCmd(), saCmd(), subcaCmd(), policyCmd())
+	rootCmd.AddCommand(
+		authCmd(),
+		lsCmd(),
+		editCmd(),
+		attachSaCmd(),
+		applyCmd(),
+		deprecatedPutCmd(),
+		rmCmd(),
+		getCmd(),
+		saCmd(),
+		subcaCmd(),
+		policyCmd(),
+	)
 
 	rootCmd.AddCommand(ophis.Command(nil))
 
@@ -155,8 +169,8 @@ func saLsCmd() *cobra.Command {
 		Use:   "ls [-o json|id]",
 		Short: "List Service Accounts",
 		Long: undent.Undent(`
-			List Service Accounts. Service Accounts are used to authenticate
-			applications that use Workload Identity Manager configurations.
+			List service accounts. Service accounts authenticate applications that
+			use WIM (Workload Identity Manager) configurations.
 
 			You can use -oid to only display the Service Account client IDs.
 		`),
@@ -587,18 +601,18 @@ func saRmCmd() *cobra.Command {
 
 // List Workload Identity Manager configurations.
 func lsCmd() *cobra.Command {
+	var showSaIDs bool
 	cmd := &cobra.Command{
 		Use:   "ls",
-		Short: "List Workload Identity Manager configurations in CyberArk Certificate Manager, SaaS",
+		Short: "List WIM (Workload Identity Manager, formerly Firefly) configurations",
 		Long: undent.Undent(`
-			List Workload Identity Manager configurations in CyberArk Certificate Manager, SaaS.
+			List WIM (Workload Identity Manager, formerly Firefly) configurations in
+			CyberArk Certificate Manager, SaaS.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl := http.Client{Transport: Transport}
-			// Note: The following functions (GetTokenUsingFileConf and listObjects)
-			// should be implemented according to your needs.
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("ls: %w", err)
@@ -609,28 +623,50 @@ func lsCmd() *cobra.Command {
 				return fmt.Errorf("ls: while listing configurations: %w", err)
 			}
 
-			// Find service accounts so that we can show the client IDs instead of the
-			// IDs.
 			knownSvcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("ls: fetching service accounts: %w", err)
 			}
 
-			// Replace the service account ID with its name and client ID.
+			saByID := make(map[string]api.ServiceAccount)
+			for _, sa := range knownSvcaccts {
+				saByID[sa.ID] = sa
+			}
+
 			for i, m := range confs {
-				var saNames []string
+				type resolvedEntry struct {
+					name  string
+					id    string
+					found bool
+				}
+				var (
+					entries    []resolvedEntry
+					namesInCfg = make(map[string]int)
+				)
 				for _, saID := range m.ServiceAccountIDs {
-					found := false
-					for _, sa := range knownSvcaccts {
-						if sa.ID == saID {
-							saNames = append(saNames, sa.Name+" ("+lightGray(sa.ID)+")")
-							found = true
-							break
-						}
+					sa, found := saByID[saID]
+					if found {
+						entries = append(entries, resolvedEntry{name: sa.Name, id: sa.ID, found: true})
+						namesInCfg[sa.Name]++
+						continue
 					}
-					if !found {
-						saNames = append(saNames, saID+redBold(" (deleted)"))
+					entries = append(entries, resolvedEntry{id: saID, found: false})
+				}
+
+				var saNames []string
+				for _, entry := range entries {
+					if !entry.found {
+						saNames = append(saNames, entry.id+redBold(" (deleted)"))
+						continue
 					}
+
+					needsID := showSaIDs || namesInCfg[entry.name] > 1
+					if needsID {
+						saNames = append(saNames, fmt.Sprintf("%s (%s)", entry.name, lightGray(entry.id)))
+						continue
+					}
+
+					saNames = append(saNames, entry.name)
 				}
 				confs[i].ServiceAccountIDs = saNames
 			}
@@ -643,10 +679,11 @@ func lsCmd() *cobra.Command {
 				})
 			}
 
-			printTable([]string{"Workload Identity Manager Configuration", "Attached Service Accounts"}, rows)
+			printTable([]string{"WIM CONFIGURATION", "Attached Service Accounts"}, rows)
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&showSaIDs, "show-sa-ids", false, "Show service account IDs even when names are unique")
 	return cmd
 }
 
@@ -655,9 +692,9 @@ func subcaCmd() *cobra.Command {
 		Use:   "subca",
 		Short: "Manage SubCA Providers",
 		Long: undent.Undent(`
-			Manage SubCA Providers. SubCA Providers are used to issue certificates
-			from a SubCA. You can list, create, delete, and set a SubCA Provider
-			for a Workload Identity Manager configuration.
+			Manage SubCA Providers. SubCA Providers issue certificates from a SubCA.
+			You can list, create, delete, and set a SubCA Provider for a WIM
+			(Workload Identity Manager, formerly Firefly) configuration.
 
 			Example:
 			  vcpctl subca ls
@@ -720,9 +757,10 @@ func subcaRmCmd() *cobra.Command {
 		Use:   "rm <subca-name-or-id>",
 		Short: "Remove a SubCA Provider",
 		Long: undent.Undent(`
-			Remove a SubCA Provider. This will delete the SubCA Provider from
-			CyberArk Certificate Manager, SaaS. You cannot remove a SubCA Provider that is
-			attached to a Workload Identity Manager configuration.
+			Remove a SubCA Provider. This deletes the SubCA Provider from CyberArk
+			Certificate Manager, SaaS. You cannot remove a SubCA Provider that is
+			attached to a WIM (Workload Identity Manager, formerly Firefly)
+			configuration.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -754,9 +792,9 @@ func policyCmd() *cobra.Command {
 		Use:   "policy",
 		Short: "Manage Policies",
 		Long: undent.Undent(`
-			Manage Policies. Policies are used to define the rules for issuing
-			certificates. You can list, create, delete, and set a Policy for a
-			Workload Identity Manager configuration.
+			Manage policies. Policies define the rules for issuing certificates.
+			You can list, create, delete, and set a policy for a WIM (Workload
+			Identity Manager, formerly Firefly) configuration.
 		`),
 		Example: undent.Undent(`
 			vcpctl policy ls
@@ -818,9 +856,10 @@ func policyRmCmd() *cobra.Command {
 		Use:   "rm <policy-name-or-id>",
 		Short: "Remove a Policy",
 		Long: undent.Undent(`
-			Remove a Policy. This will delete the Policy from CyberArk Certificate Manager, SaaS.
-			You cannot remove a Policy that is attached to a Workload Identity Manager configuration.
-			You must first remove the Policy from the Workload Identity Manager configuration.
+			Remove a policy. This deletes the policy from CyberArk Certificate
+			Manager, SaaS. You cannot remove a policy that is attached to a WIM
+			(Workload Identity Manager, formerly Firefly) configuration. Remove the
+			policy from the WIM configuration first.
 		`),
 		Example: undent.Undent(`
 			vcpctl policy rm <policy-name>
@@ -988,9 +1027,10 @@ func attachSaCmd() *cobra.Command {
 	var saName string
 	cmd := &cobra.Command{
 		Use:   "attach-sa <config-name> --sa <sa-name>",
-		Short: "Attach a Service Account to a Workload Identity Manager configuration",
+		Short: "Attach a service account to a WIM configuration",
 		Long: undent.Undent(`
-			Attach the given Service Account to the Workload Identity Manager configuration.
+			Attach the given service account to the WIM (Workload Identity Manager,
+			formerly Firefly) configuration.
 		`),
 		Example: undent.Undent(`
 			vcpctl attach-sa "config-name" --sa "sa-name"
@@ -1000,7 +1040,7 @@ func attachSaCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("attach-sa: expected a single argument (the Workload Identity Manager configuration name), got %s", args)
+				return fmt.Errorf("attach-sa: expected a single argument (the WIM configuration name), got %s", args)
 			}
 			confName := args[0]
 
@@ -1018,7 +1058,7 @@ func attachSaCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&saName, "sa", "s", "", "Service Account name or client ID to attach to the Workload Identity Manager configuration")
+	cmd.Flags().StringVarP(&saName, "sa", "s", "", "Service account name or client ID to attach to the WIM configuration")
 	_ = cmd.MarkFlagRequired("sa")
 	return cmd
 }
@@ -1081,17 +1121,18 @@ func attachSAToConf(cl http.Client, apiURL, apiKey, confName, saName string) err
 func editCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "edit",
-		Short: "Edit a Workload Identity Manager configuration",
+		Short: "Edit a WIM configuration",
 		Long: undent.Undent(`
-			Edit a Workload Identity Manager configuration. The temporary file opened in
-			your editor is a multi-document manifest containing the ServiceAccount,
-			WIMIssuerPolicy, and WIMConfiguration objects in dependency order.
+			Edit a WIM (Workload Identity Manager, formerly Firefly) configuration.
+			The temporary file opened in your editor is a multi-document manifest
+			containing the ServiceAccount, WIMIssuerPolicy, and WIMConfiguration
+			objects in dependency order.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("edit: expected a single argument (the Workload Identity Manager configuration name), got %s", args)
+				return fmt.Errorf("edit: expected a single argument (the WIM configuration name), got %s", args)
 			}
 
 			cl := http.Client{Transport: Transport}
@@ -1110,93 +1151,108 @@ func editCmd() *cobra.Command {
 	}
 }
 
-func putCmd() *cobra.Command {
+func applyCmd() *cobra.Command {
+	return newApplyLikeCmd("apply")
+}
+
+func deprecatedPutCmd() *cobra.Command {
+	cmd := newApplyLikeCmd("put")
+	cmd.Deprecated = "use \"vcpctl apply\" instead; this alias will be removed in a future release"
+	return cmd
+}
+
+func newApplyLikeCmd(name string) *cobra.Command {
 	var filePath string
 	cmd := &cobra.Command{
-		Use:   "put",
-		Short: "Create or update a Workload Identity Manager configuration",
+		Use:   name,
+		Short: "Create or update a WIM configuration",
 		Long: undent.Undent(`
-			Create or update a Workload Identity Manager configuration in CyberArk Certificate Manager, SaaS.
-			The name in the config's 'name' field is used to identify the configuration.
-			Provide a kubectl-style multi-document manifest: declare ServiceAccount manifests first,
-			followed by WIMIssuerPolicy manifests, and finish with a WIMConfiguration manifest.
+			Create or update a WIM (Workload Identity Manager, formerly Firefly)
+			configuration in CyberArk Certificate Manager, SaaS. The configuration
+			name is read from the manifest's 'name' field.
+			Provide a kubectl-style multi-document manifest: declare ServiceAccount
+			manifests first, followed by WIMIssuerPolicy manifests, and finish with
+			a WIMConfiguration manifest.
 		`),
-		Example: undent.Undent(`
-			vcpctl put -f config.yaml
-			vcpctl put -f - < config.yaml
-		`),
+		Example: undent.Undent(fmt.Sprintf(`
+			vcpctl %s -f config.yaml
+			vcpctl %s -f - < config.yaml
+		`, name, name)),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var file *os.File
-			switch filePath {
-			case "":
-				return fmt.Errorf("put: no file specified, use --file or -f to specify a file path. You can use '-f -' to read from stdin.")
-			case "-":
-				filePath = "/dev/stdin"
-				file = os.Stdin
-			default:
-				var err error
-				file, err = os.Open(filePath)
-				if err != nil {
-					return fmt.Errorf("put: opening file '%s': %w", filePath, err)
-				}
-				defer file.Close()
-			}
-
-			if len(args) != 0 {
-				return fmt.Errorf("put: expected no arguments. For context, the name of the configuration is read from the 'name' field in the provided YAML manifest.")
-			}
-
-			cl := http.Client{Transport: Transport}
-			conf, err := getToolConfig(cmd)
-			if err != nil {
-				return fmt.Errorf("put: %w", err)
-			}
-
-			bytes, err := io.ReadAll(file)
-			if err != nil {
-				return fmt.Errorf("put: while reading Workload Identity Manager configuration from '%s': %w", filePath, err)
-			}
-
-			// Get service accounts.
-			svcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
-			if err != nil {
-				return fmt.Errorf("put: while getting service accounts: %w", err)
-			}
-
-			// Read the Workload Identity Manager configuration.
-			updatedConfig, err := parseFireflyConfigManifests(bytes)
-			if err != nil {
-				return fmt.Errorf("put: while decoding Workload Identity Manager manifests from '%s': %w", filePath, err)
-			}
-			hideMisleadingFields(&updatedConfig)
-			populateServiceAccountsInConfig(&updatedConfig, svcaccts)
-
-			if updatedConfig.Name == "" {
-				return fmt.Errorf("put: Workload Identity Manager configuration must have a 'name' field set")
-			}
-
-			// Patch the original configuration with the new values.
-			err = createOrUpdateConfigAndDeps(cl, conf.APIURL, conf.APIKey, svcaccts, updatedConfig)
-			if err != nil {
-				return fmt.Errorf("put: while creating or updating the Workload Identity Manager configuration, Sub CA, or Policies: %w", err)
-			}
-
-			return nil
+			return runApply(cmd, filePath, args)
 		},
 	}
-	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the Workload Identity Manager configuration file (YAML). Use '-' to read from stdin.")
+	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the WIM configuration file (YAML). Use '-' to read from stdin.")
 	return cmd
+}
+
+func runApply(cmd *cobra.Command, filePath string, args []string) error {
+	cmdName := cmd.Name()
+	var file *os.File
+	switch filePath {
+	case "":
+		return fmt.Errorf("%s: no file specified, use --file or -f to specify a file path. You can use '-f -' to read from stdin.", cmdName)
+	case "-":
+		filePath = "/dev/stdin"
+		file = os.Stdin
+	default:
+		var err error
+		file, err = os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("%s: opening file '%s': %w", cmdName, filePath, err)
+		}
+		defer file.Close()
+	}
+
+	if len(args) != 0 {
+		return fmt.Errorf("%s: expected no arguments. The configuration name is read from the 'name' field in the provided YAML manifest.", cmdName)
+	}
+
+	cl := http.Client{Transport: Transport}
+	conf, err := getToolConfig(cmd)
+	if err != nil {
+		return fmt.Errorf("%s: %w", cmdName, err)
+	}
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("%s: while reading WIM configuration from '%s': %w", cmdName, filePath, err)
+	}
+
+	svcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
+	if err != nil {
+		return fmt.Errorf("%s: while getting service accounts: %w", cmdName, err)
+	}
+
+	updatedConfig, err := parseFireflyConfigManifests(data)
+	if err != nil {
+		return fmt.Errorf("%s: while decoding WIM manifests from '%s': %w", cmdName, filePath, err)
+	}
+	hideMisleadingFields(&updatedConfig)
+	populateServiceAccountsInConfig(&updatedConfig, svcaccts)
+
+	if updatedConfig.Name == "" {
+		return fmt.Errorf("%s: WIM configuration must have a 'name' field set", cmdName)
+	}
+
+	err = createOrUpdateConfigAndDeps(cl, conf.APIURL, conf.APIKey, svcaccts, updatedConfig)
+	if err != nil {
+		return fmt.Errorf("%s: while creating or updating the WIM configuration, Sub CA, or policies: %w", cmdName, err)
+	}
+
+	return nil
 }
 
 func rmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rm <config-name>",
-		Short: "Remove a Workload Identity Manager configuration",
+		Short: "Remove a WIM configuration",
 		Long: undent.Undent(`
-			Remove a Workload Identity Manager configuration. This will delete the configuration
-			from CyberArk Certificate Manager, SaaS.
+			Remove a WIM (Workload Identity Manager, formerly Firefly)
+			configuration. This deletes the configuration from CyberArk Certificate
+			Manager, SaaS.
 		`),
 		Example: undent.Undent(`
 			vcpctl rm my-config
@@ -1206,7 +1262,7 @@ func rmCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected a single argument (the Workload Identity Manager configuration name or ID), got %s", args)
+				return fmt.Errorf("rm: expected a single argument (the WIM configuration name or ID), got %s", args)
 			}
 			nameOrID := args[0]
 
@@ -1501,10 +1557,11 @@ var jsonSchema []byte
 func getCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
-		Short: "Export a Workload Identity Manager configuration",
+		Short: "Export a WIM configuration",
 		Long: undent.Undent(`
-			Get a Workload Identity Manager configuration from CyberArk Certificate Manager, SaaS. The configuration
-			is written to stdout in YAML format.
+			Get a WIM (Workload Identity Manager, formerly Firefly) configuration
+			from CyberArk Certificate Manager, SaaS. The configuration is written
+			to stdout in YAML format.
 		`),
 		Example: undent.Undent(`
 			vcpctl get <config-name>
@@ -1513,7 +1570,7 @@ func getCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("get: expected a single argument (the Workload Identity Manager configuration name), got %s", args)
+				return fmt.Errorf("get: expected a single argument (the WIM configuration name), got %s", args)
 			}
 			idOrName := args[0]
 
@@ -1836,7 +1893,7 @@ func editConfig(cl http.Client, apiURL, apiKey, name string) error {
 	config, err := getConfig(cl, apiURL, apiKey, name)
 	if err != nil {
 		if errors.Is(err, NotFound{}) {
-			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl put config.yaml'", name)
+			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl apply config.yaml'", name)
 		}
 		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
@@ -1999,7 +2056,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 				return fmt.Errorf("while creating service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
 			}
 			id = resp.ID
-			logutil.Debugf("Service account '%s' created with ID '%s'.", updatedConfig.ServiceAccounts[i].Name, resp.ID)
+			logutil.Infof("Creating service account '%s' with ID '%s'.", updatedConfig.ServiceAccounts[i].Name, resp.ID)
 		} else {
 			// The service account exists, we may need to patch it.
 			id = existingSa.ID
@@ -2008,6 +2065,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			updatedConfig.ServiceAccounts[i].Owner = existingSa.Owner
 			d := ANSIDiff(fullToPatchServiceAccount(existingSa), fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
 			if d != "" {
+				logutil.Infof("Updating service account '%s' (ID '%s').", updatedConfig.ServiceAccounts[i].Name, id)
 				err = patchServiceAccount(cl, apiURL, apiKey, id, fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
 				if err != nil {
 					return fmt.Errorf("while patching service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
@@ -2096,7 +2154,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 				return fmt.Errorf("while creating Workload Identity Manager policy: %w", err)
 			}
 			updatedConfig.Policies[i].ID = id
-			logutil.Debugf("Policy '%s' created with ID '%s'.", updatedConfig.Policies[i].Name, id)
+			logutil.Infof("Creating policy '%s' with ID '%s'.", updatedConfig.Policies[i].Name, id)
 		} else {
 			updatedConfig.Policies[i].ID = existingPolicy.ID
 
@@ -2109,6 +2167,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 
 			// If the policy is different, we need to update it.
 			logutil.Debugf("Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
+			logutil.Infof("Updating policy '%s' (ID '%s').", updatedConfig.Policies[i].Name, existingPolicy.ID)
 
 			// Patch the policy.
 			err = patchPolicy(cl, apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
@@ -2144,7 +2203,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			return fmt.Errorf("while creating SubCA provider: %w", err)
 		}
 		updatedConfig.SubCaProvider.ID = id
-		logutil.Debugf("SubCA provider '%s' created with ID '%s'.", updatedConfig.SubCaProvider.Name, id)
+		logutil.Infof("Creating WIMSubCAProvider '%s' with ID '%s'.", updatedConfig.SubCaProvider.Name, id)
 	} else {
 		updatedConfig.SubCaProvider.ID = existingSubCa.ID
 
@@ -2171,6 +2230,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 
 			// If the SubCA provider is different, we need to update it.
 			logutil.Debugf("SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
+			logutil.Infof("Updating WIMSubCAProvider '%s' (ID '%s').", updatedConfig.SubCaProvider.Name, existingSubCa.ID)
 
 			// Patch the SubCA provider.
 			err = patchSubCaProvider(cl, apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
@@ -2198,7 +2258,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			return fmt.Errorf("while creating Workload Identity Manager configuration: %w", err)
 		}
 
-		logutil.Debugf("Configuration '%s' created with ID '%s'.", updatedConfig.Name, confID)
+		logutil.Infof("Creating WIM configuration '%s' with ID '%s'.", updatedConfig.Name, confID)
 	} else {
 		// The configuration exists, we need to patch it.
 		d := ANSIDiff(fullToPatchConfig(existingConfig), fullToPatchConfig(updatedConfig))
@@ -2207,6 +2267,7 @@ func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existing
 			return nil
 		} else {
 			logutil.Debugf("Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
+			logutil.Infof("Updating WIM configuration '%s' (ID '%s').", updatedConfig.Name, existingConfig.ID)
 
 			patch := fullToPatchConfig(updatedConfig)
 			err = patchConfig(cl, apiURL, apiKey, existingConfig.ID, patch)

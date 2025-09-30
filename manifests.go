@@ -13,17 +13,17 @@ import (
 )
 
 const (
-	kindServiceAccount = "ServiceAccount"
-	kindIssuerPolicy   = "WIMIssuerPolicy"
-	kindSubCaProvider  = "SubCAProvider"
-	kindConfiguration  = "WIMConfiguration"
+	kindServiceAccount   = "ServiceAccount"
+	kindIssuerPolicy     = "WIMIssuerPolicy"
+	kindWIMSubCaProvider = "WIMSubCAProvider"
+	kindConfiguration    = "WIMConfiguration"
 )
 
 var manifestKindOrder = map[string]int{
-	kindServiceAccount: 0,
-	kindIssuerPolicy:   1,
-	kindSubCaProvider:  2,
-	kindConfiguration:  3,
+	kindServiceAccount:   0,
+	kindIssuerPolicy:     1,
+	kindWIMSubCaProvider: 2,
+	kindConfiguration:    3,
 }
 
 type serviceAccountManifest struct {
@@ -156,17 +156,17 @@ done:
 			}
 			policiesByName[name] = struct{}{}
 			policies = append(policies, docManifest.Policy)
-		case kindSubCaProvider:
+		case kindWIMSubCaProvider:
 			var docManifest subCaProviderManifest
 			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
-				return api.Config{}, fmt.Errorf("while decoding SubCAProvider manifest #%d: %w", doc.index, err)
+				return api.Config{}, fmt.Errorf("while decoding WIMSubCAProvider manifest #%d: %w", doc.index, err)
 			}
 			name := strings.TrimSpace(docManifest.SubCa.Name)
 			if name == "" {
-				return api.Config{}, Fixable(fmt.Errorf("SubCAProvider manifest #%d must set 'name'", doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("WIMSubCAProvider manifest #%d must set 'name'", doc.index))
 			}
 			if _, exists := subCaProvidersByName[name]; exists {
-				return api.Config{}, Fixable(fmt.Errorf("duplicate SubCAProvider named %q (manifest #%d)", name, doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("duplicate WIMSubCAProvider named %q (manifest #%d)", name, doc.index))
 			}
 			subCaProvidersByName[name] = docManifest.SubCa
 		case kindConfiguration:
@@ -185,11 +185,11 @@ done:
 			}
 			subCaName := strings.TrimSpace(docManifest.Config.SubCaProviderName)
 			if subCaName == "" {
-				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d must reference a SubCAProvider via 'subCaProvider'", doc.index))
+				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d must reference a WIMSubCAProvider via 'subCaProvider'", doc.index))
 			}
 			provider, ok := subCaProvidersByName[subCaName]
 			if !ok {
-				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d references unknown SubCAProvider %q", doc.index, subCaName))
+				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d references unknown WIMSubCAProvider %q", doc.index, subCaName))
 			}
 			docManifest.Config.SubCaProviderName = subCaName
 			manifestResult = docManifest.Config
@@ -250,12 +250,12 @@ func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
 
 	if manifestCfg.SubCaProvider.Name != "" {
 		manifest := subCaProviderManifest{
-			Kind:  kindSubCaProvider,
+			Kind:  kindWIMSubCaProvider,
 			SubCa: manifestCfg.SubCaProvider,
 		}
 		doc, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
 		if err != nil {
-			return nil, fmt.Errorf("while encoding SubCAProvider %q: %w", manifestCfg.SubCaProvider.Name, err)
+			return nil, fmt.Errorf("while encoding WIMSubCAProvider %q: %w", manifestCfg.SubCaProvider.Name, err)
 		}
 		docs = append(docs, doc)
 	}

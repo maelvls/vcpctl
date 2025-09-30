@@ -7,7 +7,7 @@
   "oneOf": [
     { "$ref": "#/$defs/ServiceAccountManifest" },
     { "$ref": "#/$defs/WIMIssuerPolicyManifest" },
-    { "$ref": "#/$defs/SubCAProviderManifest" },
+    { "$ref": "#/$defs/WIMSubCAProviderManifest" },
     { "$ref": "#/$defs/WIMConfigurationManifest" }
   ],
   "$defs": {
@@ -37,13 +37,13 @@
         { "$ref": "#/$defs/PolicyInformation" }
       ]
     },
-    "SubCAProviderManifest": {
+    "WIMSubCAProviderManifest": {
       "allOf": [
         {
           "type": "object",
           "properties": {
             "apiVersion": { "type": "string" },
-            "kind": { "const": "SubCAProvider" }
+            "kind": { "const": "WIMSubCAProvider" }
           },
           "required": ["kind", "name", "caType", "validityPeriod", "commonName", "organization", "country", "locality", "stateOrProvince", "keyAlgorithm", "pkcs11"]
         },
@@ -74,7 +74,7 @@
         },
         "subCaProvider": {
           "type": "string",
-          "description": "Name of a SubCAProvider manifest defined in the same file"
+          "description": "Name of a WIMSubCAProvider manifest defined in the same file"
         },
         "advancedSettings": { "$ref": "#/$defs/AdvancedSettingsInformation" },
         "serviceAccounts": {
@@ -92,4 +92,3 @@
     }
   }
 }
-
