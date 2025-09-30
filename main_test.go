@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -89,5 +90,202 @@ func TestClientAuthenticationJWTStandardClaims(t *testing.T) {
 		if !strings.Contains(jsonStr, key) {
 			t.Fatalf("expected JSON output to contain %s, got %s", key, jsonStr)
 		}
+	}
+}
+
+const sampleMultiDoc = `kind: ServiceAccount
+name: sa-1
+authenticationType: rsaKey
+credentialLifetime: 365
+enabled: true
+scopes:
+  - distributed-issuance
+---
+kind: WIMIssuerPolicy
+name: policy-1
+validityPeriod: P90D
+subject:
+  commonName: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  country: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  locality: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  organization: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  organizationalUnit: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  stateOrProvince: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+sans:
+  dnsNames: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  ipAddresses: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  rfc822Names: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  uniformResourceIdentifiers: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+keyUsages:
+  - digitalSignature
+extendedKeyUsages:
+  - ANY
+keyAlgorithm:
+  allowedValues:
+    - EC_P256
+  defaultValue: EC_P256
+---
+kind: WIMConfiguration
+name: demo
+clientAuthentication: {}
+clientAuthorization:
+  customClaimsAliases:
+    configuration: ""
+    allowAllPolicies: ""
+    allowedPolicies: ""
+cloudProviders: {}
+minTlsVersion: TLS13
+subCaProvider:
+  name: demo
+  caType: BUILTIN
+  validityPeriod: P90D
+  commonName: demo
+  organization: DemoOrg
+  country: US
+  locality: City
+  organizationalUnit: Unit
+  stateOrProvince: State
+  keyAlgorithm: EC_P256
+  pkcs11:
+    allowedClientLibraries: []
+    partitionLabel: ""
+    partitionSerialNumber: ""
+    pin: ""
+    signingEnabled: false
+advancedSettings:
+  enableIssuanceAuditLog: true
+  includeRawCertDataInAuditLog: false
+  requireFIPSCompliantBuild: false
+`
+
+func TestParseFireflyConfigManifests_MultiDocument(t *testing.T) {
+	cfg, err := parseFireflyConfigManifests([]byte(sampleMultiDoc))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Name != "demo" {
+		t.Fatalf("unexpected config name: %q", cfg.Name)
+	}
+	if len(cfg.ServiceAccounts) != 1 {
+		t.Fatalf("expected 1 service account, got %d", len(cfg.ServiceAccounts))
+	}
+	if cfg.ServiceAccounts[0].Name != "sa-1" {
+		t.Fatalf("unexpected service account name: %q", cfg.ServiceAccounts[0].Name)
+	}
+	if len(cfg.Policies) != 1 {
+		t.Fatalf("expected 1 policy, got %d", len(cfg.Policies))
+	}
+	if cfg.Policies[0].Name != "policy-1" {
+		t.Fatalf("unexpected policy name: %q", cfg.Policies[0].Name)
+	}
+}
+
+func TestParseFireflyConfigManifests_OrderValidation(t *testing.T) {
+	input := `kind: WIMConfiguration
+name: out-of-order
+cloudProviders: {}
+minTlsVersion: TLS13
+clientAuthentication: {}
+subCaProvider:
+  name: x
+  caType: BUILTIN
+  validityPeriod: P1D
+  commonName: x
+  organization: X
+  country: US
+  locality: X
+  organizationalUnit: X
+  stateOrProvince: X
+  keyAlgorithm: EC_P256
+  pkcs11:
+    allowedClientLibraries: []
+    partitionLabel: ""
+    partitionSerialNumber: ""
+    pin: ""
+    signingEnabled: false
+advancedSettings:
+  enableIssuanceAuditLog: true
+  includeRawCertDataInAuditLog: false
+  requireFIPSCompliantBuild: false
+---
+kind: ServiceAccount
+name: late
+`
+	_, err := parseFireflyConfigManifests([]byte(input))
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	var fix FixableError
+	if !errors.As(err, &fix) {
+		t.Fatalf("expected FixableError, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "reorder") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestParseFireflyConfigManifests_MissingKind(t *testing.T) {
+	single := `name: legacy
+cloudProviders: {}
+minTlsVersion: TLS13
+clientAuthentication: {}
+subCaProvider:
+  name: legacy
+  caType: BUILTIN
+  validityPeriod: P30D
+  commonName: legacy
+  organization: LegacyOrg
+  country: US
+  locality: City
+  organizationalUnit: Unit
+  stateOrProvince: State
+  keyAlgorithm: EC_P256
+  pkcs11:
+    allowedClientLibraries: []
+    partitionLabel: ""
+    partitionSerialNumber: ""
+    pin: ""
+    signingEnabled: false
+advancedSettings:
+  enableIssuanceAuditLog: true
+  includeRawCertDataInAuditLog: false
+  requireFIPSCompliantBuild: false
+serviceAccounts: []
+policies: []
+`
+	_, err := parseFireflyConfigManifests([]byte(single))
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	var fix FixableError
+	if !errors.As(err, &fix) {
+		t.Fatalf("expected FixableError, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "kind") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestRenderFireflyConfigManifests(t *testing.T) {
+	cfg, err := parseFireflyConfigManifests([]byte(sampleMultiDoc))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	out, err := renderFireflyConfigManifests(cfg)
+	if err != nil {
+		t.Fatalf("unexpected render error: %v", err)
+	}
+	segments := strings.Split(string(out), "---\n")
+	if len(segments) != 3 {
+		t.Fatalf("expected 3 documents, got %d", len(segments))
+	}
+	if !strings.Contains(segments[0], "kind: ServiceAccount") {
+		t.Fatalf("expected first document to be ServiceAccount, got:\n%s", segments[0])
+	}
+	if !strings.Contains(segments[1], "kind: WIMIssuerPolicy") {
+		t.Fatalf("expected second document to be WIMIssuerPolicy, got:\n%s", segments[1])
+	}
+	if !strings.Contains(segments[2], "kind: WIMConfiguration") {
+		t.Fatalf("expected third document to be WIMConfiguration, got:\n%s", segments[2])
 	}
 }

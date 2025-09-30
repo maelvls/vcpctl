@@ -39,8 +39,78 @@ vcpctl put -f test.yaml
 
 > [!NOTE]
 >
-> The `put` and `edit` commands will create the missing Workload Identity Manager Sub CA,
-> policies, and service accounts.
+> The `put` and `edit` commands expect a kubectl-style multi-document manifest. Declare
+> `ServiceAccount` resources first, followed by `WIMIssuerPolicy` resources, and finish
+> with a single `WIMConfiguration` resource. All dependencies (service accounts, issuer
+> policies, and the Sub CA) are created or patched automatically.
+
+Example manifest consumed by `vcpctl put`:
+
+```yaml
+kind: ServiceAccount
+name: sa-demo
+authenticationType: rsaKey
+credentialLifetime: 365
+enabled: true
+scopes:
+  - distributed-issuance
+---
+kind: WIMIssuerPolicy
+name: policy-demo
+validityPeriod: P90D
+subject:
+  commonName: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  country: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  locality: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  organization: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  organizationalUnit: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  stateOrProvince: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+sans:
+  dnsNames: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  ipAddresses: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  rfc822Names: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  uniformResourceIdentifiers: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+keyUsages:
+  - digitalSignature
+extendedKeyUsages:
+  - ANY
+keyAlgorithm:
+  allowedValues:
+    - EC_P256
+  defaultValue: EC_P256
+---
+kind: WIMConfiguration
+name: wim-demo
+clientAuthentication: {}
+clientAuthorization:
+  customClaimsAliases:
+    configuration: ""
+    allowAllPolicies: ""
+    allowedPolicies: ""
+cloudProviders: {}
+minTlsVersion: TLS13
+subCaProvider:
+  name: demo
+  caType: BUILTIN
+  validityPeriod: P90D
+  commonName: demo
+  organization: DemoOrg
+  country: US
+  locality: City
+  organizationalUnit: Unit
+  stateOrProvince: State
+  keyAlgorithm: EC_P256
+  pkcs11:
+    allowedClientLibraries: []
+    partitionLabel: ""
+    partitionSerialNumber: ""
+    pin: ""
+    signingEnabled: false
+advancedSettings:
+  enableIssuanceAuditLog: true
+  includeRawCertDataInAuditLog: false
+  requireFIPSCompliantBuild: false
+```
 
 
 ## Schema of config.yaml

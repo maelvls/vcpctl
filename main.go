@@ -1198,7 +1198,9 @@ func editCmd() *cobra.Command {
 		Use:   "edit",
 		Short: "Edit a Workload Identity Manager configuration",
 		Long: undent.Undent(`
-			Edit a Workload Identity Manager configuration.
+			Edit a Workload Identity Manager configuration. The temporary file opened in
+			your editor is a multi-document manifest containing the ServiceAccount,
+			WIMIssuerPolicy, and WIMConfiguration objects in dependency order.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -1230,8 +1232,9 @@ func putCmd() *cobra.Command {
 		Short: "Create or update a Workload Identity Manager configuration",
 		Long: undent.Undent(`
 			Create or update a Workload Identity Manager configuration in CyberArk Certificate Manager, SaaS.
-			The name in the config's 'name' field is used to identify the
-			configuration.
+			The name in the config's 'name' field is used to identify the configuration.
+			Provide a kubectl-style multi-document manifest: declare ServiceAccount manifests first,
+			followed by WIMIssuerPolicy manifests, and finish with a WIMConfiguration manifest.
 		`),
 		Example: undent.Undent(`
 			vcpctl put -f config.yaml
@@ -1278,9 +1281,9 @@ func putCmd() *cobra.Command {
 			}
 
 			// Read the Workload Identity Manager configuration.
-			var updatedConfig FireflyConfig
-			if err := yaml.UnmarshalWithOptions(bytes, &updatedConfig, yaml.Strict()); err != nil {
-				return fmt.Errorf("put: while decoding Workload Identity Manager configuration from '%s': %w", filePath, err)
+			updatedConfig, err := parseFireflyConfigManifests(bytes)
+			if err != nil {
+				return fmt.Errorf("put: while decoding Workload Identity Manager manifests from '%s': %w", filePath, err)
 			}
 			hideMisleadingFields(&updatedConfig)
 			populateServiceAccountsInConfig(&updatedConfig, svcaccts)
@@ -1656,11 +1659,7 @@ func getCmd() *cobra.Command {
 			populatePoliciesInConfig(&config, knownPolicies)
 			hideMisleadingFields(&config)
 
-			yamlData, err := yaml.MarshalWithOptions(
-				config,
-				yaml.WithComment(svcAcctsComments(config, knownSvcaccts)),
-				yaml.Indent(4),
-			)
+			yamlData, err := renderFireflyConfigManifests(config)
 			if err != nil {
 				return err
 			}
@@ -1999,10 +1998,7 @@ func editConfig(cl http.Client, apiURL, apiKey, name string) error {
 	populatePoliciesInConfig(&config, knownPolicies)
 	hideMisleadingFields(&config)
 
-	yamlData, err := yaml.MarshalWithOptions(
-		config,
-		yaml.WithComment(svcAcctsComments(config, knownSvcaccts)),
-	)
+	yamlData, err := renderFireflyConfigManifests(config)
 	if err != nil {
 		return err
 	}
@@ -2063,9 +2059,7 @@ edit:
 		return nil
 	}
 
-	var modified FireflyConfig
-
-	err = yaml.UnmarshalWithOptions(modifiedRaw, &modified, yaml.Strict())
+	modified, err := parseFireflyConfigManifests(modifiedRaw)
 	switch {
 	case errors.As(err, &FixableError{}):
 		err = addErrorNoticeToFile(tmpfile.Name(), err)
@@ -2075,7 +2069,7 @@ edit:
 		justSaved()
 		goto edit
 	case err != nil:
-		return fmt.Errorf("while parsing modified Workload Identity Manager configuration: %w", err)
+		return fmt.Errorf("while parsing modified Workload Identity Manager manifests: %w", err)
 	}
 
 	err = validateFireflyConfig(modified)
@@ -2146,30 +2140,6 @@ func removeNoticeFromYAML(yamlData []byte) []byte {
 
 // Doesn't work anymore since `serviceAccountIds` is hidden in the 'get', 'put,
 // and 'edit' commands.
-func svcAcctsComments(config FireflyConfig, allSvcAccts []ServiceAccount) map[string][]*yaml.Comment {
-	var comments = make(map[string][]*yaml.Comment)
-
-	for i, sa := range config.ServiceAccountIDs {
-		found := false
-		for _, knownSa := range allSvcAccts {
-			if knownSa.ID == sa {
-				found = true
-				comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
-					yaml.LineComment(" " + knownSa.Name),
-				}
-				break
-			}
-		}
-		if !found {
-			comments[fmt.Sprintf("$.serviceAccountIds[%d]", i)] = []*yaml.Comment{
-				yaml.LineComment(" unknown service account"),
-			}
-		}
-	}
-
-	return comments
-}
-
 var ErrPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
 
 // Also patches the nested SubCA provider and Workload Identity Manager policies. Use
