@@ -19,194 +19,67 @@ const (
 	kindConfiguration    = "WIMConfiguration"
 )
 
-var manifestKindOrder = map[string]int{
-	kindServiceAccount:   0,
-	kindIssuerPolicy:     1,
-	kindWIMSubCaProvider: 2,
-	kindConfiguration:    3,
-}
+func parseManifests(raw []byte) ([]manifest.Manifest, error) {
+	var manifests []manifest.Manifest
 
-type serviceAccountManifest struct {
-	APIVersion              string `yaml:"apiVersion,omitempty"`
-	Kind                    string `yaml:"kind"`
-	manifest.ServiceAccount `yaml:",inline"`
-}
+	// Due to the polymorphism created by 'kind', we decode the YAML documents
+	// twice: first to extract the 'kind' field, then to decode the full
+	// document into the appropriate struct.
+	decForKind := yaml.NewDecoder(bytes.NewReader(raw))
+	decForReal := yaml.NewDecoder(bytes.NewReader(raw), yaml.DisallowUnknownField())
 
-type policyManifest struct {
-	APIVersion      string `yaml:"apiVersion,omitempty"`
-	Kind            string `yaml:"kind"`
-	manifest.Policy `yaml:",inline"`
-}
-
-type subCaProviderManifest struct {
-	APIVersion     string `yaml:"apiVersion,omitempty"`
-	Kind           string `yaml:"kind"`
-	manifest.SubCa `yaml:",inline"`
-}
-
-type configurationManifest struct {
-	APIVersion      string `yaml:"apiVersion,omitempty"`
-	Kind            string `yaml:"kind"`
-	manifest.Config `yaml:",inline"`
-}
-
-func parseFireflyConfigManifests(raw []byte) (api.Config, error) {
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 {
-		return api.Config{}, Fixable(fmt.Errorf("manifest is empty"))
-	}
-
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-
-	type rawDoc struct {
-		index int
-		kind  string
-		data  []byte
-	}
-
-	var docs []rawDoc
 	for i := 0; ; i++ {
-		var value interface{}
-		err := dec.Decode(&value)
+		var header struct {
+			Kind string `yaml:"kind"`
+		}
+		err := decForKind.Decode(&header)
 		switch {
 		case errors.Is(err, io.EOF):
-			goto done
+			return manifests, nil
 		case err != nil:
-			return api.Config{}, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
+			return nil, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
 		}
 
-		if value == nil {
-			// An empty document (e.g. only comments). Skip it.
+		// An empty document (e.g. only comments). Skip it.
+		if header.Kind == "" {
+			_ = decForReal.Decode(&struct{}{})
 			continue
 		}
 
-		// Re-marshal the document so we can run strict decoding later.
-		docBytes, err := yaml.Marshal(value)
-		if err != nil {
-			return api.Config{}, fmt.Errorf("while normalizing manifest #%d: %w", i+1, err)
-		}
-
-		kind := extractManifestKind(docBytes)
-
-		docs = append(docs, rawDoc{index: len(docs) + 1, kind: kind, data: docBytes})
-	}
-
-done:
-	if len(docs) == 0 {
-		return api.Config{}, Fixable(fmt.Errorf("manifest is empty"))
-	}
-
-	// No 'kind' present anywhere: fall back to legacy single-document parsing.
-	var (
-		manifestResult       manifest.Config
-		serviceAccounts      []manifest.ServiceAccount
-		policies             []manifest.Policy
-		subCaProvidersByName = make(map[string]manifest.SubCa)
-		configSeen           bool
-		lastKindOrderValue   = -1
-		saByName             = make(map[string]struct{})
-		policiesByName       = make(map[string]struct{})
-	)
-
-	for _, doc := range docs {
-		kind := doc.kind
-		if kind == "" {
-			return api.Config{}, Fixable(fmt.Errorf("manifest #%d is missing 'kind'", doc.index))
-		}
-		order, ok := manifestKindOrder[kind]
-		if !ok {
-			return api.Config{}, Fixable(fmt.Errorf("manifest #%d has unsupported kind %q", doc.index, kind))
-		}
-		if order < lastKindOrderValue {
-			return api.Config{}, Fixable(fmt.Errorf("manifest #%d (%s) appears after a manifest that depends on it; please reorder the documents", doc.index, kind))
-		}
-		if order > lastKindOrderValue {
-			lastKindOrderValue = order
-		}
-		if err := validateManifestDocument(doc.index, kind, doc.data); err != nil {
-			return api.Config{}, err
-		}
-
-		switch kind {
+		switch header.Kind {
 		case kindServiceAccount:
-			var docManifest serviceAccountManifest
-			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
-				return api.Config{}, fmt.Errorf("while decoding ServiceAccount manifest #%d: %w", doc.index, err)
+			var parsed manifest.ServiceAccount
+			err = decForReal.Decode(&parsed)
+			if err != nil {
+				return nil, fmt.Errorf("while decoding ServiceAccount manifest #%d: %w", i+1, err)
 			}
-			name := strings.TrimSpace(docManifest.Name)
-			if name == "" {
-				return api.Config{}, Fixable(fmt.Errorf("ServiceAccount manifest #%d must set 'name'", doc.index))
-			}
-			if _, exists := saByName[name]; exists {
-				return api.Config{}, Fixable(fmt.Errorf("duplicate ServiceAccount named %q (manifest #%d)", name, doc.index))
-			}
-			saByName[name] = struct{}{}
-			serviceAccounts = append(serviceAccounts, docManifest.ServiceAccount)
+
+			manifests = append(manifests, manifest.Manifest{ServiceAccount: &parsed})
 		case kindIssuerPolicy:
-			var docManifest policyManifest
-			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
-				return api.Config{}, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", doc.index, err)
+			var parsed manifest.Policy
+			err = decForReal.Decode(&parsed)
+			if err != nil {
+				return nil, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", i+1, err)
 			}
-			name := strings.TrimSpace(docManifest.Policy.Name)
-			if name == "" {
-				return api.Config{}, Fixable(fmt.Errorf("WIMIssuerPolicy manifest #%d must set 'name'", doc.index))
-			}
-			if _, exists := policiesByName[name]; exists {
-				return api.Config{}, Fixable(fmt.Errorf("duplicate policy named %q (manifest #%d)", name, doc.index))
-			}
-			policiesByName[name] = struct{}{}
-			policies = append(policies, docManifest.Policy)
+			manifests = append(manifests, manifest.Manifest{Policy: &parsed})
 		case kindWIMSubCaProvider:
-			var docManifest subCaProviderManifest
-			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
-				return api.Config{}, fmt.Errorf("while decoding WIMSubCAProvider manifest #%d: %w", doc.index, err)
+			var parsed manifest.SubCa
+			err = decForReal.Decode(&parsed)
+			if err != nil {
+				return nil, fmt.Errorf("while decoding WIMSubCAProvider manifest #%d: %w", i+1, err)
 			}
-			name := strings.TrimSpace(docManifest.SubCa.Name)
-			if name == "" {
-				return api.Config{}, Fixable(fmt.Errorf("WIMSubCAProvider manifest #%d must set 'name'", doc.index))
-			}
-			if _, exists := subCaProvidersByName[name]; exists {
-				return api.Config{}, Fixable(fmt.Errorf("duplicate WIMSubCAProvider named %q (manifest #%d)", name, doc.index))
-			}
-			subCaProvidersByName[name] = docManifest.SubCa
+			manifests = append(manifests, manifest.Manifest{SubCa: &parsed})
 		case kindConfiguration:
-			if configSeen {
-				return api.Config{}, Fixable(fmt.Errorf("only one WIMConfiguration manifest is allowed (found another at #%d)", doc.index))
+			var parsed manifest.Config
+			err = decForReal.Decode(&parsed)
+			if err != nil {
+				return nil, fmt.Errorf("while decoding WIMConfiguration manifest #%d: %w", i+1, err)
 			}
-			var docManifest configurationManifest
-			if err := yaml.UnmarshalWithOptions(doc.data, &docManifest, yaml.Strict()); err != nil {
-				return api.Config{}, fmt.Errorf("while decoding WIMConfiguration manifest #%d: %w", doc.index, err)
-			}
-			if len(docManifest.Config.ServiceAccounts) > 0 {
-				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest must not embed serviceAccounts directly; define them in dedicated ServiceAccount manifests"))
-			}
-			if len(docManifest.Config.Policies) > 0 {
-				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest must not embed policies directly; define them in dedicated WIMIssuerPolicy manifests"))
-			}
-			subCaName := strings.TrimSpace(docManifest.Config.SubCaProviderName)
-			if subCaName == "" {
-				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d must reference a WIMSubCAProvider via 'subCaProvider'", doc.index))
-			}
-			provider, ok := subCaProvidersByName[subCaName]
-			if !ok {
-				return api.Config{}, Fixable(fmt.Errorf("WIMConfiguration manifest #%d references unknown WIMSubCAProvider %q", doc.index, subCaName))
-			}
-			docManifest.Config.SubCaProviderName = subCaName
-			manifestResult = docManifest.Config
-			manifestResult.SubCaProvider = provider
-			configSeen = true
+			manifests = append(manifests, manifest.Manifest{Config: &parsed})
+		default:
+			return nil, Fixable(fmt.Errorf("manifest #%d has unsupported kind %q", i+1, header.Kind))
 		}
 	}
-
-	if !configSeen {
-		return api.Config{}, Fixable(fmt.Errorf("no WIMConfiguration manifest found"))
-	}
-
-	// Attach the collected dependencies back onto the configuration.
-	manifestResult.ServiceAccounts = append(manifestResult.ServiceAccounts, serviceAccounts...)
-	manifestResult.Policies = append(manifestResult.Policies, policies...)
-
-	return manifestToAPIConfig(manifestResult), nil
 }
 
 func extractManifestKind(b []byte) string {
@@ -224,7 +97,7 @@ func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
 	manifestCfg := apiToManifestConfig(cfg)
 	var docs [][]byte
 
-	for _, sa := range manifestCfg.ServiceAccounts {
+	for _, sa := range manifestCfg.ServiceAccountNames {
 		manifest := serviceAccountManifest{
 			Kind:           kindServiceAccount,
 			ServiceAccount: sa,
@@ -261,7 +134,7 @@ func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
 	}
 
 	configDoc := manifestCfg
-	configDoc.ServiceAccounts = nil
+	configDoc.ServiceAccountNames = nil
 	configDoc.Policies = nil
 	manifest := configurationManifest{
 		Kind:   kindConfiguration,

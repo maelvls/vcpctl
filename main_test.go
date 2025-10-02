@@ -162,7 +162,7 @@ advancedSettings:
 `
 
 func TestParseFireflyConfigManifests_MultiDocument(t *testing.T) {
-	cfg, err := parseFireflyConfigManifests([]byte(sampleMultiDoc))
+	cfg, err := parseManifests([]byte(sampleMultiDoc))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -219,7 +219,7 @@ advancedSettings:
 kind: ServiceAccount
 name: late
 `
-	_, err := parseFireflyConfigManifests([]byte(input))
+	_, err := parseManifests([]byte(input))
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -245,7 +245,7 @@ advancedSettings:
 serviceAccounts: []
 policies: []
 `
-	_, err := parseFireflyConfigManifests([]byte(single))
+	_, err := parseManifests([]byte(single))
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -259,7 +259,7 @@ policies: []
 }
 
 func TestRenderFireflyConfigManifests(t *testing.T) {
-	cfg, err := parseFireflyConfigManifests([]byte(sampleMultiDoc))
+	cfg, err := parseManifests([]byte(sampleMultiDoc))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}

@@ -15,7 +15,7 @@ func manifestToAPIConfig(in manifest.Config) api.Config {
 		Policies:             manifestPoliciesToAPI(in.Policies),
 		SubCaProvider:        manifestToAPISubCa(in.SubCaProvider),
 		AdvancedSettings:     manifestToAPIAdvancedSettings(in.AdvancedSettings),
-		ServiceAccounts:      manifestServiceAccountsToAPI(in.ServiceAccounts),
+		ServiceAccounts:      manifestServiceAccountsToAPI(in.ServiceAccountNames),
 	}
 }
 
@@ -30,7 +30,7 @@ func apiToManifestConfig(in api.Config) manifest.Config {
 		SubCaProviderName:    in.SubCaProvider.Name,
 		SubCaProvider:        apiToManifestSubCa(in.SubCaProvider),
 		AdvancedSettings:     apiToManifestAdvancedSettings(in.AdvancedSettings),
-		ServiceAccounts:      apiServiceAccountsToManifest(in.ServiceAccounts),
+		ServiceAccountNames:  apiServiceAccountsToManifest(in.ServiceAccounts),
 	}
 }
 

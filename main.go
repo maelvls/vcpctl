@@ -1226,7 +1226,7 @@ func runApply(cmd *cobra.Command, filePath string, args []string) error {
 		return fmt.Errorf("%s: while getting service accounts: %w", cmdName, err)
 	}
 
-	updatedConfig, err := parseFireflyConfigManifests(data)
+	updatedConfig, err := parseManifests(data)
 	if err != nil {
 		return fmt.Errorf("%s: while decoding WIM manifests from '%s': %w", cmdName, filePath, err)
 	}
@@ -1963,7 +1963,7 @@ edit:
 		return nil
 	}
 
-	modified, err := parseFireflyConfigManifests(modifiedRaw)
+	modified, err := parseManifests(modifiedRaw)
 	switch {
 	case errors.As(err, &FixableError{}):
 		err = addErrorNoticeToFile(tmpfile.Name(), err)
