@@ -162,31 +162,42 @@ advancedSettings:
 `
 
 func TestParseFireflyConfigManifests_MultiDocument(t *testing.T) {
-	cfg, err := parseManifests([]byte(sampleMultiDoc))
+	items, err := parseManifests([]byte(sampleMultiDoc))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Name != "demo" {
-		t.Fatalf("unexpected config name: %q", cfg.Name)
+	if len(items) != 4 {
+		t.Fatalf("expected 4 manifests, got %d", len(items))
 	}
-	if len(cfg.ServiceAccounts) != 1 {
-		t.Fatalf("expected 1 service account, got %d", len(cfg.ServiceAccounts))
+
+	sa := items[0].ServiceAccount
+	if sa == nil || sa.Name != "sa-1" {
+		t.Fatalf("unexpected service account manifest: %#v", sa)
 	}
-	if cfg.ServiceAccounts[0].Name != "sa-1" {
-		t.Fatalf("unexpected service account name: %q", cfg.ServiceAccounts[0].Name)
+	policy := items[1].Policy
+	if policy == nil || policy.Name != "policy-1" {
+		t.Fatalf("unexpected policy manifest: %#v", policy)
 	}
-	if len(cfg.Policies) != 1 {
-		t.Fatalf("expected 1 policy, got %d", len(cfg.Policies))
+	subca := items[2].SubCa
+	if subca == nil || subca.Name != "demo" {
+		t.Fatalf("unexpected SubCA manifest: %#v", subca)
 	}
-	if cfg.Policies[0].Name != "policy-1" {
-		t.Fatalf("unexpected policy name: %q", cfg.Policies[0].Name)
+	config := items[3].WIMConfiguration
+	if config == nil || config.Name != "demo" {
+		t.Fatalf("unexpected config manifest: %#v", config)
 	}
-	if cfg.SubCaProvider.Name != "demo" {
-		t.Fatalf("unexpected SubCA provider name: %q", cfg.SubCaProvider.Name)
+	if len(config.PolicyNames) != 1 || config.PolicyNames[0] != "policy-1" {
+		t.Fatalf("unexpected config policy names: %#v", config.PolicyNames)
+	}
+	if len(config.ServiceAccountNames) != 1 || config.ServiceAccountNames[0] != "sa-1" {
+		t.Fatalf("unexpected config service account names: %#v", config.ServiceAccountNames)
+	}
+	if config.SubCaProviderName != "demo" {
+		t.Fatalf("unexpected config subCA provider name: %q", config.SubCaProviderName)
 	}
 }
 
-func TestParseFireflyConfigManifests_OrderValidation(t *testing.T) {
+func TestParseFireflyConfigManifests_AllowsAnyOrder(t *testing.T) {
 	input := `kind: WIMSubCAProvider
 name: x
 caType: BUILTIN
@@ -219,16 +230,12 @@ advancedSettings:
 kind: ServiceAccount
 name: late
 `
-	_, err := parseManifests([]byte(input))
-	if err == nil {
-		t.Fatalf("expected error, got nil")
+	items, err := parseManifests([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	var fix FixableError
-	if !errors.As(err, &fix) {
-		t.Fatalf("expected FixableError, got %T: %v", err, err)
-	}
-	if !strings.Contains(err.Error(), "reorder") {
-		t.Fatalf("unexpected error message: %v", err)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 manifests, got %d", len(items))
 	}
 }
 
@@ -259,11 +266,25 @@ policies: []
 }
 
 func TestRenderFireflyConfigManifests(t *testing.T) {
-	cfg, err := parseManifests([]byte(sampleMultiDoc))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
+	cfg := api.Config{
+		Name: "demo",
+		ClientAuthentication: api.ClientAuthentication{
+			Type: "JWT_JWKS",
+		},
+		CloudProviders: map[string]any{},
+		MinTLSVersion:  "TLS13",
+		ServiceAccounts: []api.ServiceAccount{
+			{Name: "sa-1"},
+		},
+		Policies: []api.Policy{
+			{Name: "policy-1"},
+		},
+		SubCaProvider: api.SubCa{Name: "demo"},
 	}
-	out, err := renderFireflyConfigManifests(cfg)
+	// Propagate names into lists so configuration manifest references them.
+	cfg.ServiceAccountIDs = []string{"sa-1-id"}
+
+	out, err := renderManifests(cfg)
 	if err != nil {
 		t.Fatalf("unexpected render error: %v", err)
 	}

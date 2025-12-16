@@ -25,6 +25,18 @@
     "PolicyInformation": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "UUID of the policy",
+          "format": "uuid",
+          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "UUID specific to your company",
+          "format": "uuid",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
+        },
         "name": {
           "type": "string",
           "description": "Name of the policy",
@@ -36,50 +48,13 @@
         "sans": {
           "$ref": "#/$defs/SansInformation"
         },
-        "keyUsages": {
-          "type": "array",
-          "description": "Key usages",
-          "example": [
-            "keyEncipherment",
-            "digitalSignature"
-          ],
-          "items": {
-            "type": "string",
-            "enum": [
-              "digitalSignature",
-              "nonRepudiation",
-              "keyEncipherment",
-              "dataEncipherment",
-              "keyAgreement",
-              "keyCertSign",
-              "cRLSign",
-              "encipherOnly",
-              "decipherOnly"
-            ]
-          }
-        },
-        "keyAlgorithm": {
-          "$ref": "#/$defs/KeyAlgorithmInformation"
-        },
-        "id": {
-          "type": "string",
-          "description": "UUID of the policy",
-          "format": "uuid",
-          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
-        },
-        "companyId": {
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
-          "type": "string",
-          "description": "UUID specific to your company",
-          "format": "uuid"
-        },
-        "validityPeriod": {
-          "type": "string",
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D"
-        },
         "extendedKeyUsages": {
+          "type": "array",
+          "description": "Extended key usages",
+          "example": [
+            "CLIENT_AUTH",
+            "SERVER_AUTH"
+          ],
           "items": {
             "type": "string",
             "enum": [
@@ -106,13 +81,38 @@
               "IPSEC_IKE_INTERMEDIATE",
               "SMARTCARD_LOGON"
             ]
-          },
+          }
+        },
+        "validityPeriod": {
+          "description": "ISO8601 Period Format",
+          "format": "PnYnMnDTnHnMnS",
+          "example": "P30D",
+          "type": "string"
+        },
+        "keyUsages": {
           "type": "array",
-          "description": "Extended key usages",
+          "description": "Key usages",
           "example": [
-            "CLIENT_AUTH",
-            "SERVER_AUTH"
-          ]
+            "keyEncipherment",
+            "digitalSignature"
+          ],
+          "items": {
+            "enum": [
+              "digitalSignature",
+              "nonRepudiation",
+              "keyEncipherment",
+              "dataEncipherment",
+              "keyAgreement",
+              "keyCertSign",
+              "cRLSign",
+              "encipherOnly",
+              "decipherOnly"
+            ],
+            "type": "string"
+          }
+        },
+        "keyAlgorithm": {
+          "$ref": "#/$defs/KeyAlgorithmInformation"
         },
         "creationDate": {
           "type": "string",
@@ -120,29 +120,35 @@
           "example": "2022-10-10T14:50:41.710+00:00"
         },
         "modificationDate": {
+          "example": "2023-12-12T20:00:10.500+00:00",
           "type": "string",
-          "description": "When the policy was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
+          "description": "When the policy was last modified"
         }
       }
     },
-    "SansInformation": {
+    "SubjectAttributesInformation": {
+      "type": "object",
       "properties": {
-        "uniformResourceIdentifiers": {
+        "commonName": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "dnsNames": {
+        "organization": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "ipAddresses": {
+        "organizationalUnit": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "rfc822Names": {
+        "locality": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "stateOrProvince": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "country": {
           "$ref": "#/$defs/PropertyInformation"
         }
       },
-      "description": "Subject alternative names",
-      "type": "object"
+      "description": "Subject attributes"
     },
     "PropertyInformation": {
       "type": "object",
@@ -172,24 +178,34 @@
           ]
         },
         "allowedValues": {
+          "type": "array",
           "items": {
             "type": "string"
-          },
-          "type": "array"
+          }
         }
       }
     },
-    "KeyAlgorithmInformation": {
-      "required": [
-        "allowedValues",
-        "defaultValue"
-      ],
+    "SansInformation": {
       "type": "object",
       "properties": {
+        "dnsNames": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "ipAddresses": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "rfc822Names": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "uniformResourceIdentifiers": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      },
+      "description": "Subject alternative names"
+    },
+    "KeyAlgorithmInformation": {
+      "properties": {
         "allowedValues": {
-          "minItems": 1,
-          "type": "array",
-          "description": "Key algorithm allowed values",
           "items": {
             "type": "string",
             "enum": [
@@ -201,9 +217,15 @@
               "EC_P521",
               "EC_ED25519"
             ]
-          }
+          },
+          "minItems": 1,
+          "type": "array",
+          "description": "Key algorithm allowed values"
         },
         "defaultValue": {
+          "type": "string",
+          "description": "Key algorithm default value",
+          "example": "RSA_4096",
           "enum": [
             "RSA_2048",
             "RSA_3072",
@@ -212,37 +234,15 @@
             "EC_P384",
             "EC_P521",
             "EC_ED25519"
-          ],
-          "type": "string",
-          "description": "Key algorithm default value",
-          "example": "RSA_4096"
+          ]
         }
       },
-      "description": "Key algorithm"
-    },
-    "SubjectAttributesInformation": {
-      "type": "object",
-      "properties": {
-        "commonName": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "organization": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "organizationalUnit": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "locality": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "stateOrProvince": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "country": {
-          "$ref": "#/$defs/PropertyInformation"
-        }
-      },
-      "description": "Subject attributes"
+      "description": "Key algorithm",
+      "required": [
+        "allowedValues",
+        "defaultValue"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

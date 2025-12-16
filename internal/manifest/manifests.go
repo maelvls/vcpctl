@@ -1,22 +1,24 @@
 package manifest
 
+import "github.com/maelvls/vcpctl/internal/api"
+
 type Manifest struct {
-	*Config
+	*WIMConfiguration
 	*ServiceAccount
 	*Policy
 	*SubCa
 }
 
-type Config struct {
-	Name                 string               `yaml:"name"`
-	ClientAuthentication ClientAuthentication `yaml:"clientAuthentication,omitempty"`
-	ClientAuthorization  ClientAuthorization  `yaml:"clientAuthorization,omitempty"`
-	CloudProviders       map[string]any       `yaml:"cloudProviders"`
-	MinTLSVersion        string               `yaml:"minTlsVersion"`
-	PolicyNames          []string             `yaml:"policies,omitempty"`
-	SubCaProviderName    string               `yaml:"subCaProvider"`
-	AdvancedSettings     AdvancedSettings     `yaml:"advancedSettings,omitempty"`
-	ServiceAccountNames  []string             `yaml:"serviceAccount,omitempty"`
+type WIMConfiguration struct {
+	Name                 string                        `yaml:"name"`
+	ClientAuthentication ClientAuthentication          `yaml:"clientAuthentication,omitempty"`
+	ClientAuthorization  ClientAuthorization           `yaml:"clientAuthorization,omitempty"`
+	CloudProviders       api.CloudProvidersInformation `yaml:"cloudProviders"`
+	MinTLSVersion        string                        `yaml:"minTlsVersion"`
+	PolicyNames          []string                      `yaml:"policies,omitempty"`
+	SubCaProviderName    string                        `yaml:"subCaProvider"`
+	AdvancedSettings     AdvancedSettings              `yaml:"advancedSettings,omitempty"`
+	ServiceAccountNames  []string                      `yaml:"serviceAccount,omitempty"`
 }
 
 type ClientAuthentication struct {

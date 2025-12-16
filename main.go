@@ -29,15 +29,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/internal/api"
+	manifest "github.com/maelvls/vcpctl/internal/manifest"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/njayp/ophis"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/spf13/cobra"
-)
-
-const (
-	userAgent = "vcpctl/v0.0.1"
 )
 
 // Replace the old flag-based main() with cobra execution.
@@ -888,7 +886,7 @@ func policyRmCmd() *cobra.Command {
 	return cmd
 }
 
-func removePolicy(cl http.Client, apiURL, apiKey, policyName string) error {
+func removePolicy(ctx context.Context, cl api.Client, policyName string) error {
 	// Find the policy by name.
 	policy, err := getPolicy(cl, apiURL, apiKey, policyName)
 	if err != nil {
@@ -916,7 +914,7 @@ func removePolicy(cl http.Client, apiURL, apiKey, policyName string) error {
 	}
 }
 
-func getSubCas(cl http.Client, apiURL, apiKey string) ([]api.SubCa, error) {
+func getSubCas(ctx context.Context, cl api.Client) ([]api.SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getSubCas: while creating request: %w", err)
@@ -951,7 +949,7 @@ func getSubCas(cl http.Client, apiURL, apiKey string) ([]api.SubCa, error) {
 	return result.SubCaProviders, nil
 }
 
-func getSubCaByID(cl http.Client, apiURL, apiKey, id string) (api.SubCa, error) {
+func getSubCaByID(ctx context.Context, cl api.Client, id string) (api.SubCa, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
 		return api.SubCa{}, fmt.Errorf("getSubCaByID: while creating request: %w", err)
@@ -986,7 +984,7 @@ func getSubCaByID(cl http.Client, apiURL, apiKey, id string) (api.SubCa, error) 
 	return result, nil
 }
 
-func removeSubCaProvider(cl http.Client, apiURL, apiKey, nameOrID string) error {
+func removeSubCaProvider(ctx context.Context, cl api.Client, nameOrID string) error {
 	if looksLikeAnID(nameOrID) {
 		return removeSubCaProviderByID(cl, apiURL, apiKey, nameOrID)
 	}
@@ -1001,7 +999,7 @@ func removeSubCaProvider(cl http.Client, apiURL, apiKey, nameOrID string) error 
 	return removeSubCaProviderByID(cl, apiURL, apiKey, subCA.ID)
 }
 
-func removeSubCaProviderByID(cl http.Client, apiURL, apiKey, id string) error {
+func removeSubCaProviderByID(ctx context.Context, cl api.Client, id string) error {
 	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while creating request: %w", err)
@@ -1063,7 +1061,7 @@ func attachSaCmd() *cobra.Command {
 	return cmd
 }
 
-func attachSAToConf(cl http.Client, apiURL, apiKey, confName, saName string) error {
+func attachSAToConf(ctx context.Context, cl api.Client, confName, saName string) error {
 	// Get configuration name by ID.
 	config, err := getConfig(cl, apiURL, apiKey, confName)
 	if err != nil {
@@ -1135,13 +1133,17 @@ func editCmd() *cobra.Command {
 				return fmt.Errorf("edit: expected a single argument (the WIM configuration name), got %s", args)
 			}
 
-			cl := http.Client{Transport: Transport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			err = editConfig(cl, conf.APIURL, conf.APIKey, args[0])
+			client, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: Transport}), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			if err != nil {
+				return fmt.Errorf("edit: %w", err)
+			}
+
+			err = editConfig(client, args[0])
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
@@ -1221,25 +1223,14 @@ func runApply(cmd *cobra.Command, filePath string, args []string) error {
 		return fmt.Errorf("%s: while reading WIM configuration from '%s': %w", cmdName, filePath, err)
 	}
 
-	svcaccts, err := getServiceAccounts(cl, conf.APIURL, conf.APIKey)
-	if err != nil {
-		return fmt.Errorf("%s: while getting service accounts: %w", cmdName, err)
-	}
-
-	updatedConfig, err := parseManifests(data)
+	manifests, err := parseManifests(data)
 	if err != nil {
 		return fmt.Errorf("%s: while decoding WIM manifests from '%s': %w", cmdName, filePath, err)
 	}
-	hideMisleadingFields(&updatedConfig)
-	populateServiceAccountsInConfig(&updatedConfig, svcaccts)
 
-	if updatedConfig.Name == "" {
-		return fmt.Errorf("%s: WIM configuration must have a 'name' field set", cmdName)
-	}
-
-	err = createOrUpdateConfigAndDeps(cl, conf.APIURL, conf.APIKey, svcaccts, updatedConfig)
+	err = applyManifests(cl, conf.APIURL, conf.APIKey, manifests)
 	if err != nil {
-		return fmt.Errorf("%s: while creating or updating the WIM configuration, Sub CA, or policies: %w", cmdName, err)
+		return fmt.Errorf("%s: while applying manifests: %w", cmdName, err)
 	}
 
 	return nil
@@ -1291,7 +1282,7 @@ func rmCmd() *cobra.Command {
 	return cmd
 }
 
-func getPolicy(cl http.Client, apiURL, apiKey, nameOrID string) (api.Policy, error) {
+func getPolicy(ctx context.Context, cl api.Client, nameOrID string) (api.Policy, error) {
 	if looksLikeAnID(nameOrID) {
 		return getPolicyByID(cl, apiURL, apiKey, nameOrID)
 	}
@@ -1328,7 +1319,7 @@ func getPolicy(cl http.Client, apiURL, apiKey, nameOrID string) (api.Policy, err
 	return found[0], nil
 }
 
-func getPolicyByID(cl http.Client, apiURL, apiKey, id string) (api.Policy, error) {
+func getPolicyByID(ctx context.Context, cl api.Client, id string) (api.Policy, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies/"+id, nil)
 	if err != nil {
 		return api.Policy{}, fmt.Errorf("getPolicyByID: while creating request: %w", err)
@@ -1358,7 +1349,7 @@ func getPolicyByID(cl http.Client, apiURL, apiKey, id string) (api.Policy, error
 	return result, nil
 }
 
-func getSubCa(cl http.Client, apiURL, apiKey, name string) (api.SubCa, error) {
+func getSubCa(ctx context.Context, cl api.Client, name string) (api.SubCa, error) {
 	if looksLikeAnID(name) {
 		return getSubCaByID(cl, apiURL, apiKey, name)
 	}
@@ -1416,7 +1407,7 @@ func getSubCa(cl http.Client, apiURL, apiKey, name string) (api.SubCa, error) {
 	return found[0], nil
 }
 
-func getConfig(cl http.Client, apiURL, apiKey, nameOrID string) (api.Config, error) {
+func getConfig(ctx context.Context, cl api.Client, nameOrID string) (api.Config, error) {
 	if looksLikeAnID(nameOrID) {
 		return getConfigByID(cl, apiURL, apiKey, nameOrID)
 	}
@@ -1453,7 +1444,7 @@ func getConfig(cl http.Client, apiURL, apiKey, nameOrID string) (api.Config, err
 	return found[0], nil
 }
 
-func getConfigs(cl http.Client, apiURL, apiKey string) ([]api.Config, error) {
+func getConfigs(ctx context.Context, cl api.Client) ([]api.Config, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getConfigs: while creating request: %w", err)
@@ -1485,7 +1476,7 @@ func getConfigs(cl http.Client, apiURL, apiKey string) ([]api.Config, error) {
 	return result.Configurations, nil
 }
 
-func removeConfig(cl http.Client, apiURL, apiKey, nameOrID string) error {
+func removeConfig(ctx context.Context, cl api.Client, nameOrID string) error {
 	var id string
 	if looksLikeAnID(nameOrID) {
 		id = nameOrID
@@ -1518,7 +1509,7 @@ func removeConfig(cl http.Client, apiURL, apiKey, nameOrID string) error {
 	}
 }
 
-func getPolicies(cl http.Client, apiURL, apiKey string) ([]api.Policy, error) {
+func getPolicies(ctx context.Context, cl api.Client) ([]api.Policy, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getPolicies: while creating request: %w", err)
@@ -1597,7 +1588,7 @@ func getCmd() *cobra.Command {
 			populatePoliciesInConfig(&config, knownPolicies)
 			hideMisleadingFields(&config)
 
-			yamlData, err := renderFireflyConfigManifests(config)
+			yamlData, err := renderManifests(config)
 			if err != nil {
 				return err
 			}
@@ -1643,7 +1634,7 @@ func hideMisleadingFields(c *api.Config) {
 
 // createConfig creates a new Workload Identity Manager configuration or updates an
 // existing one. Also deals with creating the subCA policies.
-func createConfig(cl http.Client, apiURL, apiKey string, config api.ConfigPatch) (string, error) {
+func createConfig(ctx context.Context, cl api.Client, config api.ConfigPatch) (string, error) {
 	body, err := json.Marshal(config)
 	if err != nil {
 		return "", fmt.Errorf("createConfig: while marshaling configuration: %w", err)
@@ -1686,7 +1677,7 @@ func createConfig(cl http.Client, apiURL, apiKey string, config api.ConfigPatch)
 	return result.ID, nil
 }
 
-func createFireflyPolicy(cl http.Client, apiURL, apiKey string, policy api.Policy) (string, error) {
+func createFireflyPolicy(ctx context.Context, cl api.Client, policy api.Policy) (string, error) {
 	body, err := json.Marshal(policy)
 	if err != nil {
 		return "", fmt.Errorf("createFireflyPolicy: while marshaling policy: %w", err)
@@ -1726,22 +1717,10 @@ func createFireflyPolicy(cl http.Client, apiURL, apiKey string, policy api.Polic
 	return result.ID, nil
 }
 
-func createSubCaProvider(cl http.Client, apiURL, apiKey string, provider api.SubCa) (string, error) {
-	body, err := json.Marshal(provider)
-	if err != nil {
-		return "", fmt.Errorf("createSubCaProvider: while marshaling provider: %w", err)
-	}
-	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/subcaproviders", bytes.NewReader(body))
+func createSubCaProvider(ctx context.Context, cl api.Client, provider api.SubCaProviderCreateRequest) (string, error) {
+	resp, err := cl.SubcaprovidersCreate(provider)
 	if err != nil {
 		return "", fmt.Errorf("createSubCaProvider: while creating request: %w", err)
-	}
-
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("createSubCaProvider: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1771,22 +1750,8 @@ type Config struct {
 	ServiceAccountIDs []string
 }
 
-func listConfigs(cl http.Client, apiURL, apiKey string) ([]Config, error) {
-	if apiURL == "" {
-		return nil, fmt.Errorf("listConfigs: apiURL is empty")
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("listConfigs: apiKey is empty")
-	}
-
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
-	if err != nil {
-		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Do(req)
+func listConfigs(ctx context.Context, cl api.Client) ([]api.ExtendedConfigurationInformation, error) {
+	resp, err := cl.ConfigurationsGetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while making request: %w", err)
 	}
@@ -1804,24 +1769,11 @@ func listConfigs(cl http.Client, apiURL, apiKey string) ([]Config, error) {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while reading response: %w", err)
 	}
 
-	var result struct {
-		Configurations []struct {
-			Name              string   `json:"name"`
-			ServiceAccountIDs []string `json:"serviceAccountIds"`
-		} `json:"configurations"`
-	}
+	var result api.ConfigurationResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
-
-	var confs []Config
-	for _, conf := range result.Configurations {
-		confs = append(confs, Config{
-			Name:              conf.Name,
-			ServiceAccountIDs: conf.ServiceAccountIDs,
-		})
-	}
-	return confs, nil
+	return result.Configurations, nil
 }
 
 type NotFound struct {
@@ -1832,17 +1784,10 @@ func (e NotFound) Error() string {
 	return fmt.Sprintf("'%s' not found", e.NameOrID)
 }
 
-func getConfigByID(cl http.Client, apiURL, apiKey, id string) (api.Config, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id), nil)
+func getConfigByID(ctx context.Context, cl api.Client, id string) (api.ExtendedConfigurationInformation, error) {
+	resp, err := cl.ConfigurationsGetById(ctx, id)
 	if err != nil {
-		return api.Config{}, err
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Do(req)
-	if err != nil {
-		return api.Config{}, err
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("getConfig: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1850,51 +1795,82 @@ func getConfigByID(cl http.Client, apiURL, apiKey, id string) (api.Config, error
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return api.Config{}, HTTPErrorf(resp, "getConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.ExtendedConfigurationInformation{}, HTTPErrorf(resp, "getConfig: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var fireflyConfig api.Config
-	if err := decodeJSON(resp.Body, &fireflyConfig); err != nil {
-		return api.Config{}, err
+	var result api.ExtendedConfigurationInformation
+	if err := decodeJSON(resp.Body, &result); err != nil {
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("getConfig: while decoding response: %w", err)
 	}
-
-	return fireflyConfig, nil
+	return result, nil
 }
 
-func fullToPatchConfig(full api.Config) api.ConfigPatch {
-	policyIDs := make([]string, len(full.Policies))
-	for i, p := range full.Policies {
-		policyIDs[i] = p.ID
+func fullToPatchConfig(full api.ExtendedConfigurationInformation) api.ConfigurationUpdateRequest {
+	var policyIDs []openapi_types.UUID
+	for _, p := range full.Policies {
+		policyIDs = append(policyIDs, p.Id)
 	}
+	full.ClientAuthentication.
 
-	return api.ConfigPatch{
-		Name:                 full.Name,
-		ClientAuthentication: full.ClientAuthentication,
-		ClientAuthorization:  full.ClientAuthorization,
-		CloudProviders:       full.CloudProviders,
-		MinTLSVersion:        full.MinTLSVersion,
-		ServiceAccountIDs:    full.ServiceAccountIDs,
-		PolicyIDs:            policyIDs,
-		SubCaProviderID:      full.SubCaProvider.ID,
-		AdvancedSettings:     full.AdvancedSettings,
+	return api.ConfigurationUpdateRequest{
+		Name: full.Name,
+		ClientAuthentication: api.ClientAuthenticationRequestOpenApi{
+			ClientAuthentication: api.ClientAuthenticationRequestOpenApi_ClientAuthentication{
+			},
+		},
+		ClientAuthorization: full.ClientAuthorization,
+		CloudProviders:      full.CloudProviders,
+		MinTlsVersion:       api.ConfigurationUpdateRequestMinTlsVersion(full.MinTlsVersion),
+		ServiceAccountIds:   full.ServiceAccountIDs,
+		PolicyIds:           policyIDs,
+		SubCaProviderID:     full.SubCaProvider.ID,
+		AdvancedSettings:    full.AdvancedSettings,
 	}
 }
 
-func editConfig(cl http.Client, apiURL, apiKey, name string) error {
-	knownSvcaccts, err := getServiceAccounts(cl, apiURL, apiKey)
+func PatchToManifest(patch api.ConfigurationUpdateRequest) (manifest.CWIMConfiguration error) {
+	var policies []manifest.Policy
+	for _, pid := range patch.PolicyIds {
+		policies = append(policies, manifest.Policy{
+			Name: "", // Name is not known from the patch.
+			ID:   string(pid),
+		})
+	}
+
+	return manifest.CWIMConfiguration
+		Name: patch.Name,
+		SubCaProvider: manifest.SubCaProvider{
+			ID: patch.SubCaProviderID,
+		},
+		ServiceAccounts: []manifest.ServiceAccount{}, // Service accounts are not known from the patch.
+		Policies:       policies,
+		ClientAuthentication: manifest.ClientAuthentication{
+			Type: manifest.ClientAuthenticationType(patch.ClientAuthentication.ClientAuthentication.Type),
+		},
+		ClientAuthorization: manifest.ClientAuthorization{
+			Type: manifest.ClientAuthorizationType(patch.ClientAuthorization.Type),
+		},
+		CloudProviders:   patch.CloudProviders,
+		MinTlsVersion:    string(patch.MinTlsVersion),
+		AdvancedSettings: patch.AdvancedSettings,
+	}, nil
+}
+
+func editConfig(ctx context.Context, cl api.Client, name string) error {
+	knownSvcaccts, err := getServiceAccounts(ctx, cl)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
-	knownPolicies, err := getPolicies(cl, apiURL, apiKey)
+	knownPolicies, err := getPolicies(ctx, cl)
 	if err != nil {
 		return fmt.Errorf("while fetching policies: %w", err)
 	}
 
-	config, err := getConfig(cl, apiURL, apiKey, name)
-	if err != nil {
-		if errors.Is(err, NotFound{}) {
-			return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl apply config.yaml'", name)
-		}
+	config, err := listConfigs(ctx, cl)
+	switch {
+	case errors.Is(err, NotFound{}):
+		return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl apply config.yaml'", name)
+	case err != nil:
 		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
 
@@ -1902,7 +1878,7 @@ func editConfig(cl http.Client, apiURL, apiKey, name string) error {
 	populatePoliciesInConfig(&config, knownPolicies)
 	hideMisleadingFields(&config)
 
-	yamlData, err := renderFireflyConfigManifests(config)
+	yamlData, err := renderManifests(config)
 	if err != nil {
 		return err
 	}
@@ -1976,7 +1952,7 @@ edit:
 		return fmt.Errorf("while parsing modified Workload Identity Manager manifests: %w", err)
 	}
 
-	err = createOrUpdateConfigAndDeps(cl, apiURL, apiKey, knownSvcaccts, modified)
+	err = applyManifests(cl, apiURL, apiKey, modified)
 	switch {
 	// In case we were returned a 400 Bad Request or if it's a fixable error,
 	// let's give a chance to the user to fix the problem.
@@ -2033,251 +2009,274 @@ func removeNoticeFromYAML(yamlData []byte) []byte {
 // and 'edit' commands.
 var ErrPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
 
-// Also patches the nested SubCA provider and Workload Identity Manager policies. Use
-// errors.Is(err, errPINRequired) to check if the error is due to the missing
-// PIN.
-func createOrUpdateConfigAndDeps(cl http.Client, apiURL, apiKey string, existingSvcAccts []api.ServiceAccount, updatedConfig api.Config) error {
-	// Start with creating or updating the Service Accounts.
-	for i := range updatedConfig.ServiceAccounts {
-		var id string
-		existingSa, err := findServiceAccount(updatedConfig.ServiceAccounts[i].Name, existingSvcAccts)
+// applyManifests walks through the provided manifests in order and applies each
+// resource to CyberArk Certificate Manager, SaaS.
+func applyManifests(ctx context.Context, cl api.Client, manifests []manifest.Manifest) error {
+	ctx := newManifestApplyContext(cl, apiURL, apiKey)
+
+	for i, item := range manifests {
 		switch {
-		case errors.As(err, &NotFound{}):
-			// The service account does not exist. We will be creating below.
-		case err != nil:
-			return fmt.Errorf("while getting service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
+		case item.ServiceAccount != nil:
+			if err := ctx.applyServiceAccount(i, *item.ServiceAccount); err != nil {
+				return err
+			}
+		case item.Policy != nil:
+			if err := ctx.applyPolicy(i, *item.Policy); err != nil {
+				return err
+			}
+		case item.SubCa != nil:
+			if err := ctx.applySubCa(i, *item.SubCa); err != nil {
+				return err
+			}
+		case item.CWIMConfiguration!= nil:
+			if err := ctx.applyConfig(i, *item.CWIMConfiguration); err != nil {
+				return err
+			}
 		default:
-			// The service account exists, we need to patch it below.
-		}
-		if existingSa.ID == "" {
-			// The service account does not have an ID, we need to create it.
-			resp, err := createServiceAccount(cl, apiURL, apiKey, updatedConfig.ServiceAccounts[i])
-			if err != nil {
-				return fmt.Errorf("while creating service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
-			}
-			id = resp.ID
-			logutil.Infof("Creating service account '%s' with ID '%s'.", updatedConfig.ServiceAccounts[i].Name, resp.ID)
-		} else {
-			// The service account exists, we may need to patch it.
-			id = existingSa.ID
-
-			// Un-hide the owner field.
-			updatedConfig.ServiceAccounts[i].Owner = existingSa.Owner
-			d := ANSIDiff(fullToPatchServiceAccount(existingSa), fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
-			if d != "" {
-				logutil.Infof("Updating service account '%s' (ID '%s').", updatedConfig.ServiceAccounts[i].Name, id)
-				err = patchServiceAccount(cl, apiURL, apiKey, id, fullToPatchServiceAccount(updatedConfig.ServiceAccounts[i]))
-				if err != nil {
-					return fmt.Errorf("while patching service account '%s': %w", updatedConfig.ServiceAccounts[i].Name, err)
-				}
-
-				logutil.Debugf("Service account '%s' patched:\n'%s'", updatedConfig.ServiceAccounts[i].Name, d)
-			} else {
-				logutil.Debugf("Service account '%s' is unchanged, skipping update.", updatedConfig.ServiceAccounts[i].Name)
-			}
-		}
-		updatedConfig.ServiceAccounts[i].ID = id
-		updatedConfig.ServiceAccountIDs = append(updatedConfig.ServiceAccountIDs, id)
-	}
-
-	knownSvcaccts, err := getServiceAccounts(cl, apiURL, apiKey)
-	if err != nil {
-		return fmt.Errorf("while fetching service accounts: %w", err)
-	}
-	for _, saID := range updatedConfig.ServiceAccountIDs {
-		found := false
-		for _, knownSa := range knownSvcaccts {
-			if knownSa.ID == saID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("service account ID '%s' not found.\nTo list all existing service accounts, run:\n    vcpctl ls", saID)
-		}
-	}
-
-	templates, err := getIssuingTemplates(cl, apiURL, apiKey)
-	if err != nil {
-		return fmt.Errorf("while getting issuing templates: %w", err)
-	}
-	// Find the built-in issuing template.
-	var builtin api.CertificateIssuingTemplate
-	for _, template := range templates {
-		if template.CertificateAuthority == "BUILTIN" {
-			builtin = template
-			break
-		}
-	}
-	if builtin.ID == "" {
-		return fmt.Errorf("built-in issuing template not found, please check your CyberArk Certificate Manager, SaaS configuration")
-	}
-
-	// Now, let's turn the `clientAuthentication.clients[].allowedPolicies`
-	// (which was just meant for readability) into
-	// `clientAuthentication.clients[].allowedPolicyIds`.
-	for ci := range updatedConfig.ClientAuthentication.Clients {
-		for pi := range updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicies {
-			policyName := updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicies[pi]
-			policy, err := getPolicy(cl, apiURL, apiKey, policyName)
-			if err != nil {
-				return Fixable(fmt.Errorf("while getting policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d]: %w", policyName, ci, pi, err))
-			}
-			if policy.ID == "" {
-				return Fixable(fmt.Errorf("policy '%s' referenced by clientAuthentication.clients[%d].allowedPolicies[%d] not found", policyName, ci, pi))
-			}
-			updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicyIDs = append(updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicyIDs, policy.ID)
-		}
-		// Clear the AllowedPolicies slice, since we don't want to send it to the
-		// API.
-		updatedConfig.ClientAuthentication.Clients[ci].AllowedPolicies = nil
-	}
-
-	// Before dealing with patching the configuration, let's patch the policies
-	// and the SubCA provider, if needed.
-	for i := range updatedConfig.Policies {
-		// Get the original policy to check if it exists.
-		existingPolicy, err := getPolicy(cl, apiURL, apiKey, updatedConfig.Policies[i].Name)
-		switch {
-		case errors.As(err, &NotFound{}):
-			// We will create it below.
-		case err == nil:
-			// Policy exists and might need to be patched. Continue below.
-		default:
-			return fmt.Errorf("while getting the existing Workload Identity Manager policy '%s': %w", updatedConfig.Policies[i].Name, err)
-		}
-
-		if existingPolicy.ID == "" {
-			// The policy does not exist, we need to create it.
-			id, err := createFireflyPolicy(cl, apiURL, apiKey, updatedConfig.Policies[i])
-			if err != nil {
-				return fmt.Errorf("while creating Workload Identity Manager policy: %w", err)
-			}
-			updatedConfig.Policies[i].ID = id
-			logutil.Infof("Creating policy '%s' with ID '%s'.", updatedConfig.Policies[i].Name, id)
-		} else {
-			updatedConfig.Policies[i].ID = existingPolicy.ID
-
-			// If the policy is not equal to the original one, we need to update it.
-			d := ANSIDiff(fullToPatchPolicy(existingPolicy), fullToPatchPolicy(updatedConfig.Policies[i]))
-			if d == "" {
-				logutil.Debugf("Policy '%s' is unchanged, skipping update.", updatedConfig.Policies[i].Name)
-				continue
-			}
-
-			// If the policy is different, we need to update it.
-			logutil.Debugf("Policy '%s' was changed:\n%s\n", updatedConfig.Policies[i].Name, d)
-			logutil.Infof("Updating policy '%s' (ID '%s').", updatedConfig.Policies[i].Name, existingPolicy.ID)
-
-			// Patch the policy.
-			err = patchPolicy(cl, apiURL, apiKey, existingPolicy.ID, fullToPatchPolicy(updatedConfig.Policies[i]))
-			if err != nil {
-				return fmt.Errorf("while patching Workload Identity Manager policy #%d '%s': %w", i, updatedConfig.Policies[i].Name, err)
-			}
-		}
-	}
-
-	// Now, let's take care of the SubCA provider.
-	existingSubCa, err := getSubCa(cl, apiURL, apiKey, updatedConfig.SubCaProvider.Name)
-	switch {
-	case errors.As(err, &NotFound{}):
-		// We will create the SubCA provider just below.
-	case err != nil:
-		return fmt.Errorf("while getting original SubCA provider '%s': %w", updatedConfig.SubCaProvider.Name, err)
-	default:
-		// SubCA provider exists and might need to be patched. Continue below.
-	}
-
-	// Replace the sub CA's issuing template with the built-in one. Fail if
-	// caType != BUILTIN.
-	if updatedConfig.SubCaProvider.CaType != "BUILTIN" {
-		return fmt.Errorf("subCA provider '%s' has caType '%s', but only BUILTIN is supported for now", updatedConfig.SubCaProvider.Name, updatedConfig.SubCaProvider.CaType)
-	}
-	updatedConfig.SubCaProvider.CaAccountID = builtin.CertificateAuthorityAccountID
-	updatedConfig.SubCaProvider.CaProductOptionID = builtin.CertificateAuthorityProductOptionID
-
-	if existingSubCa.ID == "" {
-		// The SubCA provider does not exist, we need to create it.
-		id, err := createSubCaProvider(cl, apiURL, apiKey, updatedConfig.SubCaProvider)
-		if err != nil {
-			return fmt.Errorf("while creating SubCA provider: %w", err)
-		}
-		updatedConfig.SubCaProvider.ID = id
-		logutil.Infof("Creating WIMSubCAProvider '%s' with ID '%s'.", updatedConfig.SubCaProvider.Name, id)
-	} else {
-		updatedConfig.SubCaProvider.ID = existingSubCa.ID
-
-		// If the SubCA provider is not equal to the original one, we need to update it.
-		diff := ANSIDiff(fullToPatchSubCAProvider(existingSubCa), fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
-		if diff == "" {
-			logutil.Debugf("SubCA provider '%s' is unchanged, skipping update.", updatedConfig.SubCaProvider.Name)
-		} else {
-			// The `subCaProvider.pkcs11.pin` field is never returned by the API, so
-			// we need to check if the user has changed it and patch it separately.
-			// If the user still wants to patch the subCAProvider, we need to ask
-			// them to re-edit the manifest to fill in the pin.
-			//
-			// First off, let's check if the user has changed something under the
-			// `subCaProvider`.
-
-			if !isZeroPKCS11(updatedConfig.SubCaProvider.PKCS11) && updatedConfig.SubCaProvider.PKCS11.PIN == "" {
-				return Fixable(fmt.Errorf(
-					"while patching Workload Identity Manager configuration's subCAProvider:\n" +
-						"Since you have changed the subCaProvider, you need fill in the subCaProvider.pkcs11.pin\n" +
-						"You can abort by emptying this file and closing it. Please re-edit the configuration to fill in the PKCS11 pin.\n",
-				))
-			}
-
-			// If the SubCA provider is different, we need to update it.
-			logutil.Debugf("SubCA provider '%s' was changed:\n%s\n", updatedConfig.SubCaProvider.Name, diff)
-			logutil.Infof("Updating WIMSubCAProvider '%s' (ID '%s').", updatedConfig.SubCaProvider.Name, existingSubCa.ID)
-
-			// Patch the SubCA provider.
-			err = patchSubCaProvider(cl, apiURL, apiKey, existingSubCa.ID, fullToPatchSubCAProvider(updatedConfig.SubCaProvider))
-			if err != nil {
-				return fmt.Errorf("while patching Workload Identity Manager SubCA provider '%s': %w", updatedConfig.SubCaProvider.Name, err)
-			}
-		}
-	}
-
-	// If we reach this point, we have successfully dealt with service accounts,
-	// the sub CA, and policies. Let's see if the Workload Identity Manager configuration needs to
-	// be created or updated.
-	existingConfig, err := getConfig(cl, apiURL, apiKey, updatedConfig.Name)
-	switch {
-	case errors.As(err, &NotFound{}):
-		// Continue below since the nested sub CA and policies may not already
-		// exist, so the Workload Identity Manager configuration may need to be patched.
-	case err != nil:
-		return fmt.Errorf("while getting configuration ID: %w", err)
-	}
-	if existingConfig.ID == "" {
-		// The configuration does not exist, we need to create it.
-		confID, err := createConfig(cl, apiURL, apiKey, fullToPatchConfig(updatedConfig))
-		if err != nil {
-			return fmt.Errorf("while creating Workload Identity Manager configuration: %w", err)
-		}
-
-		logutil.Infof("Creating WIM configuration '%s' with ID '%s'.", updatedConfig.Name, confID)
-	} else {
-		// The configuration exists, we need to patch it.
-		d := ANSIDiff(fullToPatchConfig(existingConfig), fullToPatchConfig(updatedConfig))
-		if d == "" {
-			logutil.Debugf("Configuration '%s' is unchanged, skipping update.", updatedConfig.Name)
-			return nil
-		} else {
-			logutil.Debugf("Configuration '%s' was changed:\n%s\n", updatedConfig.Name, d)
-			logutil.Infof("Updating WIM configuration '%s' (ID '%s').", updatedConfig.Name, existingConfig.ID)
-
-			patch := fullToPatchConfig(updatedConfig)
-			err = patchConfig(cl, apiURL, apiKey, existingConfig.ID, patch)
-			if err != nil {
-				return fmt.Errorf("while patching Workload Identity Manager configuration: %w", err)
-			}
+			return fmt.Errorf("manifest #%d: empty or unknown manifest", i+1)
 		}
 	}
 
 	return nil
+}
+
+type manifestApplyContext struct {
+	client          http.Client
+	apiURL          string
+	apiKey          string
+	serviceAccounts map[string]api.ServiceAccount
+	policies        map[string]api.Policy
+	subCaProviders  map[string]api.SubCa
+}
+
+func newManifestApplyContext(ctx context.Context, cl api.Client) *manifestApplyContext {
+	return &manifestApplyContext{
+		client:          cl,
+		apiURL:          apiURL,
+		apiKey:          apiKey,
+		serviceAccounts: make(map[string]api.ServiceAccount),
+		policies:        make(map[string]api.Policy),
+		subCaProviders:  make(map[string]api.SubCa),
+	}
+}
+
+func (ctx *manifestApplyContext) applyServiceAccount(idx int, in manifest.ServiceAccount) error {
+	if in.Name == "" {
+		return fmt.Errorf("manifest #%d (ServiceAccount): name must be set", idx+1)
+	}
+
+	sa := manifestToAPIServiceAccount(in)
+	existing, err := getServiceAccount(ctx.client, ctx.apiURL, ctx.apiKey, sa.Name)
+	switch {
+	case errors.As(err, &NotFound{}):
+		resp, err := createServiceAccount(ctx.client, ctx.apiURL, ctx.apiKey, sa)
+		if err != nil {
+			return fmt.Errorf("manifest #%d (ServiceAccount %q): while creating: %w", idx+1, sa.Name, err)
+		}
+		logutil.Infof("Creating service account '%s' with ID '%s'.", sa.Name, resp.ID)
+	case err != nil:
+		return fmt.Errorf("manifest #%d (ServiceAccount %q): while retrieving existing service account: %w", idx+1, sa.Name, err)
+	default:
+		if err := patchServiceAccount(ctx.client, ctx.apiURL, ctx.apiKey, existing.ID, fullToPatchServiceAccount(sa)); err != nil {
+			return fmt.Errorf("manifest #%d (ServiceAccount %q): while patching: %w", idx+1, sa.Name, err)
+		}
+		logutil.Infof("Updating service account '%s' (ID '%s').", sa.Name, existing.ID)
+	}
+
+	fresh, err := ctx.refreshServiceAccount(sa.Name)
+	if err != nil {
+		return fmt.Errorf("manifest #%d (ServiceAccount %q): while refreshing state: %w", idx+1, sa.Name, err)
+	}
+	ctx.serviceAccounts[sa.Name] = fresh
+	return nil
+}
+
+func (ctx *manifestApplyContext) applyPolicy(idx int, in manifest.Policy) error {
+	if in.Name == "" {
+		return fmt.Errorf("manifest #%d (WIMIssuerPolicy): name must be set", idx+1)
+	}
+
+	policy := manifestToAPIPolicy(in)
+	existing, err := getPolicy(ctx.client, ctx.apiURL, ctx.apiKey, policy.Name)
+	switch {
+	case errors.As(err, &NotFound{}):
+		id, err := createFireflyPolicy(ctx.client, ctx.apiURL, ctx.apiKey, policy)
+		if err != nil {
+			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while creating: %w", idx+1, policy.Name, err)
+		}
+		logutil.Infof("Creating policy '%s' with ID '%s'.", policy.Name, id)
+	case err != nil:
+		return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while retrieving existing policy: %w", idx+1, policy.Name, err)
+	default:
+		if err := patchPolicy(ctx.client, ctx.apiURL, ctx.apiKey, existing.ID, fullToPatchPolicy(policy)); err != nil {
+			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while patching: %w", idx+1, policy.Name, err)
+		}
+		logutil.Infof("Updating policy '%s' (ID '%s').", policy.Name, existing.ID)
+	}
+
+	fresh, err := ctx.refreshPolicy(policy.Name)
+	if err != nil {
+		return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while refreshing state: %w", idx+1, policy.Name, err)
+	}
+	ctx.policies[policy.Name] = fresh
+	return nil
+}
+
+func (ctx *manifestApplyContext) applySubCa(idx int, in manifest.SubCa) error {
+	if in.Name == "" {
+		return fmt.Errorf("manifest #%d (WIMSubCAProvider): name must be set", idx+1)
+	}
+
+	subca := manifestToAPISubCa(in)
+	existing, err := getSubCa(ctx.client, ctx.apiURL, ctx.apiKey, subca.Name)
+	switch {
+	case errors.As(err, &NotFound{}):
+		id, err := createSubCaProvider(ctx.client, ctx.apiURL, ctx.apiKey, subca)
+		if err != nil {
+			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while creating: %w", idx+1, subca.Name, err)
+		}
+		logutil.Infof("Creating WIMSubCAProvider '%s' with ID '%s'.", subca.Name, id)
+	case err != nil:
+		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while retrieving existing SubCA provider: %w", idx+1, subca.Name, err)
+	default:
+		if err := patchSubCaProvider(ctx.client, ctx.apiURL, ctx.apiKey, existing.ID, fullToPatchSubCAProvider(subca)); err != nil {
+			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while patching: %w", idx+1, subca.Name, err)
+		}
+		logutil.Infof("Updating WIMSubCAProvider '%s' (ID '%s').", subca.Name, existing.ID)
+	}
+
+	fresh, err := ctx.refreshSubCa(subca.Name)
+	if err != nil {
+		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while refreshing state: %w", idx+1, subca.Name, err)
+	}
+	ctx.subCaProviders[subca.Name] = fresh
+	return nil
+}
+
+func (ctx *manifestApplyContext) applyConfig(idx int, in manifest.CWIMConfiguration error {
+	if in.Name == "" {
+		return fmt.Errorf("manifest #%d (WIMConfiguration): name must be set", idx+1)
+	}
+
+	cfg := api.Config{
+		Name:                 in.Name,
+		ClientAuthentication: manifestToAPIClientAuthentication(in.ClientAuthentication),
+		ClientAuthorization:  manifestToAPIClientAuthorization(in.ClientAuthorization),
+		CloudProviders:       copyStringAnyMap(in.CloudProviders),
+		MinTLSVersion:        in.MinTLSVersion,
+		AdvancedSettings:     manifestToAPIAdvancedSettings(in.AdvancedSettings),
+	}
+
+	for _, saName := range in.ServiceAccountNames {
+		sa, err := ctx.resolveServiceAccount(saName)
+		if err != nil {
+			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving service account %q: %w", idx+1, cfg.Name, saName, err)
+		}
+		cfg.ServiceAccounts = append(cfg.ServiceAccounts, sa)
+		cfg.ServiceAccountIDs = append(cfg.ServiceAccountIDs, sa.ID)
+	}
+
+	for _, policyName := range in.PolicyNames {
+		policy, err := ctx.resolvePolicy(policyName)
+		if err != nil {
+			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving policy %q: %w", idx+1, cfg.Name, policyName, err)
+		}
+		cfg.Policies = append(cfg.Policies, policy)
+	}
+
+	if in.SubCaProviderName != "" {
+		subca, err := ctx.resolveSubCa(in.SubCaProviderName)
+		if err != nil {
+			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving subCA provider %q: %w", idx+1, cfg.Name, in.SubCaProviderName, err)
+		}
+		cfg.SubCaProvider = subca
+	}
+
+	for ci := range cfg.ClientAuthentication.Clients {
+		client := &cfg.ClientAuthentication.Clients[ci]
+		if len(client.AllowedPolicies) == 0 {
+			continue
+		}
+		for _, name := range client.AllowedPolicies {
+			policy, err := ctx.resolvePolicy(name)
+			if err != nil {
+				return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving clientAuthentication.clients[%d].allowedPolicies entry %q: %w", idx+1, cfg.Name, ci, name, err)
+			}
+			client.AllowedPolicyIDs = append(client.AllowedPolicyIDs, policy.ID)
+		}
+		client.AllowedPolicies = nil
+	}
+
+	if cfg.SubCaProvider.Name != "" && cfg.SubCaProvider.ID == "" {
+		return fmt.Errorf("manifest #%d (WIMConfiguration %q): subCA provider %q not found", idx+1, cfg.Name, cfg.SubCaProvider.Name)
+	}
+
+	existing, err := getConfig(ctx.client, ctx.apiURL, ctx.apiKey, cfg.Name)
+	switch {
+	case errors.As(err, &NotFound{}):
+		_, err := createConfig(ctx.client, ctx.apiURL, ctx.apiKey, fullToPatchConfig(cfg))
+		if err != nil {
+			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while creating: %w", idx+1, cfg.Name, err)
+		}
+		logutil.Infof("Creating WIM configuration '%s'.", cfg.Name)
+	case err != nil:
+		return fmt.Errorf("manifest #%d (WIMConfiguration %q): while retrieving existing configuration: %w", idx+1, cfg.Name, err)
+	default:
+		if err := patchConfig(ctx.client, ctx.apiURL, ctx.apiKey, existing.ID, fullToPatchConfig(cfg)); err != nil {
+			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while patching: %w", idx+1, cfg.Name, err)
+		}
+		logutil.Infof("Updating WIM configuration '%s' (ID '%s').", cfg.Name, existing.ID)
+	}
+
+	return nil
+}
+
+func (ctx *manifestApplyContext) resolveServiceAccount(name string) (api.ServiceAccount, error) {
+	if sa, ok := ctx.serviceAccounts[name]; ok {
+		return sa, nil
+	}
+	return ctx.refreshServiceAccount(name)
+}
+
+func (ctx *manifestApplyContext) refreshServiceAccount(name string) (api.ServiceAccount, error) {
+	sa, err := getServiceAccount(ctx.client, ctx.apiURL, ctx.apiKey, name)
+	if err != nil {
+		return api.ServiceAccount{}, err
+	}
+	ctx.serviceAccounts[name] = sa
+	return sa, nil
+}
+
+func (ctx *manifestApplyContext) resolvePolicy(name string) (api.Policy, error) {
+	if policy, ok := ctx.policies[name]; ok {
+		return policy, nil
+	}
+	return ctx.refreshPolicy(name)
+}
+
+func (ctx *manifestApplyContext) refreshPolicy(name string) (api.Policy, error) {
+	policy, err := getPolicy(ctx.client, ctx.apiURL, ctx.apiKey, name)
+	if err != nil {
+		return api.Policy{}, err
+	}
+	ctx.policies[name] = policy
+	return policy, nil
+}
+
+func (ctx *manifestApplyContext) resolveSubCa(name string) (api.SubCa, error) {
+	if subca, ok := ctx.subCaProviders[name]; ok {
+		return subca, nil
+	}
+	return ctx.refreshSubCa(name)
+}
+
+func (ctx *manifestApplyContext) refreshSubCa(name string) (api.SubCa, error) {
+	subca, err := getSubCa(ctx.client, ctx.apiURL, ctx.apiKey, name)
+	if err != nil {
+		return api.SubCa{}, err
+	}
+	ctx.subCaProviders[name] = subca
+	return subca, nil
 }
 
 // To check whether an error is fixable by the user, wrap it with Fixable(err).
@@ -2295,64 +2294,6 @@ func (f FixableError) Error() string {
 }
 func (f FixableError) Unwrap() error {
 	return f.Err
-}
-
-func patchConfig(cl http.Client, apiURL, apiKey, id string, patch api.ConfigPatch) error {
-	patchJSON, err := json.Marshal(patch)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id), bytes.NewReader(patchJSON))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		// The patch was successful.
-		return nil
-	default:
-		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
-	}
-}
-
-func patchSubCaProvider(cl http.Client, apiURL, apiKey, id string, patch api.SubCaProviderPatch) error {
-	patchJSON, err := json.Marshal(patch)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/distributedissuers/subcaproviders/%s", apiURL, id), bytes.NewReader(patchJSON))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		// The patch was successful.
-		return nil
-	default:
-		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
-	}
 }
 
 var APIKeyInvalid = errors.New("API key is invalid")
@@ -2425,7 +2366,7 @@ func fullToPatchPolicy(full api.Policy) api.PolicyPatch {
 }
 
 // https://api.venafi.cloud/v1/distributedissuers/policies/{id}
-func patchPolicy(cl http.Client, apiURL, apiKey, id string, patch api.PolicyPatch) error {
+func patchPolicy(ctx context.Context, cl api.Client, id string, patch api.PolicyPatch) error {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return err
@@ -2468,7 +2409,7 @@ func equalStringSlices(a, b []string) bool {
 	return true
 }
 
-func getServiceAccounts(cl http.Client, apiURL, apiKey string) ([]api.ServiceAccount, error) {
+func getServiceAccounts(ctx context.Context, cl api.Client) ([]api.ServiceAccountBaseObject, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts", nil)
 	if err != nil {
 		return nil, err
@@ -2502,7 +2443,7 @@ func getServiceAccounts(cl http.Client, apiURL, apiKey string) ([]api.ServiceAcc
 	return result, nil
 }
 
-func removeServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) error {
+func removeServiceAccount(ctx context.Context, cl api.Client, nameOrID string) error {
 	var id string
 	if looksLikeAnID(nameOrID) {
 		id = nameOrID
@@ -2559,7 +2500,7 @@ func findServiceAccount(nameOrID string, allSAs []api.ServiceAccount) (api.Servi
 	return api.ServiceAccount{}, NotFound{NameOrID: nameOrID}
 }
 
-func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (api.ServiceAccount, error) {
+func getServiceAccount(ctx context.Context, cl api.Client, nameOrID string) (api.ServiceAccount, error) {
 	if looksLikeAnID(nameOrID) {
 		return getServiceAccountByID(cl, apiURL, apiKey, nameOrID)
 	}
@@ -2600,7 +2541,7 @@ func getServiceAccount(cl http.Client, apiURL, apiKey, nameOrID string) (api.Ser
 	`), nameOrID, b.String(), found[0].ID)
 }
 
-func getServiceAccountByID(cl http.Client, apiURL, apiKey, id string) (api.ServiceAccount, error) {
+func getServiceAccountByID(ctx context.Context, cl api.Client, id string) (api.ServiceAccount, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
 	if err != nil {
 		return api.ServiceAccount{}, err
@@ -2658,7 +2599,7 @@ func genECKeyPair() (string, string, error) {
 
 // Owner can be left empty, in which case the first team will be used as the
 // owner.
-func createServiceAccount(cl http.Client, apiURL, apiKey string, sa api.ServiceAccount) (api.SACreateResp, error) {
+func createServiceAccount(ctx context.Context, cl api.Client, sa api.ServiceAccount) (api.SACreateResp, error) {
 	// If no owner is specified, let's just use the first team we can find.
 	if sa.Owner == "" {
 		teams, err := getTeams(cl, apiURL, apiKey)
@@ -2722,7 +2663,7 @@ func fullToPatchServiceAccount(sa api.ServiceAccount) api.ServiceAccountPatch {
 	}
 }
 
-func patchServiceAccount(cl http.Client, apiURL, apiKey, id string, patch api.ServiceAccountPatch) error {
+func patchServiceAccount(ctx context.Context, cl api.Client, id string, patch api.ServiceAccountPatch) error {
 	// If no owner is specified, let's just use the first team we can find.
 	if patch.Owner == "" {
 		teams, err := getTeams(cl, apiURL, apiKey)
@@ -2787,7 +2728,7 @@ func ANSIDiff(x, y any, opts ...cmp.Option) string {
 	return strings.Join(ss, "\n")
 }
 
-func getIssuingTemplates(cl http.Client, apiURL, apiKey string) ([]api.CertificateIssuingTemplate, error) {
+func getIssuingTemplates(ctx context.Context, cl api.Client) ([]api.CertificateIssuingTemplate, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/certificateissuingtemplates", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while creating request: %w", err)
@@ -2882,7 +2823,7 @@ type CheckResp struct {
 	} `json:"apiKey"`
 }
 
-func checkAPIKey(cl http.Client, apiURL, apiKey string) (CheckResp, error) {
+func checkAPIKey(ctx context.Context, cl api.Client) (CheckResp, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/useraccounts", apiURL), nil)
 	if err != nil {
 		return CheckResp{}, fmt.Errorf("while creating request for GET /v1/useraccounts: %w", err)
@@ -2967,7 +2908,7 @@ type Team struct {
 }
 
 // URL: https://api-dev210.qa.venafi.io/v1/teams?includeSystemGenerated=true
-func getTeams(cl http.Client, apiURL, apiKey string) ([]Team, error) {
+func getTeams(ctx context.Context, cl api.Client) ([]Team, error) {
 	req, err := http.NewRequest("GET", apiURL+"/v1/teams?includeSystemGenerated=true", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getTeams: while creating request: %w", err)

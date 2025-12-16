@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/goccy/go-yaml"
 	api "github.com/maelvls/vcpctl/internal/api"
@@ -40,67 +39,87 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 			return nil, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
 		}
 
-		// An empty document (e.g. only comments). Skip it.
+		// An empty document (e.g. only comments). Skip it. If a document contains
+		// fields but no 'kind', surface a fixable error.
 		if header.Kind == "" {
-			_ = decForReal.Decode(&struct{}{})
-			continue
+			var raw map[string]any
+			err = decForReal.Decode(&raw)
+			if err != nil {
+				return nil, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
+			}
+			if len(raw) == 0 {
+				continue
+			}
+			return nil, Fixable(fmt.Errorf("manifest #%d is missing the required 'kind' field", i+1))
 		}
 
 		switch header.Kind {
 		case kindServiceAccount:
-			var parsed manifest.ServiceAccount
+			var parsed serviceAccountManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
 				return nil, fmt.Errorf("while decoding ServiceAccount manifest #%d: %w", i+1, err)
 			}
 
-			manifests = append(manifests, manifest.Manifest{ServiceAccount: &parsed})
+			manifests = append(manifests, manifest.Manifest{ServiceAccount: &parsed.ServiceAccount})
 		case kindIssuerPolicy:
-			var parsed manifest.Policy
+			var parsed policyManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
 				return nil, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", i+1, err)
 			}
-			manifests = append(manifests, manifest.Manifest{Policy: &parsed})
+			manifests = append(manifests, manifest.Manifest{Policy: &parsed.Policy})
 		case kindWIMSubCaProvider:
-			var parsed manifest.SubCa
+			var parsed subCaProviderManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
 				return nil, fmt.Errorf("while decoding WIMSubCAProvider manifest #%d: %w", i+1, err)
 			}
-			manifests = append(manifests, manifest.Manifest{SubCa: &parsed})
+			manifests = append(manifests, manifest.Manifest{SubCa: &parsed.SubCa})
 		case kindConfiguration:
-			var parsed manifest.Config
+			var parsed configurationManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
 				return nil, fmt.Errorf("while decoding WIMConfiguration manifest #%d: %w", i+1, err)
 			}
-			manifests = append(manifests, manifest.Manifest{Config: &parsed})
+			manifests = append(manifests, manifest.Manifest{WIMConfiguration: &parsed.WIMConfiguration})
 		default:
 			return nil, Fixable(fmt.Errorf("manifest #%d has unsupported kind %q", i+1, header.Kind))
 		}
 	}
 }
 
-func extractManifestKind(b []byte) string {
-	type header struct {
-		Kind string `yaml:"kind"`
+func manifestsToAPI(manifests []manifest.Manifest) (any, error) {
+	var result []any
+	for i, m := range manifests {
+		var converted any
+		switch {
+		case m.WIMConfiguration != nil:
+			converted = manifestToUpdateRequest(*m.WIMConfiguration)
+		case m.ServiceAccount != nil:
+			converted = manifestToAPIServiceAccount(*m.ServiceAccount)
+		case m.Policy != nil:
+			converted = manifestToAPIPolicy(*m.Policy)
+		case m.SubCa != nil:
+			converted = manifestToAPISubCa(*m.SubCa)
+		default:
+			return nil, fmt.Errorf("manifest #%d has no content", i+1)
+		}
+		result = append(result, converted)
 	}
-	var h header
-	if err := yaml.Unmarshal(b, &h); err != nil {
-		return ""
+	if len(result) == 1 {
+		return result[0], nil
 	}
-	return strings.TrimSpace(h.Kind)
+	return result, nil
 }
 
-func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
-	manifestCfg := apiToManifestConfig(cfg)
+func renderManifests(cfg api.Config) ([]byte, error) {
 	var docs [][]byte
 
-	for _, sa := range manifestCfg.ServiceAccountNames {
+	for _, sa := range cfg.ServiceAccounts {
 		manifest := serviceAccountManifest{
 			Kind:           kindServiceAccount,
-			ServiceAccount: sa,
+			ServiceAccount: apiToManifestServiceAccount(sa),
 		}
 		doc, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
 		if err != nil {
@@ -109,10 +128,10 @@ func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
 		docs = append(docs, doc)
 	}
 
-	for _, policy := range manifestCfg.Policies {
+	for _, policy := range cfg.Policies {
 		manifest := policyManifest{
 			Kind:   kindIssuerPolicy,
-			Policy: policy,
+			Policy: apiToManifestPolicy(policy),
 		}
 		doc, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
 		if err != nil {
@@ -121,26 +140,24 @@ func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
 		docs = append(docs, doc)
 	}
 
-	if manifestCfg.SubCaProvider.Name != "" {
+	if cfg.SubCaProvider.Name != "" {
 		manifest := subCaProviderManifest{
 			Kind:  kindWIMSubCaProvider,
-			SubCa: manifestCfg.SubCaProvider,
+			SubCa: apiToManifestSubCa(cfg.SubCaProvider),
 		}
 		doc, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
 		if err != nil {
-			return nil, fmt.Errorf("while encoding WIMSubCAProvider %q: %w", manifestCfg.SubCaProvider.Name, err)
+			return nil, fmt.Errorf("while encoding WIMSubCAProvider %q: %w", cfg.SubCaProvider.Name, err)
 		}
 		docs = append(docs, doc)
 	}
 
-	configDoc := manifestCfg
-	configDoc.ServiceAccountNames = nil
-	configDoc.Policies = nil
-	manifest := configurationManifest{
-		Kind:   kindConfiguration,
-		Config: configDoc,
+	manifestCfg := apiToManifestConfig(cfg)
+	configManifest := configurationManifest{
+		Kind:             kindConfiguration,
+		WIMConfiguration: manifestCfg,
 	}
-	configBytes, err := yaml.MarshalWithOptions(manifest, yaml.Indent(2))
+	configBytes, err := yaml.MarshalWithOptions(configManifest, yaml.Indent(2))
 	if err != nil {
 		return nil, fmt.Errorf("while encoding WIMConfiguration %q: %w", cfg.Name, err)
 	}
@@ -158,4 +175,24 @@ func renderFireflyConfigManifests(cfg api.Config) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+type serviceAccountManifest struct {
+	Kind                    string `yaml:"kind"`
+	manifest.ServiceAccount `yaml:",inline"`
+}
+
+type policyManifest struct {
+	Kind            string `yaml:"kind"`
+	manifest.Policy `yaml:",inline"`
+}
+
+type subCaProviderManifest struct {
+	Kind           string `yaml:"kind"`
+	manifest.SubCa `yaml:",inline"`
+}
+
+type configurationManifest struct {
+	Kind                      string `yaml:"kind"`
+	manifest.WIMConfiguration `yaml:",inline"`
 }

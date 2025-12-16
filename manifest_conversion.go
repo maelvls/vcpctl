@@ -3,35 +3,51 @@ package main
 import (
 	api "github.com/maelvls/vcpctl/internal/api"
 	manifest "github.com/maelvls/vcpctl/internal/manifest"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func manifestToAPIConfig(in manifest.Config) api.Config {
-	return api.Config{
+func fromManifestWIMConfiguration(in manifest.WIMConfiguration,
+	saNameToUUID func(string) (openapi_types.UUID, error),
+	policyNameToUUID func(string) (openapi_types.UUID, error),
+	subCANameToUUID func(string) (openapi_types.UUID, error)) api.ConfigurationUpdateRequest {
+	return api.ConfigurationUpdateRequest{
 		Name:                 in.Name,
 		ClientAuthentication: manifestToAPIClientAuthentication(in.ClientAuthentication),
 		ClientAuthorization:  manifestToAPIClientAuthorization(in.ClientAuthorization),
-		CloudProviders:       copyStringAnyMap(in.CloudProviders),
-		MinTLSVersion:        in.MinTLSVersion,
-		Policies:             manifestPoliciesToAPI(in.Policies),
+		CloudProviders:       in.CloudProviders,
+		MinTlsVersion:        api.ConfigurationUpdateRequestMinTlsVersion(in.MinTLSVersion),
+		PolicyIds:            manifestPoliciesToAPI(policyNameToUUID, in.PolicyNames),
 		SubCaProvider:        manifestToAPISubCa(in.SubCaProvider),
 		AdvancedSettings:     manifestToAPIAdvancedSettings(in.AdvancedSettings),
-		ServiceAccounts:      manifestServiceAccountsToAPI(in.ServiceAccountNames),
+		ServiceAccounts:      manifestServiceAccountsToAPI(in.ServiceAccounts),
 	}
 }
 
-func apiToManifestConfig(in api.Config) manifest.Config {
-	return manifest.Config{
+func toManifestWIMConfiguration(in api.ConfigurationUpdateRequest) manifest.WIMConfiguration {
+	return manifest.WIMConfiguration{
 		Name:                 in.Name,
 		ClientAuthentication: apiToManifestClientAuthentication(in.ClientAuthentication),
 		ClientAuthorization:  apiToManifestClientAuthorization(in.ClientAuthorization),
 		CloudProviders:       copyStringAnyMap(in.CloudProviders),
 		MinTLSVersion:        in.MinTLSVersion,
-		Policies:             apiPoliciesToManifest(in.Policies),
-		SubCaProviderName:    in.SubCaProvider.Name,
-		SubCaProvider:        apiToManifestSubCa(in.SubCaProvider),
 		AdvancedSettings:     apiToManifestAdvancedSettings(in.AdvancedSettings),
-		ServiceAccountNames:  apiServiceAccountsToManifest(in.ServiceAccounts),
+
+		ServiceAccountNames: namesFrom(in.ServiceAccounts, func(sa api.ServiceAccount) string { return sa.Name }),
+		PolicyNames:         namesFrom(in.Policies, func(p api.Policy) string { return p.Name }),
+		SubCaProviderName:   in.SubCaProvider.Name,
 	}
+}
+
+func namesFrom[T any](items []T, nameFunc func(T) string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]string, len(items))
+	for i, item := range items {
+		result[i] = nameFunc(item)
+	}
+	return result
 }
 
 func manifestToAPIClientAuthentication(in manifest.ClientAuthentication) api.ClientAuthentication {
@@ -120,7 +136,7 @@ func apiToManifestCustomClaimsAliases(in api.CustomClaimsAliases) manifest.Custo
 	}
 }
 
-func manifestPoliciesToAPI(items []manifest.Policy) []api.Policy {
+func manifestPoliciesToAPI(policyNameToUUID func(string) (string, error), items []manifest.Policy) []api.PolicyCreateRequest {
 	if len(items) == 0 {
 		return nil
 	}

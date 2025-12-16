@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	"dario.cat/mergo"
 	"github.com/maelvls/vcpctl/logutil"
 )
 
@@ -29,46 +30,229 @@ const (
 
 // Usage:ServiceAccountDetails
 //
-//	 go run ./genschema schema.tmpl.json schema.json
-//		                <---input----->  <--output-->
+//	go run ./genschema
 func main() {
-	if len(os.Args) != 3 {
-		_, _ = fmt.Fprintf(os.Stderr, "Usage: genschema template.json output.json\n")
+	if len(os.Args) != 1 {
+		_, _ = fmt.Fprintf(os.Stderr, "Usage: genschema\n")
 		os.Exit(1)
 	}
-	templateFile := os.Args[1]
-	outputFile := os.Args[2]
 
-	root0, err := fetchSchema(unifiedOpenAPIURL)
+	oapi1, err := fetchSchema(unifiedOpenAPIURL)
 	if err != nil {
 		panic(err)
 	}
 
 	// Fetch and filter only relevant schema definitions from the upstream
 	// OpenAPI spec.
-	root1, err := fetchSchema(vcamanagementOpenAPIURL)
+	oapi2, err := fetchSchema(vcamanagementOpenAPIURL)
 	if err != nil {
 		panic(err)
 	}
 
-	root2, err := fetchSchema(accountOpenAPIURL)
+	oapi3, err := fetchSchema(accountOpenAPIURL)
 	if err != nil {
 		panic(err)
 	}
 
-	// Merge the "schemas" blocks from all three specs.
+	// Step 1: Generate JSON schemas. First off, let's merge the
+	// components.schemas from all three OpenAPI specs.
 	schemas := mergeDefs(
-		root0["components"].(map[string]any)["schemas"].(map[string]any),
-		root1["components"].(map[string]any)["schemas"].(map[string]any),
-		root2["components"].(map[string]any)["schemas"].(map[string]any),
+		oapi1["components"].(map[string]any)["schemas"].(map[string]any),
+		oapi2["components"].(map[string]any)["schemas"].(map[string]any),
+		oapi3["components"].(map[string]any)["schemas"].(map[string]any),
 	)
 
+	err = createSchemaWithTemplate("serviceaccount.schema.tmpl.json", schemas, []string{"ServiceAccountBaseObject"}, "serviceaccount.schema.json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = createSchemaWithTemplate("wimconfiguration.schema.tmpl.json", schemas, []string{"ExtendedConfigurationInformation"}, "wimconfiguration.schema.json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = createSchemaWithTemplate("wimissuerpolicy.schema.tmpl.json", schemas, []string{"PolicyInformation"}, "wimissuerpolicy.schema.json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = createSchemaWithTemplate("wimsubcaprovider.schema.tmpl.json", schemas, []string{"SubCaProviderInformation"}, "wimsubcaprovider.schema.json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Step 2: Merge all 3 OpenAPI specs into one big OpenAPI spec.
+	merged := make(map[string]any)
+	err = mergo.MergeWithOverwrite(&merged, oapi1)
+	if err != nil {
+		panic(fmt.Errorf("merging oapi1: %w", err))
+	}
+	err = mergo.MergeWithOverwrite(&merged, oapi2)
+	if err != nil {
+		panic(fmt.Errorf("merging oapi2: %w", err))
+	}
+	err = mergo.MergeWithOverwrite(&merged, oapi3)
+	if err != nil {
+		panic(fmt.Errorf("merging oapi3: %w", err))
+	}
+
+	// Fix a bug in the ClientAuthenticationOpenApi schema where it doesn't have
+	// a mapping in its discriminator, and the individual items don't have a
+	// reference the discriminator. See:
+	// https://venafi.atlassian.net/browse/VC-45818
+	err = mergo.Merge(&merged, map[string]any{
+		"components": map[string]any{
+			"schemas": map[string]any{
+				"ClientAuthenticationInformation": map[string]any{
+					"discriminator": map[string]any{
+						"mapping": map[string]string{
+							"JWT_JWKS":            "#/components/schemas/JwtStandardClaimsAuthenticationInformation",
+							"JWT_OIDC":            "#/components/schemas/JwtJwksAuthenticationInformation",
+							"JWT_STANDARD_CLAIMS": "#/components/schemas/JwtOidcAuthenticationInformation",
+						},
+					},
+				},
+				"JwtStandardClaimsAuthenticationInformation": map[string]any{
+					"allOf": []any{
+						map[string]any{
+							"$ref": "#/components/schemas/ClientAuthenticationInformation",
+						},
+					},
+				},
+				"JwtJwksAuthenticationInformation": map[string]any{
+					"allOf": []any{
+						map[string]any{
+							"$ref": "#/components/schemas/ClientAuthenticationInformation",
+						},
+					},
+				},
+				"JwtOidcAuthenticationInformation": map[string]any{
+					"allOf": []any{
+						map[string]any{
+							"$ref": "#/components/schemas/ClientAuthenticationInformation",
+						},
+					},
+				},
+			},
+		},
+	}, mergo.WithOverride)
+	if err != nil {
+		panic(fmt.Errorf("merging discriminator fix: %w", err))
+	}
+
+	// For some reason, the ClientAuthenticationInformationRequestOpenApi is a
+	// duplicate of ClientAuthenticationInformation. We just replace all
+	// references to the former with references to the latter. See:
+	// https://venafi.atlassian.net/browse/VC-45818
+	err = changeRef(merged, "#/components/schemas/ClientAuthenticationRequestOpenApi", "#/components/schemas/ClientAuthenticationInformation")
+	if err != nil {
+		panic(fmt.Errorf("changing ref: %w", err))
+	}
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "ClientAuthenticationRequestOpenApi")
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "ClientAuthenticationOpenApi")
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtJwksAuthenticationOpenApi")
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtOidcAuthenticationOpenApi")
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtStandardClaimsAuthenticationOpenApi")
+
+	// Make sure that ExtendedConfigurationInformation is a allOf of
+	// ConfigurationInformation and some extra fields.
+	err = changeRef(merged, "#/components/schemas/ExtendedConfigurationInformation", "#/components/schemas/ConfigurationInformationRespExtended")
+	if err != nil {
+		panic(fmt.Errorf("changing ref: %w", err))
+	}
+	err = changeRef(merged, "#/components/schemas/ConfigurationInformation", "#/components/schemas/ConfigurationInformationResp")
+	if err != nil {
+		panic(fmt.Errorf("changing ref: %w", err))
+	}
+	err = mergo.Merge(&merged, map[string]any{
+		"components": map[string]any{
+			"schemas": map[string]any{
+				"ConfigurationInformationBase": merged["components"].(map[string]any)["schemas"].(map[string]any)["ConfigurationCreateRequest"],
+
+				// Request you send in PATCH.
+				"ConfigurationUpdateRequest": map[string]any{
+					"$ref": "#/components/schemas/ConfigurationInformationBase",
+				},
+
+				// Request you send in POST.
+				"ConfigurationCreateRequest": map[string]any{
+					"$ref": "#/components/schemas/ConfigurationInformationBase",
+				},
+
+				// Response you get from GET /intermediatecertificates and /intermediatecertificates/{id}.
+				"ConfigurationInformationResp": map[string]any{
+					"allOf": []any{
+						map[string]any{
+							"$ref": "#/components/schemas/ConfigurationInformationBase",
+						},
+						map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"id": map[string]any{
+									"type":   "string",
+									"format": "uuid",
+								},
+							},
+						},
+					},
+				},
+
+				// Response you get from GET, POST, and PATCH /
+				"ConfigurationInformationRespExtended": map[string]any{
+					"allOf": []any{
+						map[string]any{
+							"$ref": "#/components/schemas/ConfigurationInformationResp",
+						},
+						map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"policies": map[string]any{
+									"type": "array",
+									"items": map[string]any{
+										"$ref": "#/components/schemas/PolicyInformation",
+									},
+								},
+								"policyDefinitions": map[string]any{
+									"type": "array",
+									"items": map[string]any{
+										"$ref": "#/components/schemas/PolicyInformation",
+									},
+								},
+								"subCaProvider": map[string]any{
+									"$ref": "#/components/schemas/SubCaProviderInformation",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}, mergo.WithOverride)
+	if err != nil {
+		panic(fmt.Errorf("merging ExtendedConfigurationInformation fix: %w", err))
+	}
+
+	raw, err := json.Marshal(merged, jsontext.Multiline(true), jsontext.WithIndent("  "))
+	if err != nil {
+		panic(fmt.Errorf("marshalling updated OpenAPI spec: %w", err))
+	}
+
+	// Rewrite all $ref paths to use local $defs instead of components.
+	err = os.WriteFile("openapi.json", raw, 0644)
+	if err != nil {
+		panic(fmt.Errorf("writing to openapi.json file: %w", err))
+	}
+	logutil.Infof("./genschema/openapi.json updated.")
+}
+
+func createSchemaWithTemplate(templatePath string, defs map[string]any, onlyRefs []string, outputPath string) error {
 	keep := make(map[string]struct{})
-	collectRefs(schemas, keep,
-		"ExtendedConfigurationInformation",
-		"ServiceAccountBaseObject",
-		"PolicyInformation",
-	)
+	collectRefs(defs, keep, onlyRefs...)
 
 	var str []string
 	for k := range keep {
@@ -80,12 +264,12 @@ func main() {
 	// drop everything else
 	remaining := make(map[string]any)
 	for k := range keep {
-		remaining[k] = schemas[k]
+		remaining[k] = defs[k]
 	}
 
-	schema, err := readSchema(templateFile)
+	schema, err := readSchema(templatePath)
 	if err != nil {
-		panic(fmt.Errorf("reading template from '%s': %w", templateFile, err))
+		panic(fmt.Errorf("reading template from '%s': %w", templatePath, err))
 	}
 
 	// Replace or add the $defs block with filtered upstream definitions.
@@ -119,11 +303,12 @@ func main() {
 	}
 	updated := bytes.ReplaceAll(raw, []byte("#/components/schemas/"), []byte("#/$defs/"))
 
-	if err := os.WriteFile(outputFile, updated, 0644); err != nil {
-		panic(fmt.Errorf("writing to %s file: %w", outputFile, err))
+	if err := os.WriteFile(outputPath, updated, 0644); err != nil {
+		panic(fmt.Errorf("writing to %s file: %w", outputPath, err))
 	}
 
-	fmt.Println("schema.json updated.")
+	fmt.Printf("%v updated.\n", outputPath)
+	return nil
 }
 
 // removeAllOfFirst deletes the first element of the `allOf` array from a given
@@ -218,6 +403,41 @@ func collectRefs(schemas map[string]any, seen map[string]struct{}, names ...stri
 			logutil.Errorf("warning: schema for %q not found", name)
 		}
 	}
+}
+
+func changeRef(node any, from, to string) error {
+	switch n := node.(type) {
+	case map[string]any:
+		for k, v := range n {
+			if k == "$ref" {
+				if ref, ok := v.(string); ok && ref == from {
+					logutil.Infof("node %v: changing $ref from %q to %q", n, from, to)
+					n[k] = to
+				}
+			} else {
+				if err := changeRef(v, from, to); err != nil {
+					return err
+				}
+			}
+		}
+	case map[string]string:
+		for k, v := range n {
+			if k == "$ref" && v == from {
+				n[k] = to
+			}
+		}
+	case []any:
+		for _, item := range n {
+			if err := changeRef(item, from, to); err != nil {
+				return err
+			}
+		}
+	case string, float64, bool, nil:
+		// do nothing
+	default:
+		return fmt.Errorf("unexpected type %T in changeRef", n)
+	}
+	return nil
 }
 
 // walks arbitrary JSON for $ref strings
