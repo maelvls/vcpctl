@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	json "encoding/json/v2"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
+	api "github.com/maelvls/vcpctl/internal/api"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
 )
@@ -88,7 +90,11 @@ func authLoginCmd() *cobra.Command {
 					return fmt.Errorf("API URL should start with 'https://', got: '%s'", apiURL)
 				}
 
-				resp, err := checkAPIKey(cl, apiURL, apiKey)
+				apiClient, err := api.NewClient(apiURL, api.WithHTTPClient(&cl), api.WithBearerToken(apiKey), api.WithUserAgent())
+				if err != nil {
+					return fmt.Errorf("while creating API client: %w", err)
+				}
+				resp, err := checkAPIKey(context.Background(), *apiClient, apiURL, apiKey)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
 				}
@@ -132,7 +138,11 @@ func authLoginCmd() *cobra.Command {
 
 			// Let the user know if they are already authenticated.
 			if current.URL != "" {
-				_, err := checkAPIKey(cl, current.APIURL, current.APIKey)
+				apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(current.APIKey), api.WithUserAgent())
+				if err != nil {
+					return fmt.Errorf("while creating API client: %w", err)
+				}
+				_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, current.APIKey)
 				if err == nil {
 					var continueAuth bool
 					f := huh.NewForm(huh.NewGroup(huh.NewConfirm().
@@ -203,7 +213,11 @@ func authLoginCmd() *cobra.Command {
 					if len(input) != 36 {
 						return fmt.Errorf("API key must be 36 characters long")
 					}
-					_, err = checkAPIKey(cl, current.APIURL, input)
+					apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(input), api.WithUserAgent())
+					if err != nil {
+						return fmt.Errorf("while creating API client: %w", err)
+					}
+					_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
 					if err != nil {
 						return err
 					}
