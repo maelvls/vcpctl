@@ -15,23 +15,54 @@ var (
 	Transport = &loghttp.Transport{LogRequest: LogRequest, LogResponse: LogResponse, Transport: http.DefaultTransport}
 )
 
+// Redact the 90% first characters of the API key in the header for security.
+// Replace the same number of chars. Creates a new copy of the headers.
+func redactSensitiveHeaders(headers http.Header) http.Header {
+	redacted := headers.Clone()
+
+	apiKey := redacted.Get("tppl-api-key")
+	if len(apiKey) > 0 {
+		redacted.Set("tppl-api-key", strings.Repeat("*", len(apiKey)-len(apiKey)*1/10)+apiKey[len(apiKey)*9/10:])
+	}
+
+	authorization := redacted.Get("Authorization")
+	if len(authorization) > 0 {
+		redacted.Set("Authorization", strings.Repeat("*", len(authorization)-len(authorization)*1/10)+authorization[len(authorization)*9/10:])
+	}
+
+	return redacted
+}
+
+// Body might contain the 'privateKey' and 'ociToken' fields. Let's redact them.
+func redactSensitiveBody(body string) string {
+	redacted := body
+	redacted = redactJSONField(redacted, "privateKey")
+	redacted = redactJSONField(redacted, "ociToken")
+	return redacted
+}
+
+func redactJSONField(body string, field string) string {
+	// This is a very naive implementation but should be sufficient for logging
+	// purposes.
+	prefix := fmt.Sprintf(`"%s":"`, field)
+	start := strings.Index(body, prefix)
+	if start == -1 {
+		return body
+	}
+	start += len(prefix)
+	end := strings.Index(body[start:], `"`)
+	if end == -1 {
+		return body
+	}
+	end += start
+	redactedValue := strings.Repeat("*", end-start)
+	return body[:start] + redactedValue + body[end:]
+}
+
 func LogRequest(req *http.Request) {
 	if !logutil.EnableDebug {
 		return
 	}
-
-	// Redact the 80% first characters of the API key in the header for
-	// security. Replace the same number of chars.
-	headers := req.Header.Clone()
-	apiKey := req.Header.Get("tppl-api-key")
-	if len(apiKey) > 0 {
-		headers.Set("tppl-api-key", strings.Repeat("*", len(apiKey)-len(apiKey)*1/5)+apiKey[len(apiKey)*4/5:])
-	}
-	var s []string
-	for k, v := range headers {
-		s = append(s, fmt.Sprintf("%s=%s", k, strings.Join(v, ",")))
-	}
-	headersStr := strings.Join(s, " ")
 
 	var body string
 	if req.Body != nil {
@@ -47,10 +78,17 @@ func LogRequest(req *http.Request) {
 		}
 	}
 
-	// Replace newlines with spaces and fold repeated spaces for better
-	// readability.
-	body = strings.Join(strings.Fields(body), " ")
+	// Debug string: format headers as key=value pairs.
+	headers := redactSensitiveHeaders(req.Header)
+	var s []string
+	for k, v := range headers {
+		s = append(s, fmt.Sprintf("%s=%s", k, strings.Join(v, ",")))
+	}
+	headersStr := strings.Join(s, " ")
 
+	// Debug string: replace newlines with spaces and fold repeated spaces for
+	// better readability.
+	body = strings.Join(strings.Fields(body), " ")
 	if body == "" {
 		body = ", no body"
 	} else if len(body) > 100 {

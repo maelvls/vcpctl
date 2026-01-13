@@ -1,30 +1,131 @@
 {
-  "description": "Schema describing the YAML manifests consumed by vcpctl.",
-  "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
-  "allOf": [
-    {
+  "$defs": {
+    "SansInformation": {
       "type": "object",
       "properties": {
-        "apiVersion": {
-          "type": "string"
+        "rfc822Names": {
+          "$ref": "#/$defs/PropertyInformation"
         },
-        "kind": {
-          "const": "WIMIssuerPolicy"
+        "uniformResourceIdentifiers": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "dnsNames": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "ipAddresses": {
+          "$ref": "#/$defs/PropertyInformation"
         }
       },
-      "required": [
-        "kind",
-        "name"
-      ]
+      "description": "Subject alternative names"
     },
-    {
-      "$ref": "#/$defs/PolicyInformation"
-    }
-  ],
-  "$defs": {
+    "PropertyInformation": {
+      "type": "object",
+      "properties": {
+        "minOccurrences": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "maxOccurrences": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "IGNORED",
+            "FORBIDDEN",
+            "OPTIONAL",
+            "REQUIRED",
+            "LOCKED"
+          ]
+        },
+        "allowedValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defaultValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "KeyAlgorithmInformation": {
+      "description": "Key algorithm",
+      "required": [
+        "allowedValues",
+        "defaultValue"
+      ],
+      "type": "object",
+      "properties": {
+        "allowedValues": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "RSA_2048",
+              "RSA_3072",
+              "RSA_4096",
+              "EC_P256",
+              "EC_P384",
+              "EC_P521",
+              "EC_ED25519"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "description": "Key algorithm allowed values"
+        },
+        "defaultValue": {
+          "type": "string",
+          "description": "Key algorithm default value",
+          "example": "RSA_4096",
+          "enum": [
+            "RSA_2048",
+            "RSA_3072",
+            "RSA_4096",
+            "EC_P256",
+            "EC_P384",
+            "EC_P521",
+            "EC_ED25519"
+          ]
+        }
+      }
+    },
+    "SubjectAttributesInformation": {
+      "type": "object",
+      "properties": {
+        "organization": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organizationalUnit": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "locality": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "stateOrProvince": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "country": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "commonName": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      },
+      "description": "Subject attributes"
+    },
     "PolicyInformation": {
       "type": "object",
       "properties": {
+        "modificationDate": {
+          "type": "string",
+          "description": "When the policy was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00"
+        },
         "id": {
           "type": "string",
           "description": "UUID of the policy",
@@ -32,21 +133,49 @@
           "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
         },
         "companyId": {
-          "type": "string",
-          "description": "UUID specific to your company",
           "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
-        },
-        "name": {
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
           "type": "string",
-          "description": "Name of the policy",
-          "example": "Some policy"
+          "description": "UUID specific to your company"
+        },
+        "validityPeriod": {
+          "type": "string",
+          "description": "ISO8601 Period Format",
+          "format": "PnYnMnDTnHnMnS",
+          "example": "P30D"
         },
         "subject": {
           "$ref": "#/$defs/SubjectAttributesInformation"
         },
+        "name": {
+          "example": "Some policy",
+          "type": "string",
+          "description": "Name of the policy"
+        },
         "sans": {
           "$ref": "#/$defs/SansInformation"
+        },
+        "keyUsages": {
+          "type": "array",
+          "description": "Key usages",
+          "example": [
+            "keyEncipherment",
+            "digitalSignature"
+          ],
+          "items": {
+            "enum": [
+              "digitalSignature",
+              "nonRepudiation",
+              "keyEncipherment",
+              "dataEncipherment",
+              "keyAgreement",
+              "keyCertSign",
+              "cRLSign",
+              "encipherOnly",
+              "decipherOnly"
+            ],
+            "type": "string"
+          }
         },
         "extendedKeyUsages": {
           "type": "array",
@@ -83,34 +212,6 @@
             ]
           }
         },
-        "validityPeriod": {
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D",
-          "type": "string"
-        },
-        "keyUsages": {
-          "type": "array",
-          "description": "Key usages",
-          "example": [
-            "keyEncipherment",
-            "digitalSignature"
-          ],
-          "items": {
-            "enum": [
-              "digitalSignature",
-              "nonRepudiation",
-              "keyEncipherment",
-              "dataEncipherment",
-              "keyAgreement",
-              "keyCertSign",
-              "cRLSign",
-              "encipherOnly",
-              "decipherOnly"
-            ],
-            "type": "string"
-          }
-        },
         "keyAlgorithm": {
           "$ref": "#/$defs/KeyAlgorithmInformation"
         },
@@ -118,134 +219,33 @@
           "type": "string",
           "description": "When the policy was initially created",
           "example": "2022-10-10T14:50:41.710+00:00"
-        },
-        "modificationDate": {
-          "example": "2023-12-12T20:00:10.500+00:00",
-          "type": "string",
-          "description": "When the policy was last modified"
         }
       }
-    },
-    "SubjectAttributesInformation": {
-      "type": "object",
-      "properties": {
-        "commonName": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "organization": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "organizationalUnit": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "locality": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "stateOrProvince": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "country": {
-          "$ref": "#/$defs/PropertyInformation"
-        }
-      },
-      "description": "Subject attributes"
-    },
-    "PropertyInformation": {
-      "type": "object",
-      "properties": {
-        "defaultValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "minOccurrences": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "maxOccurrences": {
-          "format": "int32",
-          "type": "integer"
-        },
-        "type": {
-          "type": "string",
-          "enum": [
-            "IGNORED",
-            "FORBIDDEN",
-            "OPTIONAL",
-            "REQUIRED",
-            "LOCKED"
-          ]
-        },
-        "allowedValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "SansInformation": {
-      "type": "object",
-      "properties": {
-        "dnsNames": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "ipAddresses": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "rfc822Names": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "uniformResourceIdentifiers": {
-          "$ref": "#/$defs/PropertyInformation"
-        }
-      },
-      "description": "Subject alternative names"
-    },
-    "KeyAlgorithmInformation": {
-      "properties": {
-        "allowedValues": {
-          "items": {
-            "type": "string",
-            "enum": [
-              "RSA_2048",
-              "RSA_3072",
-              "RSA_4096",
-              "EC_P256",
-              "EC_P384",
-              "EC_P521",
-              "EC_ED25519"
-            ]
-          },
-          "minItems": 1,
-          "type": "array",
-          "description": "Key algorithm allowed values"
-        },
-        "defaultValue": {
-          "type": "string",
-          "description": "Key algorithm default value",
-          "example": "RSA_4096",
-          "enum": [
-            "RSA_2048",
-            "RSA_3072",
-            "RSA_4096",
-            "EC_P256",
-            "EC_P384",
-            "EC_P521",
-            "EC_ED25519"
-          ]
-        }
-      },
-      "description": "Key algorithm",
-      "required": [
-        "allowedValues",
-        "defaultValue"
-      ],
-      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/wim-manifest.schema.json",
-  "title": "CyberArk Workload Identity Manager Manifests"
+  "title": "CyberArk Workload Identity Manager Manifests",
+  "description": "Schema describing the YAML manifests consumed by vcpctl.",
+  "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
+  "allOf": [
+    {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "WIMIssuerPolicy"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ]
+    },
+    {
+      "$ref": "#/$defs/PolicyInformation"
+    }
+  ]
 }

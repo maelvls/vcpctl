@@ -9,13 +9,14 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type Interaction struct {
-	ExpectCall string // e.g. "GET /v1/distributedissuers/configurations/sa"
-	MockCode   int    // e.g. 200
-	MockBody   string // e.g. `{"id": "a860aca0","status": "ISSUED", "certificate": ""}`
+	Expect   string // e.g. "GET /v1/distributedissuers/configurations/sa"
+	MockCode int    // e.g. 200
+	MockBody string // e.g. `{"id": "a860aca0","status": "ISSUED", "certificate": ""}`
 
 	// Optional. Don't read r.Body, use the `body` argument instead.
 	Assert func(t *testing.T, r *http.Request, body string)
@@ -51,9 +52,9 @@ func Mock(t *testing.T, mock []Interaction, cancel func(error)) *httptest.Server
 		}
 
 		interaction := mock[n-1]
-		if interaction.ExpectCall != fmt.Sprintf("%v %v", r.Method, r.URL.Path) {
+		if interaction.Expect != fmt.Sprintf("%v %v", r.Method, r.URL.Path) {
 			w.WriteHeader(432)
-			err := fmt.Errorf("mocksrv: unexpected request #%d: expected '%v', got '%v %v'", n, interaction.ExpectCall, r.Method, r.URL.Path)
+			err := fmt.Errorf("mocksrv: unexpected request #%d: expected '%v', got '%v %v'", n, interaction.Expect, r.Method, r.URL.Path)
 			fmt.Fprintf(w, "%v", err)
 			t.Error(err)
 			cancel(err)
@@ -79,7 +80,7 @@ func Mock(t *testing.T, mock []Interaction, cancel func(error)) *httptest.Server
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	t.Cleanup(server.Close)
 	t.Cleanup(func() {
-		require.Equal(t, int32(len(mock)), count.Load())
+		assert.Equal(t, int32(len(mock)), count.Load(), "the actual number of requests made to the mock server does not match the expected number")
 	})
 
 	return server
@@ -93,7 +94,7 @@ func UnorderedMock(t *testing.T, mock []Interaction, cancel func(error)) *httpte
 		var n int
 		var found bool
 		for i, interaction := range mock {
-			if interaction.ExpectCall == fmt.Sprintf("%v %v", r.Method, r.URL.Path) {
+			if interaction.Expect == fmt.Sprintf("%v %v", r.Method, r.URL.Path) {
 				n = i + 1 // +1 because we want to use 1-based indexing for the error messages.
 				found = true
 				break

@@ -28,10 +28,87 @@
     "SubCaProviderInformation": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "UUID of the Sub CA provider",
+          "format": "uuid",
+          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746"
+        },
+        "caProductOptionId": {
+          "format": "uuid",
+          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd",
+          "type": "string",
+          "description": "UUID of the CA product option used by this Sub CA provider"
+        },
+        "validityPeriod": {
+          "type": "string",
+          "description": "ISO8601 Period Format",
+          "format": "PnYnMnDTnHnMnS",
+          "example": "P30D"
+        },
+        "pkcs11": {
+          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
+        },
+        "organization": {
+          "description": "Organization",
+          "example": "Some organization",
+          "type": "string"
+        },
+        "stateOrProvince": {
+          "example": "Texas",
+          "type": "string",
+          "description": "State or province"
+        },
+        "keyAlgorithm": {
+          "type": "string",
+          "description": "Key algorithm type",
+          "example": "EC_P256",
+          "enum": [
+            "RSA_2048",
+            "RSA_3072",
+            "RSA_4096",
+            "EC_P256",
+            "EC_P384",
+            "EC_P521",
+            "EC_ED25519"
+          ]
+        },
         "name": {
           "type": "string",
           "description": "Name of the Sub CA provider",
           "example": "Some Sub CA provider"
+        },
+        "caAccountId": {
+          "type": "string",
+          "description": "UUID of the CA account used by this Sub CA provider",
+          "format": "uuid",
+          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a"
+        },
+        "commonName": {
+          "type": "string",
+          "description": "Common name",
+          "example": "example.com"
+        },
+        "organizationalUnit": {
+          "type": "string",
+          "description": "Organizational unit",
+          "example": "Some organizational unit"
+        },
+        "locality": {
+          "type": "string",
+          "description": "Locality",
+          "example": "San Antonio"
+        },
+        "modificationDate": {
+          "type": "string",
+          "description": "When the Sub CA provider was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "UUID specific to your company",
+          "format": "uuid",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
         },
         "caType": {
           "type": "string",
@@ -50,102 +127,30 @@
             "TPP"
           ]
         },
-        "caProductOptionId": {
-          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd",
+        "country": {
           "type": "string",
-          "description": "UUID of the CA product option used by this Sub CA provider",
-          "format": "uuid"
-        },
-        "validityPeriod": {
-          "type": "string",
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D"
-        },
-        "commonName": {
-          "type": "string",
-          "description": "Common name",
-          "example": "example.com"
-        },
-        "companyId": {
-          "type": "string",
-          "description": "UUID specific to your company",
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
-        },
-        "organization": {
-          "type": "string",
-          "description": "Organization",
-          "example": "Some organization"
-        },
-        "stateOrProvince": {
-          "type": "string",
-          "description": "State or province",
-          "example": "Texas"
-        },
-        "id": {
-          "type": "string",
-          "description": "UUID of the Sub CA provider",
-          "format": "uuid",
-          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746"
-        },
-        "caAccountId": {
-          "type": "string",
-          "description": "UUID of the CA account used by this Sub CA provider",
-          "format": "uuid",
-          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a"
-        },
-        "organizationalUnit": {
-          "type": "string",
-          "description": "Organizational unit",
-          "example": "Some organizational unit"
-        },
-        "pkcs11": {
-          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
-        },
-        "locality": {
-          "type": "string",
-          "description": "Locality",
-          "example": "San Antonio"
+          "description": "Country",
+          "example": "US"
         },
         "creationDate": {
           "type": "string",
           "description": "When the Sub CA provider was initially created",
           "example": "2022-10-10T14:50:41.710+00:00"
-        },
-        "modificationDate": {
-          "type": "string",
-          "description": "When the Sub CA provider was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
-        },
-        "country": {
-          "example": "US",
-          "type": "string",
-          "description": "Country"
-        },
-        "keyAlgorithm": {
-          "example": "EC_P256",
-          "enum": [
-            "RSA_2048",
-            "RSA_3072",
-            "RSA_4096",
-            "EC_P256",
-            "EC_P384",
-            "EC_P521",
-            "EC_ED25519"
-          ],
-          "type": "string",
-          "description": "Key algorithm type"
         }
       }
     },
     "SubCaProviderPkcs11ConfigurationInformation": {
       "properties": {
+        "partitionLabel": {
+          "description": "HSM Partition Label",
+          "example": "workload-identity-manager-hsm-partition",
+          "type": "string"
+        },
         "partitionSerialNumber": {
-          "pattern": "^[A-Fa-fx0-9]{0,18}$",
           "type": "string",
           "description": "HSM Partition Serial Number",
-          "example": "1444210958933"
+          "example": "1444210958933",
+          "pattern": "^[A-Fa-fx0-9]{0,18}$"
         },
         "pin": {
           "type": "string",
@@ -154,24 +159,19 @@
           "example": "1234"
         },
         "allowedClientLibraries": {
+          "type": "array",
           "description": "A collection of strings each of which represents SHA256 hash of an allowed HSM client library",
           "example": [
             "c34d199f2e30bb679cd9b8533b99975465aefe8b023be1b37972f1ab43ab7b2d"
           ],
           "items": {
             "type": "string"
-          },
-          "type": "array"
+          }
         },
         "signingEnabled": {
           "type": "boolean",
           "description": "Indicates whether HSM signing is enabled or not",
           "example": true
-        },
-        "partitionLabel": {
-          "type": "string",
-          "description": "HSM Partition Label",
-          "example": "workload-identity-manager-hsm-partition"
         }
       },
       "type": "object"

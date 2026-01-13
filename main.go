@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -397,16 +398,20 @@ func saGenkeypairCmd() *cobra.Command {
 				return fmt.Errorf("sa gen keypair: while generating EC key pair: %w", err)
 			}
 
-			updatedSA := existingSA
-			updatedSA.PublicKey = ecPub
-			p := fullToPatchServiceAccount(updatedSA)
-			err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), p)
+			desiredSA := existingSA
+			desiredSA.PublicKey = ecPub
+			patch, _, err := diffToPatchServiceAccount(existingSA, desiredSA)
+			if err != nil {
+				return fmt.Errorf("sa gen keypair: while creating service account patch: %w", err)
+			}
+
+			updatedSA, err := patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: while patching service account: %w", err)
 			}
 
 			if logutil.EnableDebug {
-				d := ANSIDiff(fullToPatchServiceAccount(existingSA), fullToPatchServiceAccount(updatedSA))
+				d := ANSIDiff(existingSA, updatedSA)
 				logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
 			}
 			logutil.Debugf("Client ID: %s", existingSA.Id.String())
@@ -466,14 +471,7 @@ func saPutKeypairCmd() *cobra.Command {
 			existingSA, err := getServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saName)
 			switch {
 			case errors.As(err, &NotFound{}):
-				// Doesn't exist yet, we will be creating it below.
-			case err == nil:
-				// Exists, we will be updating it.
-			default:
-				return fmt.Errorf("sa put keypair: while checking if service account exists: %w", err)
-			}
-
-			if existingSA.Id.String() == "" {
+				// Doesn't exist yet.
 				resp, err := createServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, ServiceAccount{
 					Name:               saName,
 					CredentialLifetime: 365, // days
@@ -486,21 +484,34 @@ func saPutKeypairCmd() *cobra.Command {
 
 				fmt.Println(resp.Id.String())
 				return nil
-			} else {
-				updatedSA := existingSA
-				p := fullToPatchServiceAccount(updatedSA)
-				err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), p)
+			case err == nil:
+				// Exists, we will be updating it.
+				desiredSA := existingSA
+				desiredSA.Scopes = scopes
+				patch, smthChanged, err := diffToPatchServiceAccount(existingSA, desiredSA)
+				if err != nil {
+					return fmt.Errorf("sa put keypair: while creating service account patch: %w", err)
+				}
+				if !smthChanged {
+					logutil.Debugf("Service Account '%s' is already up to date.", saName)
+					fmt.Println(existingSA.Id.String())
+					return nil
+				}
+
+				updatedSA, err := patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
 				if err != nil {
 					return fmt.Errorf("sa put keypair: while patching service account: %w", err)
 				}
 
 				if logutil.EnableDebug {
-					d := ANSIDiff(fullToPatchServiceAccount(existingSA), fullToPatchServiceAccount(updatedSA))
+					d := ANSIDiff(existingSA, updatedSA)
 					logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
 				}
 
 				fmt.Println(existingSA.Id.String())
 				return nil
+			default:
+				return fmt.Errorf("sa put keypair: while checking if service account exists: %w", err)
 			}
 		},
 	}
@@ -1149,7 +1160,7 @@ func attachSaCmd() *cobra.Command {
 
 func attachSAToConf(ctx context.Context, cl api.Client, apiURL, apiKey, confName, saName string) error {
 	// Get configuration name by ID.
-	config, err := getConfig(ctx, cl, apiURL, apiKey, confName)
+	existing, err := getConfig(ctx, cl, apiURL, apiKey, confName)
 	if err != nil {
 		return fmt.Errorf("while fetching the ID of the Workload Identity Manager configuration '%s': %w", confName, err)
 	}
@@ -1186,17 +1197,30 @@ func attachSAToConf(ctx context.Context, cl api.Client, apiURL, apiKey, confName
 	}
 
 	// Is this SA already in the configuration?
-	if slices.Contains(config.ServiceAccountIds, sa.Id) {
-		logutil.Debugf("Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), config.Name)
+	if slices.Contains(existing.ServiceAccountIds, sa.Id) {
+		logutil.Debugf("Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), existing.Name)
 		return nil
 	}
 
 	// Add the service account to the configuration.
-	config.ServiceAccountIds = append(config.ServiceAccountIds, sa.Id)
-	patch := fullToPatchConfig(config)
-	err = patchConfig(ctx, cl, apiURL, apiKey, config.Id, patch)
+	desired := existing
+	desired.ServiceAccountIds = append(desired.ServiceAccountIds, sa.Id)
+	patch, changed, err := diffToPatchConfig(existing, desired)
+	if err != nil {
+		return fmt.Errorf("while creating patch to attach service account '%s' to configuration '%s': %w", saName, confName, err)
+	}
+	if !changed {
+		logutil.Debugf("Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), existing.Name)
+		return nil
+	}
+	updated, err := patchConfig(ctx, cl, apiURL, apiKey, existing.Id, patch)
 	if err != nil {
 		return fmt.Errorf("while patching Workload Identity Manager configuration: %w", err)
+	}
+
+	if logutil.EnableDebug {
+		d := ANSIDiff(existing, updated)
+		logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
 	}
 
 	return nil
@@ -1321,7 +1345,7 @@ func runApply(cmd *cobra.Command, filePath string, args []string, dryRun bool) e
 	if err != nil {
 		return fmt.Errorf("%s: while creating API client: %w", cmdName, err)
 	}
-	err = applyManifests(*apiClient, conf.APIURL, conf.APIKey, manifests, dryRun)
+	err = applyManifests(apiClient, conf.APIURL, conf.APIKey, manifests, dryRun)
 	if err != nil {
 		return fmt.Errorf("%s: while applying manifests: %w", cmdName, err)
 	}
@@ -1844,21 +1868,25 @@ func createSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	return result.ID, nil
 }
 
-func patchSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch SubCaProviderUpdateRequest) error {
+func patchSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch SubCaProviderUpdateRequest) (SubCa, error) {
 	resp, err := cl.SubcaprovidersUpdate(ctx, id, patch)
 	if err != nil {
-		return fmt.Errorf("patchSubCaProvider: while creating request: %w", err)
+		return SubCa{}, fmt.Errorf("patchSubCaProvider: while creating request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
-	case http.StatusOK, http.StatusNoContent:
+	case http.StatusOK:
 		// The patch was successful.
-		return nil
+		var updated SubCa
+		if err := decodeJSON(resp.Body, &updated); err != nil {
+			return SubCa{}, fmt.Errorf("patchSubCaProvider: while decoding response: %w", err)
+		}
+		return updated, nil
 	case http.StatusNotFound:
-		return fmt.Errorf("WIMSubCAProvider: %w", NotFound{NameOrID: id})
+		return SubCa{}, fmt.Errorf("WIMSubCAProvider: %w", NotFound{NameOrID: id})
 	default:
-		return HTTPErrorf(resp, "patchSubCaProvider: http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return SubCa{}, HTTPErrorf(resp, "patchSubCaProvider: http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
@@ -1949,6 +1977,853 @@ func fullToPatchConfig(full Config) ConfigPatch {
 	}
 
 	return patch
+}
+
+// diffToPatchConfig computes the difference between existing and desired
+// configs and returns a patch with only the changed fields.
+func diffToPatchConfig(existing, desired Config) (ConfigPatch, bool, error) {
+	patch := ConfigPatch{}
+	var smthChanged, fieldChanged bool
+	var err error
+
+	if desired.AdvancedSettings.EnableIssuanceAuditLog != existing.AdvancedSettings.EnableIssuanceAuditLog {
+		patch.AdvancedSettings.EnableIssuanceAuditLog = desired.AdvancedSettings.EnableIssuanceAuditLog
+		smthChanged = true
+	}
+	if desired.AdvancedSettings.IncludeRawCertDataInAuditLog != existing.AdvancedSettings.IncludeRawCertDataInAuditLog {
+		patch.AdvancedSettings.IncludeRawCertDataInAuditLog = desired.AdvancedSettings.IncludeRawCertDataInAuditLog
+		smthChanged = true
+	}
+	if desired.AdvancedSettings.RequireFIPSCompliantBuild != existing.AdvancedSettings.RequireFIPSCompliantBuild {
+		patch.AdvancedSettings.RequireFIPSCompliantBuild = desired.AdvancedSettings.RequireFIPSCompliantBuild
+		smthChanged = true
+	}
+
+	patch.ClientAuthentication, fieldChanged, err = diffToPatchClientAuthentication(existing.ClientAuthentication, desired.ClientAuthentication)
+	if err != nil {
+		return ConfigPatch{}, false, fmt.Errorf("diffToPatchConfig: while comparing the 'clientAuthentication' field on the existing and desired configurations: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	patch.ClientAuthorization, fieldChanged = diffToPatchClientAuthorization(existing.ClientAuthorization, desired.ClientAuthorization)
+	smthChanged = smthChanged || fieldChanged
+
+	patch.CloudProviders, fieldChanged = diffToPatchCloudProviders(existing.CloudProviders, desired.CloudProviders)
+	smthChanged = smthChanged || fieldChanged
+
+	if desired.CompanyId != (openapi_types.UUID{}) && desired.CompanyId != existing.CompanyId {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'companyId' field in an existing configuration")
+	}
+
+	if desired.ControllerAllowedPolicyIds != nil && !slicesEqual(desired.ControllerAllowedPolicyIds, existing.ControllerAllowedPolicyIds) {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'controllerAllowedPolicyIds' field in an existing configuration")
+	}
+
+	if desired.CreationDate != "" && desired.CreationDate != existing.CreationDate {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'creationDate' field in an existing configuration")
+	}
+
+	if desired.Id != (openapi_types.UUID{}) && desired.Id != existing.Id {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'id' field in an existing configuration")
+	}
+
+	if desired.LongLivedCertCount != 0 && desired.LongLivedCertCount != existing.LongLivedCertCount {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'longLivedCertCount' field in an existing configuration")
+	}
+
+	if desired.MinTlsVersion != "" && desired.MinTlsVersion != existing.MinTlsVersion {
+		patch.MinTlsVersion = api.ConfigurationUpdateRequestMinTlsVersion(desired.MinTlsVersion)
+		smthChanged = true
+	}
+
+	if desired.ModificationDate != "" && desired.ModificationDate != existing.ModificationDate {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change ModificationDate of existing configuration")
+	}
+
+	if desired.Name != "" && desired.Name != existing.Name {
+		patch.Name = desired.Name
+		smthChanged = true
+	}
+
+	if desired.Policies != nil && !policiesEqual(existing.Policies, desired.Policies) {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'policies' field of an existing configuration")
+	}
+
+	if desired.PolicyDefinitions != nil && !policiesEqual(existing.PolicyDefinitions, desired.PolicyDefinitions) {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'policyDefinitions' field of an existing configuration")
+	}
+
+	if len(desired.PolicyIds) > 0 && !slicesEqual(desired.PolicyIds, existing.PolicyIds) {
+		patch.PolicyIds = desired.PolicyIds
+		smthChanged = true
+	}
+
+	// Compare ShortLivedCertCount.
+	if desired.ShortLivedCertCount != 0 && desired.ShortLivedCertCount != existing.ShortLivedCertCount {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'shortLivedCertCount' field of an existing configuration")
+	}
+
+	_, changed, _ := diffToPatchSubCAProvider(existing.SubCaProvider, desired.SubCaProvider)
+	if changed {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'subCaProvider' field of an existing configuration")
+	}
+
+	if desired.UltraShortLivedCertCount != 0 && desired.UltraShortLivedCertCount != existing.UltraShortLivedCertCount {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'ultraShortLivedCertCount' field of an existing configuration")
+	}
+
+	if desired.UnixSocketAllowedPolicyIds != nil && !slicesEqual(desired.UnixSocketAllowedPolicyIds, existing.UnixSocketAllowedPolicyIds) {
+		return ConfigPatch{}, false, fmt.Errorf("cannot change the 'unixSocketAllowedPolicyIds' field in an existing configuration")
+	}
+
+	return patch, smthChanged, nil
+}
+
+func policiesEqual(a, b []api.PolicyInformation) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if a[i].CompanyId != b[i].CompanyId {
+			return false
+		}
+		if a[i].CreationDate != b[i].CreationDate {
+			return false
+		}
+
+		if !slicesEqual(a[i].ExtendedKeyUsages, b[i].ExtendedKeyUsages) {
+			return false
+		}
+
+		if a[i].Id != b[i].Id {
+			return false
+		}
+
+		_, changed, _ := diffToPatchKeyAlgorithmInformation(a[i].KeyAlgorithm, b[i].KeyAlgorithm)
+		if changed {
+			return false
+		}
+
+		if !slicesEqual(a[i].KeyUsages, b[i].KeyUsages) {
+			return false
+		}
+
+		if a[i].ModificationDate != b[i].ModificationDate {
+			return false
+		}
+
+		if a[i].Name != b[i].Name {
+			return false
+		}
+
+		_, changed, _ = diffToPatchSansInformation(a[i].Sans, b[i].Sans)
+		if changed {
+			return false
+		}
+
+		_, changed, _ = diffToPatchSubjectAttributesInformation(a[i].Subject, b[i].Subject)
+		if changed {
+			return false
+		}
+
+		if a[i].ValidityPeriod != b[i].ValidityPeriod {
+			return false
+		}
+	}
+
+	return true
+}
+
+func diffToPatchSubCAProvider(existing, desired SubCa) (SubCaProviderUpdateRequest, bool, error) {
+	patch := SubCaProviderUpdateRequest{}
+	var smthChanged bool
+
+	if desired.CaAccountId != (openapi_types.UUID{}) && desired.CaAccountId != existing.CaAccountId {
+		return SubCaProviderUpdateRequest{}, false, fmt.Errorf("cannot change CaAccountId of existing subCA provider")
+	}
+
+	if desired.CaProductOptionId != (openapi_types.UUID{}) && desired.CaProductOptionId != existing.CaProductOptionId {
+		patch.CaProductOptionId = desired.CaProductOptionId
+		smthChanged = true
+	}
+
+	if desired.CaType != "" && desired.CaType != existing.CaType {
+		return SubCaProviderUpdateRequest{}, false, fmt.Errorf("cannot change CaType of existing subCA provider")
+	}
+
+	if desired.CommonName != "" && desired.CommonName != existing.CommonName {
+		patch.CommonName = desired.CommonName
+		smthChanged = true
+	}
+
+	if desired.Country != "" && desired.Country != existing.Country {
+		patch.Country = desired.Country
+		smthChanged = true
+	}
+
+	if desired.CreationDate != "" && desired.CreationDate != existing.CreationDate {
+		return SubCaProviderUpdateRequest{}, false, fmt.Errorf("cannot change CreationDate of existing subCA provider")
+	}
+
+	if desired.Id != (openapi_types.UUID{}) && desired.Id != existing.Id {
+		return SubCaProviderUpdateRequest{}, false, fmt.Errorf("cannot change Id of existing subCA provider")
+	}
+
+	if desired.KeyAlgorithm != "" && desired.KeyAlgorithm != existing.KeyAlgorithm {
+		patch.KeyAlgorithm = api.SubCaProviderUpdateRequestKeyAlgorithm(desired.KeyAlgorithm)
+		smthChanged = true
+	}
+
+	if desired.Locality != "" && desired.Locality != existing.Locality {
+		patch.Locality = desired.Locality
+		smthChanged = true
+	}
+
+	if desired.ModificationDate != "" && desired.ModificationDate != existing.ModificationDate {
+		return SubCaProviderUpdateRequest{}, false, fmt.Errorf("cannot change ModificationDate of existing subCA provider")
+	}
+
+	if desired.Name != "" && desired.Name != existing.Name {
+		patch.Name = desired.Name
+		smthChanged = true
+	}
+
+	if desired.Organization != "" && desired.Organization != existing.Organization {
+		patch.Organization = desired.Organization
+		smthChanged = true
+	}
+
+	if desired.OrganizationalUnit != "" && desired.OrganizationalUnit != existing.OrganizationalUnit {
+		patch.OrganizationalUnit = desired.OrganizationalUnit
+		smthChanged = true
+	}
+
+	patch.Pkcs11 = diffToPatchSubCaProviderPkcs11ConfigurationInformation(existing.Pkcs11, desired.Pkcs11)
+
+	if desired.StateOrProvince != "" && desired.StateOrProvince != existing.StateOrProvince {
+		patch.StateOrProvince = desired.StateOrProvince
+		smthChanged = true
+	}
+
+	if desired.ValidityPeriod != "" && desired.ValidityPeriod != existing.ValidityPeriod {
+		patch.ValidityPeriod = desired.ValidityPeriod
+		smthChanged = true
+	}
+
+	return patch, smthChanged, nil
+}
+
+func diffToPatchSubCaProviderPkcs11ConfigurationInformation(existing, desired SubCaProviderPkcs11ConfigurationInformation) SubCaProviderPkcs11ConfigurationInformation {
+	patch := SubCaProviderPkcs11ConfigurationInformation{}
+
+	if desired.AllowedClientLibraries != nil && !slicesEqual(desired.AllowedClientLibraries, existing.AllowedClientLibraries) {
+		patch.AllowedClientLibraries = desired.AllowedClientLibraries
+	}
+
+	if desired.PartitionSerialNumber != "" && desired.PartitionSerialNumber != existing.PartitionSerialNumber {
+		patch.PartitionSerialNumber = desired.PartitionSerialNumber
+	}
+
+	if desired.PartitionLabel != "" && desired.PartitionLabel != existing.PartitionLabel {
+		patch.PartitionLabel = desired.PartitionLabel
+	}
+
+	if desired.Pin != "" && desired.Pin != existing.Pin {
+		patch.Pin = desired.Pin
+	}
+
+	if desired.SigningEnabled != existing.SigningEnabled {
+		patch.SigningEnabled = desired.SigningEnabled
+	}
+
+	return patch
+}
+
+func diffToPatchPolicy(existing, desired Policy) (api.PolicyUpdateRequest, bool, error) {
+	patch := api.PolicyUpdateRequest{}
+	var smthChanged, fieldChanged bool
+
+	if desired.CompanyId.ID() != 0 && desired.CompanyId != existing.CompanyId {
+		return api.PolicyUpdateRequest{}, false, fmt.Errorf("cannot change CompanyId of existing policy")
+	}
+
+	if len(desired.Configurations) > 0 && !reflect.DeepEqual(desired.Configurations, existing.Configurations) {
+		return api.PolicyUpdateRequest{}, false, fmt.Errorf("cannot change Configurations of existing policy")
+	}
+
+	if len(desired.ExtendedKeyUsages) > 0 && !slicesEqual(desired.ExtendedKeyUsages, existing.ExtendedKeyUsages) {
+		for _, eku := range desired.ExtendedKeyUsages {
+			patch.ExtendedKeyUsages = append(patch.ExtendedKeyUsages, api.PolicyUpdateRequestExtendedKeyUsages(eku))
+		}
+		smthChanged = true
+	}
+
+	var err error
+	patch.KeyAlgorithm, fieldChanged, err = diffToPatchKeyAlgorithmInformation(existing.KeyAlgorithm, desired.KeyAlgorithm)
+	if err != nil {
+		return api.PolicyUpdateRequest{}, false, err
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	if len(desired.KeyUsages) > 0 && !slicesEqual(desired.KeyUsages, existing.KeyUsages) {
+		var usages []api.PolicyUpdateRequestKeyUsages
+		for _, ku := range desired.KeyUsages {
+			usages = append(usages, api.PolicyUpdateRequestKeyUsages(ku))
+		}
+		patch.KeyUsages = usages
+		smthChanged = true
+	}
+
+	if desired.Name != "" && desired.Name != existing.Name {
+		patch.Name = desired.Name
+		smthChanged = true
+	}
+
+	patch.Sans, fieldChanged, err = diffToPatchSansInformation(existing.Sans, desired.Sans)
+	if err != nil {
+		return api.PolicyUpdateRequest{}, false, fmt.Errorf("diffToPatchPolicy: while comparing the 'sans' field on the existing and desired policies: %w", err)
+	}
+	patch.Subject, fieldChanged, err = diffToPatchSubjectAttributesInformation(existing.Subject, desired.Subject)
+	if err != nil {
+		return api.PolicyUpdateRequest{}, false, fmt.Errorf("diffToPatchPolicy: while comparing the 'subject' field on the existing and desired policies: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	if desired.ValidityPeriod != "" && desired.ValidityPeriod != existing.ValidityPeriod {
+		patch.ValidityPeriod = desired.ValidityPeriod
+		smthChanged = true
+	}
+
+	return patch, smthChanged, nil
+}
+
+func diffToPatchKeyAlgorithmInformation(existing, desired api.KeyAlgorithmInformation) (api.KeyAlgorithmInformation, bool, error) {
+	patch := api.KeyAlgorithmInformation{}
+	var smthChanged bool
+
+	if desired.AllowedValues != nil && !slicesEqual(desired.AllowedValues, existing.AllowedValues) {
+		patch.AllowedValues = desired.AllowedValues
+		smthChanged = true
+	}
+
+	if desired.DefaultValue != "" && desired.DefaultValue != existing.DefaultValue {
+		patch.DefaultValue = desired.DefaultValue
+		smthChanged = true
+	}
+
+	return patch, smthChanged, nil
+}
+
+func diffToPatchSansInformation(existing, desired api.SansInformation) (api.SansInformation, bool, error) {
+	patch := api.SansInformation{}
+	var fieldWasChanged, somethingChanged bool
+	var err error
+
+	patch.DnsNames, fieldWasChanged, err = diffToPatchPropertyInformation(existing.DnsNames, desired.DnsNames)
+	if err != nil {
+		return api.SansInformation{}, false, fmt.Errorf("diffToPatchSansInformation: while comparing the 'dnsNames' field on the existing and desired 'sans' field: %w", err)
+	}
+	somethingChanged = somethingChanged || fieldWasChanged
+
+	patch.IpAddresses, fieldWasChanged, err = diffToPatchPropertyInformation(existing.IpAddresses, desired.IpAddresses)
+	if err != nil {
+		return api.SansInformation{}, false, fmt.Errorf("diffToPatchSansInformation: while comparing the 'ipAddresses' field on the existing and desired 'sans' field: %w", err)
+	}
+	somethingChanged = somethingChanged || fieldWasChanged
+
+	patch.Rfc822Names, fieldWasChanged, err = diffToPatchPropertyInformation(existing.Rfc822Names, desired.Rfc822Names)
+	if err != nil {
+		return api.SansInformation{}, false, fmt.Errorf("diffToPatchSansInformation: while comparing the 'rfc822Names' field on the existing and desired 'sans' field: %w", err)
+	}
+	somethingChanged = somethingChanged || fieldWasChanged
+
+	patch.UniformResourceIdentifiers, fieldWasChanged, err = diffToPatchPropertyInformation(existing.UniformResourceIdentifiers, desired.UniformResourceIdentifiers)
+	if err != nil {
+		return api.SansInformation{}, false, fmt.Errorf("diffToPatchSansInformation: while comparing the 'uniformResourceIdentifiers' field on the existing and desired 'sans' field: %w", err)
+	}
+	somethingChanged = somethingChanged || fieldWasChanged
+
+	return patch, somethingChanged, nil
+}
+
+func diffToPatchSubjectAttributesInformation(existing, desired api.SubjectAttributesInformation) (api.SubjectAttributesInformation, bool, error) {
+	patch := api.SubjectAttributesInformation{}
+	var smthChanged, fieldChanged bool
+	var err error
+
+	patch.CommonName, fieldChanged, err = diffToPatchPropertyInformation(existing.CommonName, desired.CommonName)
+	if err != nil {
+		return api.SubjectAttributesInformation{}, false, fmt.Errorf("diffToPatchSubjectAttributesInformation: while comparing the 'commonName' field on the existing and desired 'subject' field: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	patch.Country, fieldChanged, err = diffToPatchPropertyInformation(existing.Country, desired.Country)
+	if err != nil {
+		return api.SubjectAttributesInformation{}, false, fmt.Errorf("diffToPatchSubjectAttributesInformation: while comparing the 'country' field on the existing and desired 'subject' field: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	patch.Locality, fieldChanged, err = diffToPatchPropertyInformation(existing.Locality, desired.Locality)
+	if err != nil {
+		return api.SubjectAttributesInformation{}, false, fmt.Errorf("diffToPatchSubjectAttributesInformation: while comparing the 'locality' field on the existing and desired 'subject' field: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	patch.Organization, fieldChanged, err = diffToPatchPropertyInformation(existing.Organization, desired.Organization)
+	if err != nil {
+		return api.SubjectAttributesInformation{}, false, fmt.Errorf("diffToPatchSubjectAttributesInformation: while comparing the 'organization' field on the existing and desired 'subject' field: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	patch.OrganizationalUnit, fieldChanged, err = diffToPatchPropertyInformation(existing.OrganizationalUnit, desired.OrganizationalUnit)
+	if err != nil {
+		return api.SubjectAttributesInformation{}, false, fmt.Errorf("diffToPatchSubjectAttributesInformation: while comparing the 'organizationalUnit' field on the existing and desired 'subject' field: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	patch.StateOrProvince, fieldChanged, err = diffToPatchPropertyInformation(existing.StateOrProvince, desired.StateOrProvince)
+	if err != nil {
+		return api.SubjectAttributesInformation{}, false, fmt.Errorf("diffToPatchSubjectAttributesInformation: while comparing the 'stateOrProvince' field on the existing and desired 'subject' field: %w", err)
+	}
+	smthChanged = smthChanged || fieldChanged
+
+	return patch, smthChanged, nil
+}
+
+func diffToPatchPropertyInformation(existing, desired api.PropertyInformation) (api.PropertyInformation, bool, error) {
+	patch := api.PropertyInformation{}
+	changed := false
+
+	if desired.AllowedValues != nil && !slicesEqual(desired.AllowedValues, existing.AllowedValues) {
+		patch.AllowedValues = desired.AllowedValues
+		changed = true
+	}
+
+	if desired.DefaultValues != nil && !slicesEqual(desired.DefaultValues, existing.DefaultValues) {
+		patch.DefaultValues = desired.DefaultValues
+		changed = true
+	}
+
+	if desired.MaxOccurrences != 0 && desired.MaxOccurrences != existing.MaxOccurrences {
+		patch.MaxOccurrences = desired.MaxOccurrences
+		changed = true
+	}
+
+	if desired.MinOccurrences != 0 && desired.MinOccurrences != existing.MinOccurrences {
+		patch.MinOccurrences = desired.MinOccurrences
+		changed = true
+	}
+
+	if desired.Type != "" && desired.Type != existing.Type {
+		patch.Type = desired.Type
+		changed = true
+	}
+
+	// All fields are mandatory if a change needs to be made to one of the
+	// values. Thus, if a change is needed in one of the fields, the existing
+	// values are carried over so that the API doesn't fail.
+	if changed {
+		if desired.AllowedValues == nil {
+			patch.AllowedValues = existing.AllowedValues
+		}
+		if existing.AllowedValues == nil {
+			patch.AllowedValues = []string{}
+		}
+
+		if desired.DefaultValues == nil {
+			patch.DefaultValues = existing.DefaultValues
+		}
+		if existing.DefaultValues == nil {
+			patch.DefaultValues = []string{}
+		}
+
+		if desired.MaxOccurrences == 0 {
+			patch.MaxOccurrences = existing.MaxOccurrences
+		}
+		if desired.MinOccurrences == 0 {
+			patch.MinOccurrences = existing.MinOccurrences
+		}
+		if desired.Type == "" {
+			patch.Type = existing.Type
+		}
+
+		err := validatePropertyInformation(patch)
+		if err != nil {
+			return api.PropertyInformation{}, false, err
+		}
+	}
+
+	return patch, changed, nil
+}
+
+func validatePropertyInformation(pi api.PropertyInformation) error {
+	if pi.Type == "" {
+		return fmt.Errorf("property information 'type' field is required")
+	}
+
+	switch pi.Type {
+	case "IGNORED", "FORBIDDEN":
+		if pi.MinOccurrences != 0 {
+			return fmt.Errorf("for property information of type %s, the 'minOccurrences' field must be 0, but was %d", pi.Type, pi.MinOccurrences)
+		}
+		if pi.MaxOccurrences != 0 {
+			return fmt.Errorf("for property information of type %s, the 'maxOccurrences' field must be 0, but was %d", pi.Type, pi.MaxOccurrences)
+		}
+		if len(pi.AllowedValues) != 0 {
+			return fmt.Errorf("for property information of type %s, the 'allowedValues' field must be empty, but was %v", pi.Type, pi.AllowedValues)
+		}
+		if len(pi.DefaultValues) != 0 {
+			return fmt.Errorf("for property information of type %s, the 'defaultValues' field must be empty, but was %v", pi.Type, pi.DefaultValues)
+		}
+	case "OPTIONAL":
+		if pi.MinOccurrences != 0 {
+			return fmt.Errorf("for property information of type %s, the 'minOccurrences' field must be 0, but was %d", pi.Type, pi.MinOccurrences)
+		}
+		if pi.MaxOccurrences <= 0 {
+			return fmt.Errorf("for property information of type %s, the 'maxOccurrences' field must be greater than 0, but was %d", pi.Type, pi.MaxOccurrences)
+		}
+		for _, v := range pi.AllowedValues {
+			if v == "" {
+				return fmt.Errorf("for property information of type %s, the 'allowedValues' field must not contain blank values, but was %v", pi.Type, pi.AllowedValues)
+			}
+		}
+		for _, v := range pi.DefaultValues {
+			if v == "" {
+				return fmt.Errorf("for property information of type %s, the 'defaultValues' field must not contain blank values, but was %v", pi.Type, pi.DefaultValues)
+			}
+		}
+	case "REQUIRED":
+		if pi.MinOccurrences <= 0 {
+			return fmt.Errorf("for property information of type %s, the 'minOccurrences' field must be greater than 0, but was %d", pi.Type, pi.MinOccurrences)
+		}
+		if pi.MaxOccurrences < pi.MinOccurrences {
+			return fmt.Errorf("for property information of type %s, the 'maxOccurrences' field must be greater than or equal to 'minOccurrences', but was %d", pi.Type, pi.MaxOccurrences)
+		}
+		for _, v := range pi.AllowedValues {
+			if v == "" {
+				return fmt.Errorf("for property information of type %s, the 'allowedValues' field must not contain blank values, but was %v", pi.Type, pi.AllowedValues)
+			}
+		}
+		if len(pi.DefaultValues) != 0 {
+			return fmt.Errorf("for property information of type %s, the 'defaultValues' field must be empty, but was %v", pi.Type, pi.DefaultValues)
+		}
+	case "LOCKED":
+		if pi.MinOccurrences != 0 {
+			return fmt.Errorf("for property information of type %s, the 'minOccurrences' field must be 0, but was %d", pi.Type, pi.MinOccurrences)
+		}
+		if pi.MaxOccurrences != 0 {
+			return fmt.Errorf("for property information of type %s, the 'maxOccurrences' field must be 0, but was %d", pi.Type, pi.MaxOccurrences)
+		}
+		if len(pi.AllowedValues) != 0 {
+			return fmt.Errorf("for property information of type %s, the 'allowedValues' field must be empty, but was %v", pi.Type, pi.AllowedValues)
+		}
+		if len(pi.DefaultValues) == 0 {
+			return fmt.Errorf("for property information of type %s, the 'defaultValues' field must not be empty, but was %v", pi.Type, pi.DefaultValues)
+		}
+		for _, v := range pi.DefaultValues {
+			if v == "" {
+				return fmt.Errorf("for property information of type %s, the 'defaultValues' field must not contain blank values, but was %v", pi.Type, pi.DefaultValues)
+			}
+		}
+	default:
+		return fmt.Errorf("property information 'type' field has invalid value: %s", pi.Type)
+	}
+
+	return nil
+}
+
+func slicesEqual[T comparable](a, b []T) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func diffToPatchCloudProviders(existing, desired api.CloudProvidersInformation) (api.CloudProvidersInformation, bool) {
+	patch := api.CloudProvidersInformation{}
+	var fieldChanged, smthChanged bool
+
+	patch.Aws, fieldChanged = diffToPatchAwsCloudProviderInformation(existing.Aws, desired.Aws)
+	smthChanged = smthChanged || fieldChanged
+	patch.Azure, fieldChanged = diffToPatchAzureCloudProviderInformation(existing.Azure, desired.Azure)
+	smthChanged = smthChanged || fieldChanged
+	patch.Google, fieldChanged = diffToPatchGoogleCloudProviderInformation(existing.Google, desired.Google)
+	smthChanged = smthChanged || fieldChanged
+
+	return patch, smthChanged
+}
+
+func diffToPatchAwsCloudProviderInformation(existing, desired api.AwsCloudProviderInformation) (api.AwsCloudProviderInformation, bool) {
+	patch := api.AwsCloudProviderInformation{}
+	var smthChanged bool
+
+	if desired.AccountIds != nil && !slicesEqual(desired.AccountIds, existing.AccountIds) {
+		patch.AccountIds = desired.AccountIds
+		smthChanged = true
+	}
+
+	if desired.Regions != nil && !slicesEqual(desired.Regions, existing.Regions) {
+		patch.Regions = desired.Regions
+		smthChanged = true
+	}
+
+	return patch, smthChanged
+}
+
+func diffToPatchAzureCloudProviderInformation(existing, desired api.AzureCloudProviderInformation) (api.AzureCloudProviderInformation, bool) {
+	patch := api.AzureCloudProviderInformation{}
+	var smthChanged bool
+
+	if desired.SubscriptionIds != nil && !slicesEqual(desired.SubscriptionIds, existing.SubscriptionIds) {
+		patch.SubscriptionIds = desired.SubscriptionIds
+		smthChanged = true
+	}
+
+	return patch, smthChanged
+}
+
+func diffToPatchGoogleCloudProviderInformation(existing, desired api.GoogleCloudProviderInformation) (api.GoogleCloudProviderInformation, bool) {
+	patch := api.GoogleCloudProviderInformation{}
+	var smthChanged bool
+
+	if desired.ProjectIdentifiers != nil && !slicesEqual(desired.ProjectIdentifiers, existing.ProjectIdentifiers) {
+		patch.ProjectIdentifiers = desired.ProjectIdentifiers
+		smthChanged = true
+	}
+
+	if desired.Regions != nil && !slicesEqual(desired.Regions, existing.Regions) {
+		patch.Regions = desired.Regions
+		smthChanged = true
+	}
+
+	return patch, smthChanged
+}
+
+func diffToPatchClientAuthentication(existing, desired api.ClientAuthenticationInformation) (api.ClientAuthenticationInformation, bool, error) {
+	patch := api.ClientAuthenticationInformation{}
+	var smthChanged bool
+
+	desiredRaw, err := desired.ValueByDiscriminator()
+	if err != nil {
+		return patch, false, fmt.Errorf("diffToPatchClientAuthentication: while looking at the 'type' field under the desired 'clientAuthentication' field: %w", err)
+	}
+	existingRaw, err := existing.ValueByDiscriminator()
+	if err != nil {
+		return patch, false, fmt.Errorf("diffToPatchClientAuthentication: while looking at the 'type' field under the existing 'clientAuthentication' field: %w", err)
+	}
+
+	switch desiredVal := desiredRaw.(type) {
+	case api.JwtJwksAuthenticationInformation:
+		switch existingVal := existingRaw.(type) {
+		case api.JwtJwksAuthenticationInformation:
+			var patchVal api.JwtJwksAuthenticationInformation
+			if desiredVal.Urls != nil && !slicesEqual(desiredVal.Urls, existingVal.Urls) {
+				patchVal.Urls = desiredVal.Urls
+				smthChanged = true
+			}
+
+			if smthChanged {
+				err = patch.FromJwtJwksAuthenticationInformation(patchVal)
+				if err != nil {
+					return api.ClientAuthenticationInformation{}, false, fmt.Errorf("diffToPatchClientAuthentication: while setting the 'clientAuthentication' field with type=JWT_JWKS in patch: %w", err)
+				}
+			}
+
+		default:
+			err = patch.FromJwtJwksAuthenticationInformation(desiredVal)
+			smthChanged = true
+		}
+	case api.JwtOidcAuthenticationInformation:
+		switch existingVal := existingRaw.(type) {
+		case api.JwtOidcAuthenticationInformation:
+			var patchVal api.JwtOidcAuthenticationInformation
+			if desiredVal.Audience != "" && desiredVal.Audience != existingVal.Audience {
+				patchVal.Audience = desiredVal.Audience
+				smthChanged = true
+			}
+
+			if desiredVal.BaseUrl != "" && desiredVal.BaseUrl != existingVal.BaseUrl {
+				patchVal.BaseUrl = desiredVal.BaseUrl
+				smthChanged = true
+			}
+
+			if smthChanged {
+				err = patch.FromJwtOidcAuthenticationInformation(patchVal)
+				if err != nil {
+					return api.ClientAuthenticationInformation{}, false, fmt.Errorf("diffToPatchClientAuthentication: while setting the 'clientAuthentication' field with type=JWT_OIDC in patch: %w", err)
+				}
+			}
+		default:
+			err = patch.FromJwtOidcAuthenticationInformation(desiredVal)
+			smthChanged = true
+		}
+	case api.JwtStandardClaimsAuthenticationInformation:
+		switch existingVal := existingRaw.(type) {
+		case api.JwtStandardClaimsAuthenticationInformation:
+			var patchVal api.JwtStandardClaimsAuthenticationInformation
+			if desiredVal.Audience != "" && desiredVal.Audience != existingVal.Audience {
+				patchVal.Audience = desiredVal.Audience
+				smthChanged = true
+			}
+
+			patchJwtCl, fieldChanged := diffToPatchJwtClientInformation(existingVal.Clients, desiredVal.Clients)
+			smthChanged = smthChanged || fieldChanged
+			patchVal.Clients = patchJwtCl
+
+			if smthChanged {
+				err = patch.FromJwtStandardClaimsAuthenticationInformation(patchVal)
+				if err != nil {
+					return api.ClientAuthenticationInformation{}, false, fmt.Errorf("diffToPatchClientAuthentication: while setting the 'clientAuthentication' field with type=JWT_STANDARD_CLAIMS in patch: %w", err)
+				}
+			}
+		default:
+			err = patch.FromJwtStandardClaimsAuthenticationInformation(desiredVal)
+			if err != nil {
+				return api.ClientAuthenticationInformation{}, false, fmt.Errorf("diffToPatchClientAuthentication: while setting the 'clientAuthentication' field with type=JWT_STANDARD_CLAIMS in patch: %w", err)
+			}
+			smthChanged = true
+		}
+	default:
+		return api.ClientAuthenticationInformation{}, false, fmt.Errorf("diffToPatchClientAuthentication: unexpected, ValueByDiscriminator should have errored first for unsupported 'type' field value, got %T", desiredRaw)
+	}
+	return patch, smthChanged, nil
+}
+
+func diffToPatchJwtClientInformation(existing, desired []api.JwtClientInformation) ([]api.JwtClientInformation, bool) {
+	patch := []api.JwtClientInformation{}
+	var smthChanged bool
+
+	if len(desired) != len(existing) {
+		patch = desired
+		smthChanged = true
+		return patch, smthChanged
+	}
+
+	patch = make([]api.JwtClientInformation, len(desired))
+	for i := range len(desired) {
+		if desired[i].AllowedPolicyIds != nil && !slicesEqual(desired[i].AllowedPolicyIds, existing[i].AllowedPolicyIds) {
+			patch[i].AllowedPolicyIds = desired[i].AllowedPolicyIds
+			smthChanged = true
+		}
+
+		if desired[i].Issuer != "" && desired[i].Issuer != existing[i].Issuer {
+			patch[i].Issuer = desired[i].Issuer
+			smthChanged = true
+		}
+
+		if desired[i].JwksUri != "" && desired[i].JwksUri != existing[i].JwksUri {
+			patch[i].JwksUri = desired[i].JwksUri
+			smthChanged = true
+		}
+
+		if desired[i].Name != "" && desired[i].Name != existing[i].Name {
+			patch[i].Name = desired[i].Name
+			smthChanged = true
+		}
+
+		if desired[i].Subjects != nil && !slicesEqual(desired[i].Subjects, existing[i].Subjects) {
+			patch[i].Subjects = desired[i].Subjects
+			smthChanged = true
+		}
+	}
+
+	return patch, smthChanged
+}
+
+func diffToPatchClientAuthorization(existing, desired api.ClientAuthorizationInformation) (api.ClientAuthorizationInformation, bool) {
+	patch := api.ClientAuthorizationInformation{}
+	var smthChanged bool
+
+	if desired.CustomClaimsAliases.Configuration != "" && existing.CustomClaimsAliases.Configuration != desired.CustomClaimsAliases.Configuration {
+		patch.CustomClaimsAliases.Configuration = desired.CustomClaimsAliases.Configuration
+		smthChanged = true
+	}
+
+	if desired.CustomClaimsAliases.AllowAllPolicies != "" && existing.CustomClaimsAliases.AllowAllPolicies != desired.CustomClaimsAliases.AllowAllPolicies {
+		patch.CustomClaimsAliases.AllowAllPolicies = desired.CustomClaimsAliases.AllowAllPolicies
+		smthChanged = true
+	}
+
+	if desired.CustomClaimsAliases.AllowedPolicies != "" && existing.CustomClaimsAliases.AllowedPolicies != desired.CustomClaimsAliases.AllowedPolicies {
+		patch.CustomClaimsAliases.AllowedPolicies = desired.CustomClaimsAliases.AllowedPolicies
+		smthChanged = true
+	}
+
+	return patch, smthChanged
+}
+
+func diffToPatchServiceAccount(existing, desired ServiceAccount) (ServiceAccountPatch, bool, error) {
+	patch := ServiceAccountPatch{}
+	var smthChanged bool
+
+	if desired.Applications != nil && !slicesEqual(desired.Applications, existing.Applications) {
+		patch.Applications = desired.Applications
+		smthChanged = true
+	}
+
+	if desired.Audience != "" && desired.Audience != existing.Audience {
+		patch.Audience = desired.Audience
+		smthChanged = true
+	}
+
+	if desired.CredentialLifetime != 0 && desired.CredentialLifetime != existing.CredentialLifetime {
+		patch.CredentialLifetime = desired.CredentialLifetime
+		smthChanged = true
+	}
+
+	if desired.IssuerURL != "" && desired.IssuerURL != existing.IssuerURL {
+		patch.IssuerURL = desired.IssuerURL
+		smthChanged = true
+	}
+
+	if desired.JwksURI != "" && desired.JwksURI != existing.JwksURI {
+		patch.JwksURI = desired.JwksURI
+		smthChanged = true
+	}
+
+	if desired.Name != "" && desired.Name != existing.Name {
+		patch.Name = desired.Name
+		smthChanged = true
+	}
+
+	if desired.Owner.ID() != 0 && desired.Owner != existing.Owner {
+		return ServiceAccountPatch{}, false, fmt.Errorf("cannot change Owner of existing service account")
+	}
+
+	if desired.PublicKey != "" && desired.PublicKey != existing.PublicKey {
+		patch.PublicKey = desired.PublicKey
+		smthChanged = true
+	}
+
+	if desired.Scopes != nil && !slicesEqual(desired.Scopes, existing.Scopes) {
+		patch.Scopes = desired.Scopes
+		smthChanged = true
+	}
+
+	if desired.Subject != "" && desired.Subject != existing.Subject {
+		patch.Subject = desired.Subject
+		smthChanged = true
+	}
+
+	return patch, smthChanged, nil
+}
+
+func mapsEqual(a, b map[string]interface{}) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if a[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 func PatchToManifest(patch ConfigPatch) (manifest.WIMConfiguration, error) {
@@ -2082,7 +2957,7 @@ edit:
 	if err != nil {
 		return fmt.Errorf("edit: while creating API client: %w", err)
 	}
-	err = applyManifests(*apiClient, apiURL, apiKey, modified, false)
+	err = applyManifests(apiClient, apiURL, apiKey, modified, false)
 	switch {
 	// In case we were returned a 400 Bad Request or if it's a fixable error,
 	// let's give a chance to the user to fix the problem.
@@ -2138,487 +3013,6 @@ func removeNoticeFromYAML(yamlData []byte) []byte {
 // Doesn't work anymore since `serviceAccountIds` is hidden in the 'get', 'put,
 // and 'edit' commands.
 var ErrPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
-
-// applyManifests walks through the provided manifests in order and applies each
-// resource to CyberArk Certificate Manager, SaaS.
-func applyManifests(cl api.Client, apiURL, apiKey string, manifests []manifest.Manifest, dryRun bool) error {
-	// Sort manifests by dependency order: ServiceAccount → WIMIssuerPolicy → WIMSubCAProvider → WIMConfiguration
-	sortedManifests := sortManifestsByDependency(manifests)
-
-	// Pre-flight validation
-	if err := validateManifests(sortedManifests); err != nil {
-		return fmt.Errorf("pre-flight validation failed: %w", err)
-	}
-
-	// Validate references
-	if err := validateReferences(cl, apiURL, apiKey, sortedManifests); err != nil {
-		return fmt.Errorf("reference validation failed: %w", err)
-	}
-
-	if dryRun {
-		return applyManifestsDryRun(sortedManifests)
-	}
-
-	applyCtx := newManifestApplyContext(context.Background(), cl, apiURL, apiKey)
-
-	var successCount, failureCount int
-	var errors []error
-
-	for i, item := range sortedManifests {
-		var err error
-		switch {
-		case item.ServiceAccount != nil:
-			err = applyCtx.applyServiceAccount(i, *item.ServiceAccount)
-		case item.Policy != nil:
-			err = applyCtx.applyPolicy(i, *item.Policy)
-		case item.SubCa != nil:
-			err = applyCtx.applySubCa(i, *item.SubCa)
-		case item.WIMConfiguration != nil:
-			err = applyCtx.applyConfig(i, *item.WIMConfiguration)
-		default:
-			err = fmt.Errorf("manifest #%d: empty or unknown manifest", i+1)
-		}
-
-		if err != nil {
-			failureCount++
-			errors = append(errors, err)
-			// Fail-fast: return on first error
-			return fmt.Errorf("manifest #%d: %w", i+1, err)
-		} else {
-			successCount++
-		}
-	}
-
-	// Print summary
-	printApplySummary(successCount, failureCount, len(sortedManifests))
-
-	return nil
-}
-
-type manifestApplyContext struct {
-	client          api.Client
-	apiURL          string
-	apiKey          string
-	serviceAccounts map[string]ServiceAccount
-	policies        map[string]Policy
-	subCaProviders  map[string]SubCa
-}
-
-func newManifestApplyContext(ctx context.Context, cl api.Client, apiURL, apiKey string) *manifestApplyContext {
-	return &manifestApplyContext{
-		client:          cl,
-		apiURL:          apiURL,
-		apiKey:          apiKey,
-		serviceAccounts: make(map[string]ServiceAccount),
-		policies:        make(map[string]Policy),
-		subCaProviders:  make(map[string]SubCa),
-	}
-}
-
-func (ctx *manifestApplyContext) applyServiceAccount(idx int, in manifest.ServiceAccount) error {
-	if in.Name == "" {
-		return fmt.Errorf("manifest #%d (ServiceAccount): name must be set", idx+1)
-	}
-
-	sa := manifestToAPIServiceAccount(in)
-	existing, err := getServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, sa.Name)
-	switch {
-	case errors.As(err, &NotFound{}):
-		resp, err := createServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, sa)
-		if err != nil {
-			return fmt.Errorf("manifest #%d (ServiceAccount %q): while creating: %w", idx+1, sa.Name, err)
-		}
-		logutil.Infof("Creating service account '%s' with ID '%s'.", sa.Name, resp.Id.String())
-	case err != nil:
-		return fmt.Errorf("manifest #%d (ServiceAccount %q): while retrieving existing service account: %w", idx+1, sa.Name, err)
-	default:
-		if err := patchServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), fullToPatchServiceAccount(sa)); err != nil {
-			return fmt.Errorf("manifest #%d (ServiceAccount %q): while patching: %w", idx+1, sa.Name, err)
-		}
-
-		logutil.Infof("Updating service account '%s' (ID '%s').", sa.Name, existing.Id.String())
-	}
-
-	fresh, err := ctx.refreshServiceAccount(sa.Name)
-	if err != nil {
-		return fmt.Errorf("manifest #%d (ServiceAccount %q): while refreshing state: %w", idx+1, sa.Name, err)
-	}
-	if logutil.EnableDebug {
-		d := ANSIDiff(fullToPatchServiceAccount(existing), fullToPatchServiceAccount(fresh))
-		logutil.Debugf("Service Account '%s':\n%s", sa.Name, d)
-	}
-	ctx.serviceAccounts[sa.Name] = fresh
-	return nil
-}
-
-func (ctx *manifestApplyContext) applyPolicy(idx int, in manifest.Policy) error {
-	if in.Name == "" {
-		return fmt.Errorf("manifest #%d (WIMIssuerPolicy): name must be set", idx+1)
-	}
-
-	policyCreateReq := manifestToAPIPolicy(in)
-	existing, err := getPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, policyCreateReq.Name)
-	switch {
-	case errors.As(err, &NotFound{}):
-		id, err := createFireflyPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, policyCreateReq)
-		if err != nil {
-			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while creating: %w", idx+1, policyCreateReq.Name, err)
-		}
-		logutil.Infof("Creating policy '%s' with ID '%s'.", policyCreateReq.Name, id)
-	case err != nil:
-		return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while retrieving existing policy: %w", idx+1, policyCreateReq.Name, err)
-	default:
-		if err := patchPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), fullToPatchPolicy(existing)); err != nil {
-			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while patching: %w", idx+1, policyCreateReq.Name, err)
-		}
-		logutil.Infof("Updating policy '%s' (ID '%s').", policyCreateReq.Name, existing.Id.String())
-	}
-
-	fresh, err := ctx.refreshPolicy(policyCreateReq.Name)
-	if err != nil {
-		return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while refreshing state: %w", idx+1, policyCreateReq.Name, err)
-	}
-	ctx.policies[policyCreateReq.Name] = fresh
-	return nil
-}
-
-func (ctx *manifestApplyContext) applySubCa(idx int, in manifest.SubCa) error {
-	if in.Name == "" {
-		return fmt.Errorf("manifest #%d (WIMSubCAProvider): name must be set", idx+1)
-	}
-
-	subca := manifestToAPISubCa(in)
-	existing, err := getSubCa(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, subca.Name)
-	switch {
-	case errors.As(err, &NotFound{}):
-		// Convert SubCa (SubCaProviderInformation) to SubCaProviderCreateRequest
-		createReq := SubCaProviderCreateRequest{
-			Name:              subca.Name,
-			CaType:            api.SubCaProviderCreateRequestCaType(subca.CaType),
-			CaAccountId:       subca.CaAccountId,
-			CaProductOptionId: subca.CaProductOptionId,
-			ValidityPeriod:    subca.ValidityPeriod,
-			CommonName:        subca.CommonName,
-			Organization:      subca.Organization,
-			Country:           subca.Country,
-			Locality:          subca.Locality,
-			KeyAlgorithm:      api.SubCaProviderCreateRequestKeyAlgorithm(subca.KeyAlgorithm),
-			Pkcs11:            subca.Pkcs11,
-		}
-		id, err := createSubCaProvider(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, createReq)
-		if err != nil {
-			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while creating: %w", idx+1, subca.Name, err)
-		}
-		logutil.Infof("Creating WIMSubCAProvider '%s' with ID '%s'.", subca.Name, id)
-	case err != nil:
-		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while retrieving existing SubCA provider: %w", idx+1, subca.Name, err)
-	default:
-		patch := fullToPatchSubCAProvider(subca)
-		if err := patchSubCaProvider(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch); err != nil {
-			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while patching: %w", idx+1, subca.Name, err)
-		}
-		logutil.Infof("Updating WIMSubCAProvider '%s' (ID '%s').", subca.Name, existing.Id.String())
-	}
-
-	fresh, err := ctx.refreshSubCa(subca.Name)
-	if err != nil {
-		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while refreshing state: %w", idx+1, subca.Name, err)
-	}
-	ctx.subCaProviders[subca.Name] = fresh
-	return nil
-}
-
-func (ctx *manifestApplyContext) applyConfig(idx int, in manifest.WIMConfiguration) error {
-	if in.Name == "" {
-		return fmt.Errorf("manifest #%d (WIMConfiguration): name must be set", idx+1)
-	}
-
-	var serviceAccountIDs []openapi_types.UUID
-	var policies []api.PolicyInformation
-	var policyIDs []openapi_types.UUID
-
-	for _, saName := range in.ServiceAccountNames {
-		sa, err := ctx.resolveServiceAccount(saName)
-		if err != nil {
-			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving service account %q: %w", idx+1, in.Name, saName, err)
-		}
-		serviceAccountIDs = append(serviceAccountIDs, sa.Id)
-	}
-
-	for _, policyName := range in.PolicyNames {
-		policy, err := ctx.resolvePolicy(policyName)
-		if err != nil {
-			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving policy %q: %w", idx+1, in.Name, policyName, err)
-		}
-		policyInfo := api.PolicyInformation{
-			Name: policy.Name,
-			Id:   policy.Id,
-		}
-		policyIDs = append(policyIDs, policy.Id)
-		policies = append(policies, policyInfo)
-	}
-
-	var subCaProvider SubCa
-	if in.SubCaProviderName != "" {
-		subca, err := ctx.resolveSubCa(in.SubCaProviderName)
-		if err != nil {
-			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving subCA provider %q: %w", idx+1, in.Name, in.SubCaProviderName, err)
-		}
-		subCaProvider = SubCa{
-			Name: subca.Name,
-			Id:   subca.Id,
-		}
-	}
-
-	// Build ExtendedConfigurationInformation for comparison and patching
-	cfg := api.ExtendedConfigurationInformation{
-		Name:              in.Name,
-		Policies:          policies,
-		PolicyIds:         policyIDs,
-		ServiceAccountIds: serviceAccountIDs,
-		SubCaProvider:     subCaProvider,
-		CloudProviders:    in.CloudProviders,
-		AdvancedSettings:  manifestToAPIAdvancedSettings(in.AdvancedSettings),
-	}
-
-	if in.MinTLSVersion != "" {
-		minTLS := api.ExtendedConfigurationInformationMinTlsVersion(in.MinTLSVersion)
-		cfg.MinTlsVersion = minTLS
-	}
-
-	existing, err := getConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, in.Name)
-	switch {
-	case errors.As(err, &NotFound{}):
-		_, err := createConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, fullToPatchConfig(cfg))
-		if err != nil {
-			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while creating: %w", idx+1, in.Name, err)
-		}
-		logutil.Infof("Creating WIM configuration '%s'.", in.Name)
-	case err != nil:
-		return fmt.Errorf("manifest #%d (WIMConfiguration %q): while retrieving existing configuration: %w", idx+1, in.Name, err)
-	default:
-		if err := patchConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id, fullToPatchConfig(cfg)); err != nil {
-			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while patching: %w", idx+1, in.Name, err)
-		}
-		logutil.Infof("Updating WIM configuration '%s' (ID '%s').", in.Name, existing.Id.String())
-	}
-
-	return nil
-}
-
-func (ctx *manifestApplyContext) resolveServiceAccount(name string) (ServiceAccount, error) {
-	if sa, ok := ctx.serviceAccounts[name]; ok {
-		return sa, nil
-	}
-	return ctx.refreshServiceAccount(name)
-}
-
-func (ctx *manifestApplyContext) refreshServiceAccount(name string) (ServiceAccount, error) {
-	sa, err := getServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
-	if err != nil {
-		return ServiceAccount{}, err
-	}
-	ctx.serviceAccounts[name] = sa
-	return sa, nil
-}
-
-func (ctx *manifestApplyContext) resolvePolicy(name string) (Policy, error) {
-	if policy, ok := ctx.policies[name]; ok {
-		return policy, nil
-	}
-	return ctx.refreshPolicy(name)
-}
-
-func (ctx *manifestApplyContext) refreshPolicy(name string) (Policy, error) {
-	policy, err := getPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
-	if err != nil {
-		return Policy{}, err
-	}
-	ctx.policies[name] = policy
-	return policy, nil
-}
-
-func (ctx *manifestApplyContext) resolveSubCa(name string) (SubCa, error) {
-	if subca, ok := ctx.subCaProviders[name]; ok {
-		return subca, nil
-	}
-	return ctx.refreshSubCa(name)
-}
-
-func (ctx *manifestApplyContext) refreshSubCa(name string) (SubCa, error) {
-	subca, err := getSubCa(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
-	if err != nil {
-		return SubCa{}, err
-	}
-	ctx.subCaProviders[name] = subca
-	return subca, nil
-}
-
-// sortManifestsByDependency sorts manifests by kind priority:
-// ServiceAccount → WIMIssuerPolicy → WIMSubCAProvider → WIMConfiguration
-func sortManifestsByDependency(manifests []manifest.Manifest) []manifest.Manifest {
-	kindPriority := map[string]int{
-		kindServiceAccount:   1,
-		kindIssuerPolicy:     2,
-		kindWIMSubCaProvider: 3,
-		kindConfiguration:    4,
-	}
-
-	sorted := make([]manifest.Manifest, len(manifests))
-	copy(sorted, manifests)
-
-	slices.SortFunc(sorted, func(a, b manifest.Manifest) int {
-		kindA := getManifestKind(a)
-		kindB := getManifestKind(b)
-		priorityA := kindPriority[kindA]
-		priorityB := kindPriority[kindB]
-		return priorityA - priorityB
-	})
-
-	return sorted
-}
-
-func getManifestKind(m manifest.Manifest) string {
-	switch {
-	case m.ServiceAccount != nil:
-		return kindServiceAccount
-	case m.Policy != nil:
-		return kindIssuerPolicy
-	case m.SubCa != nil:
-		return kindWIMSubCaProvider
-	case m.WIMConfiguration != nil:
-		return kindConfiguration
-	default:
-		return "unknown"
-	}
-}
-
-// validateManifests performs pre-flight validation: checks that all required names are set
-func validateManifests(manifests []manifest.Manifest) error {
-	for i, m := range manifests {
-		switch {
-		case m.ServiceAccount != nil:
-			if m.ServiceAccount.Name == "" {
-				return fmt.Errorf("manifest #%d (ServiceAccount): name must be set", i+1)
-			}
-		case m.Policy != nil:
-			if m.Policy.Name == "" {
-				return fmt.Errorf("manifest #%d (WIMIssuerPolicy): name must be set", i+1)
-			}
-		case m.SubCa != nil:
-			if m.SubCa.Name == "" {
-				return fmt.Errorf("manifest #%d (WIMSubCAProvider): name must be set", i+1)
-			}
-		case m.WIMConfiguration != nil:
-			if m.WIMConfiguration.Name == "" {
-				return fmt.Errorf("manifest #%d (WIMConfiguration): name must be set", i+1)
-			}
-		default:
-			return fmt.Errorf("manifest #%d: empty or unknown manifest", i+1)
-		}
-	}
-	return nil
-}
-
-// validateReferences checks that all referenced resources exist in manifests or API
-func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manifest.Manifest) error {
-	// Build sets of names defined in manifests
-	serviceAccountNames := make(map[string]bool)
-	policyNames := make(map[string]bool)
-	subCaNames := make(map[string]bool)
-
-	for _, m := range manifests {
-		if m.ServiceAccount != nil && m.ServiceAccount.Name != "" {
-			serviceAccountNames[m.ServiceAccount.Name] = true
-		}
-		if m.Policy != nil && m.Policy.Name != "" {
-			policyNames[m.Policy.Name] = true
-		}
-		if m.SubCa != nil && m.SubCa.Name != "" {
-			subCaNames[m.SubCa.Name] = true
-		}
-	}
-
-	// Validate references in WIMConfiguration manifests
-	for i, m := range manifests {
-		if m.WIMConfiguration == nil {
-			continue
-		}
-
-		cfg := m.WIMConfiguration
-
-		// Validate service account references
-		for _, saName := range cfg.ServiceAccountNames {
-			if !serviceAccountNames[saName] {
-				// Check if it exists in API
-				_, err := getServiceAccount(context.Background(), cl, apiURL, apiKey, saName)
-				if err != nil {
-					if errors.As(err, &NotFound{}) {
-						return fmt.Errorf("manifest #%d (WIMConfiguration %q): service account %q not found in manifests or API", i+1, cfg.Name, saName)
-					}
-					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking service account %q: %w", i+1, cfg.Name, saName, err)
-				}
-			}
-		}
-
-		// Validate policy references
-		for _, policyName := range cfg.PolicyNames {
-			if !policyNames[policyName] {
-				// Check if it exists in API
-				_, err := getPolicy(context.Background(), cl, apiURL, apiKey, policyName)
-				if err != nil {
-					if errors.As(err, &NotFound{}) {
-						return fmt.Errorf("manifest #%d (WIMConfiguration %q): policy %q not found in manifests or API", i+1, cfg.Name, policyName)
-					}
-					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking policy %q: %w", i+1, cfg.Name, policyName, err)
-				}
-			}
-		}
-
-		// Validate subCA provider reference
-		if cfg.SubCaProviderName != "" {
-			if !subCaNames[cfg.SubCaProviderName] {
-				// Check if it exists in API
-				_, err := getSubCa(context.Background(), cl, apiURL, apiKey, cfg.SubCaProviderName)
-				if err != nil {
-					if errors.As(err, &NotFound{}) {
-						return fmt.Errorf("manifest #%d (WIMConfiguration %q): subCA provider %q not found in manifests or API", i+1, cfg.Name, cfg.SubCaProviderName)
-					}
-					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking subCA provider %q: %w", i+1, cfg.Name, cfg.SubCaProviderName, err)
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-// applyManifestsDryRun shows what would be created/updated without making API calls
-func applyManifestsDryRun(manifests []manifest.Manifest) error {
-	logutil.Infof("DRY RUN: Would apply %d manifest(s):", len(manifests))
-	for i, m := range manifests {
-		switch {
-		case m.ServiceAccount != nil:
-			logutil.Infof("  #%d: ServiceAccount '%s' (would create or update)", i+1, m.ServiceAccount.Name)
-		case m.Policy != nil:
-			logutil.Infof("  #%d: WIMIssuerPolicy '%s' (would create or update)", i+1, m.Policy.Name)
-		case m.SubCa != nil:
-			logutil.Infof("  #%d: WIMSubCAProvider '%s' (would create or update)", i+1, m.SubCa.Name)
-		case m.WIMConfiguration != nil:
-			logutil.Infof("  #%d: WIMConfiguration '%s' (would create or update)", i+1, m.WIMConfiguration.Name)
-		}
-	}
-	return nil
-}
-
-// printApplySummary prints a summary of the apply operation
-func printApplySummary(successCount, failureCount, totalCount int) {
-	if failureCount == 0 {
-		logutil.Infof("Successfully applied %d resource(s).", successCount)
-	} else {
-		logutil.Errorf("Applied %d of %d resource(s) (%d failed).", successCount, totalCount, failureCount)
-	}
-}
 
 // To check whether an error is fixable by the user, wrap it with Fixable(err).
 // Then, check with errors.As(err, Fixable{}).
@@ -2715,15 +3109,15 @@ func fullToPatchPolicy(full Policy) PolicyPatch {
 }
 
 // https://api.venafi.cloud/v1/distributedissuers/policies/{id}
-func patchPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch PolicyPatch) error {
+func patchPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch PolicyPatch) (Policy, error) {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
-		return err
+		return Policy{}, err
 	}
 
 	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/distributedissuers/policies/%s", apiURL, id), bytes.NewReader(patchJSON))
 	if err != nil {
-		return err
+		return Policy{}, err
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -2731,31 +3125,36 @@ func patchPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, id s
 
 	resp, err := cl.Client.Do(req)
 	if err != nil {
-		return err
+		return Policy{}, err
 	}
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// The patch was successful.
-		return nil
+		var updated Policy
+		err := decodeJSON(resp.Body, &updated)
+		if err != nil {
+			return Policy{}, fmt.Errorf("while decoding response: %w, body: %s", err, resp.Body)
+		}
+		return updated, nil
 	case http.StatusNotFound:
-		return fmt.Errorf("Workload Identity Manager policy: %w", NotFound{NameOrID: id})
+		return Policy{}, fmt.Errorf("Workload Identity Manager policy: %w", NotFound{NameOrID: id})
 	default:
-		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return Policy{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 }
 
 // https://api.venafi.cloud/v1/distributedissuers/configurations/{id}
-func patchConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, id openapi_types.UUID, patch ConfigPatch) error {
+func patchConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, id openapi_types.UUID, patch ConfigPatch) (Config, error) {
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
-		return fmt.Errorf("patchConfig: while marshaling patch: %w", err)
+		return Config{}, fmt.Errorf("patchConfig: while marshaling patch: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "PATCH", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", cl.Server, id.String()), bytes.NewReader(patchJSON))
+	req, err := http.NewRequestWithContext(ctx, "PATCH", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id.String()), bytes.NewReader(patchJSON))
 	if err != nil {
-		return fmt.Errorf("patchConfig: while creating request: %w", err)
+		return Config{}, fmt.Errorf("patchConfig: while creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("tppl-api-key", apiKey)
@@ -2763,31 +3162,24 @@ func patchConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, id o
 
 	resp, err := cl.Client.Do(req)
 	if err != nil {
-		return fmt.Errorf("patchConfig: while sending request: %w", err)
+		return Config{}, fmt.Errorf("patchConfig: while sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
-	case http.StatusOK, http.StatusNoContent:
+	case http.StatusOK:
 		// The patch was successful.
-		return nil
-	case http.StatusNotFound:
-		return fmt.Errorf("WIM configuration: %w", NotFound{NameOrID: id.String()})
-	default:
-		return HTTPErrorf(resp, "patchConfig: http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
-	}
-}
-
-func equalStringSlices(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
+		var updated Config
+		err := decodeJSON(resp.Body, &updated)
+		if err != nil {
+			return Config{}, fmt.Errorf("patchConfig: while decoding response: %w, body: %s", err, resp.Body)
 		}
+		return updated, nil
+	case http.StatusNotFound:
+		return Config{}, fmt.Errorf("WIM configuration: %w", NotFound{NameOrID: id.String()})
+	default:
+		return Config{}, HTTPErrorf(resp, "patchConfig: unexpected http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
-	return true
 }
 
 func getServiceAccounts(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]ServiceAccount, error) {
@@ -2980,9 +3372,9 @@ func genECKeyPair() (string, string, error) {
 
 // Owner can be left empty, in which case the first team will be used as the
 // owner.
-func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, sa ServiceAccount) (api.CreateServiceAccountResponseBody, error) {
+func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, desired ServiceAccount) (api.CreateServiceAccountResponseBody, error) {
 	// If no owner is specified, let's just use the first team we can find.
-	if sa.Owner == (openapi_types.UUID{}) {
+	if desired.Owner == (openapi_types.UUID{}) {
 		teams, err := getTeams(ctx, cl, apiURL, apiKey)
 		if err != nil {
 			return api.CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: while getting teams: %w", err)
@@ -2991,23 +3383,28 @@ func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey str
 			return api.CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
 		}
 		ownerUUID := openapi_types.UUID{}
-		_ = ownerUUID.UnmarshalText([]byte(teams[0].ID))
-		sa.Owner = ownerUUID
-		logutil.Debugf("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
+		err = ownerUUID.UnmarshalText([]byte(teams[0].ID))
+		if err != nil {
+			return api.CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: while parsing the first team's ID '%s' as UUID: %w", teams[0].ID, err)
+		}
+
+		logutil.Infof("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
+		desired.Owner = ownerUUID
 	}
 
-	saJSON, err := json.Marshal(sa)
+	jsonStr, err := json.Marshal(desired)
 	if err != nil {
 		return api.CreateServiceAccountResponseBody{}, err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/serviceaccounts", apiURL), bytes.NewReader(saJSON))
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/serviceaccounts", apiURL), bytes.NewReader(jsonStr))
 	if err != nil {
 		return api.CreateServiceAccountResponseBody{}, err
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
+
 	resp, err := cl.Client.Do(req)
 	if err != nil {
 		return api.CreateServiceAccountResponseBody{}, err
@@ -3024,36 +3421,22 @@ func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey str
 	}
 
 	var result api.CreateServiceAccountResponseBody
-	if err := decodeJSON(resp.Body, &result); err != nil {
+	err = decodeJSON(resp.Body, &result)
+	if err != nil {
 		return api.CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: while decoding response: %w", err)
 	}
 	return result, nil
 }
 
-func fullToPatchServiceAccount(sa ServiceAccount) ServiceAccountPatch {
-	return ServiceAccountPatch{
-		Applications:       sa.Applications,
-		Audience:           sa.Audience,
-		CredentialLifetime: sa.CredentialLifetime,
-		IssuerURL:          sa.IssuerURL,
-		JwksURI:            sa.JwksURI,
-		Name:               sa.Name,
-		Owner:              sa.Owner,
-		Scopes:             sa.Scopes,
-		Subject:            sa.Subject,
-		PublicKey:          sa.PublicKey,
-	}
-}
-
-func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch ServiceAccountPatch) error {
+func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch ServiceAccountPatch) (ServiceAccount, error) {
 	// If no owner is specified, let's just use the first team we can find.
 	if patch.Owner == (openapi_types.UUID{}) {
 		teams, err := getTeams(ctx, cl, apiURL, apiKey)
 		if err != nil {
-			return fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
+			return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
 		}
 		if len(teams) == 0 {
-			return fmt.Errorf("patchServiceAccount: no teams found, please specify an owner")
+			return ServiceAccount{}, fmt.Errorf("patchServiceAccount: no teams found, please specify an owner")
 		}
 		ownerUUID := openapi_types.UUID{}
 		_ = ownerUUID.UnmarshalText([]byte(teams[0].ID))
@@ -3063,12 +3446,12 @@ func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey stri
 
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
-		return fmt.Errorf("patchServiceAccount: while marshalling patch: %w", err)
+		return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while marshalling patch: %w", err)
 	}
 
 	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), bytes.NewReader(patchJSON))
 	if err != nil {
-		return fmt.Errorf("patchServiceAccount: while creating request: %w", err)
+		return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -3076,7 +3459,7 @@ func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey stri
 
 	resp, err := cl.Client.Do(req)
 	if err != nil {
-		return fmt.Errorf("patchServiceAccount: while sending request: %w", err)
+		return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -3084,13 +3467,25 @@ func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	case http.StatusOK, http.StatusNoContent:
 		// The patch was successful.
 	case http.StatusNotFound:
-		return fmt.Errorf("service account: %w", NotFound{NameOrID: id})
+		return ServiceAccount{}, fmt.Errorf("service account: %w", NotFound{NameOrID: id})
 	default:
-		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return ServiceAccount{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	return nil
+	return ServiceAccount{}, nil
 }
+
+// Without this, cmp.Diff would not be able to compare two
+// 'ClientAuthenticationInformation' values as they contain the 'union' field,
+// which is unexported and prevents comparison. Using this transformer changes a
+// ClientAuthenticationInformation into one of the three concrete structs.
+var transformClientAuthentication = cmp.Transformer("transformClientAuthentication", func(o api.ClientAuthenticationInformation) any {
+	value, err := o.ValueByDiscriminator()
+	if err != nil {
+		return fmt.Sprintf("<error: %v>", err)
+	}
+	return value
+})
 
 func ANSIDiff(x, y any, opts ...cmp.Option) string {
 	escapeCode := func(code int) string {

@@ -512,6 +512,9 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl auth login")
 	}
 
+	// Let's make sure the URL never contains a trailing slash.
+	current.APIURL = strings.TrimRight(current.APIURL, "/")
+
 	return ToolConf{
 		APIURL: current.APIURL,
 		APIKey: current.APIKey,

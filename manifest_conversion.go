@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	api "github.com/maelvls/vcpctl/internal/api"
 	manifest "github.com/maelvls/vcpctl/internal/manifest"
 
@@ -20,46 +22,66 @@ func namesFrom[T any](items []T, nameFunc func(T) string) []string {
 
 // manifestToAPIClientAuthentication converts manifest ClientAuthentication to API union type.
 // ClientAuthenticationInformation is a union type, so we use JSON marshaling to handle it.
-func manifestToAPIClientAuthentication(in manifest.ClientAuthentication) api.ClientAuthenticationInformation {
-	// ClientAuthenticationInformation is a union type with only Type and union json.RawMessage.
-	// For now, we create a minimal structure. The actual union handling would require
-	// JSON marshaling/unmarshaling based on the Type field.
-	// TODO: Implement proper union type handling if ClientAuthentication is actually used.
-	return api.ClientAuthenticationInformation{
-		Type: in.Type,
-		// union field is json.RawMessage and cannot be set directly
+func manifestToAPIClientAuthentication(resolvePolicy func(string) (Policy, error), in manifest.ClientAuthentication) (api.ClientAuthenticationInformation, error) {
+	switch in.Type {
+	case "JWT_JWKS":
+		var result api.ClientAuthenticationInformation
+		err := result.MergeJwtJwksAuthenticationInformation(api.JwtJwksAuthenticationInformation{
+			Urls: in.URLs,
+		})
+		if err != nil {
+			return api.ClientAuthenticationInformation{}, err
+		}
+		return result, nil
+	case "JWT_STANDARD_CLAIMS":
+		var result api.ClientAuthenticationInformation
+		jwtClients, err := manifestToAPIJwtClientInformation(resolvePolicy, in.Clients)
+		if err != nil {
+			return api.ClientAuthenticationInformation{}, fmt.Errorf("manifestToAPIClientAuthentication: while converting clients for clientAuthentication type=JWT_STANDARD_CLAIMS: %w", err)
+		}
+		err = result.MergeJwtStandardClaimsAuthenticationInformation(api.JwtStandardClaimsAuthenticationInformation{
+			Audience: in.Audience,
+			Clients:  jwtClients,
+		})
+		if err != nil {
+			return api.ClientAuthenticationInformation{}, err
+		}
+		return result, nil
+	case "JWT_OIDC":
+		var result api.ClientAuthenticationInformation
+		err := result.MergeJwtOidcAuthenticationInformation(api.JwtOidcAuthenticationInformation{
+			BaseUrl:  in.BaseURL,
+			Audience: in.Audience,
+		})
+		if err != nil {
+			return api.ClientAuthenticationInformation{}, fmt.Errorf("manifestToAPIClientAuthentication: while converting clients for clientAuthentication type=JWT_OIDC: %w", err)
+		}
+		return result, nil
+	default:
+		return api.ClientAuthenticationInformation{}, fmt.Errorf("manifestToAPIClientAuthentication: unknown ClientAuthentication type: %s", in.Type)
 	}
 }
 
-// apiToManifestClientAuthentication converts API union type to manifest ClientAuthentication.
-// ClientAuthenticationInformation is a union type, so we use JSON unmarshaling to handle it.
-func apiToManifestClientAuthentication(in api.ClientAuthenticationInformation) manifest.ClientAuthentication {
-	// ClientAuthenticationInformation is a union type with only Type and union json.RawMessage.
-	// For now, we return a minimal structure. The actual union handling would require
-	// JSON marshaling/unmarshaling based on the Type field.
-	// TODO: Implement proper union type handling if ClientAuthentication is actually used.
-	return manifest.ClientAuthentication{
-		Type: in.Type,
-		// Other fields cannot be extracted from union type without JSON unmarshaling
+func manifestToAPIJwtClientInformation(resolvePolicy func(string) (Policy, error), in []manifest.ClientAuthenticationClient) ([]api.JwtClientInformation, error) {
+	var result []api.JwtClientInformation
+	for _, c := range in {
+		var allowedPolicyIDs []openapi_types.UUID
+		for _, name := range c.AllowedPolicies {
+			policy, err := resolvePolicy(name)
+			if err != nil {
+				return nil, err
+			}
+			allowedPolicyIDs = append(allowedPolicyIDs, policy.Id)
+		}
+		result = append(result, api.JwtClientInformation{
+			Name:             c.Name,
+			Issuer:           c.Issuer,
+			JwksUri:          c.JwksURI,
+			Subjects:         c.Subjects,
+			AllowedPolicyIds: allowedPolicyIDs,
+		})
 	}
-}
-
-// manifestToAPIClientAuthenticationClient is not used since ClientAuthenticationClient doesn't exist.
-// This function is kept for compatibility but returns an empty union type.
-func manifestToAPIClientAuthenticationClient(in manifest.ClientAuthenticationClient) api.ClientAuthenticationInformation {
-	// ClientAuthenticationClient doesn't exist as a separate type in the API.
-	// This is a placeholder that returns a minimal union type.
-	return api.ClientAuthenticationInformation{
-		Type: "", // Type would need to be determined from the client structure
-	}
-}
-
-// apiToManifestClientAuthenticationClient is not used since ClientAuthenticationClient doesn't exist.
-// This function is kept for compatibility but returns an empty structure.
-func apiToManifestClientAuthenticationClient(in api.ClientAuthenticationInformation) manifest.ClientAuthenticationClient {
-	// ClientAuthenticationClient doesn't exist as a separate type in the API.
-	// This is a placeholder that returns an empty structure.
-	return manifest.ClientAuthenticationClient{}
+	return result, nil
 }
 
 func manifestToAPIClientAuthorization(in manifest.ClientAuthorization) api.ClientAuthorizationInformation {
@@ -90,11 +112,11 @@ func apiToManifestCustomClaimsAliases(in api.CustomClaimsAliasesInformation) man
 	}
 }
 
-func manifestPoliciesToAPI(policyNameToUUID func(string) (string, error), items []manifest.Policy) []api.PolicyCreateRequest {
+func manifestPoliciesToAPI(policyNameToUUID func(string) (string, error), items []manifest.Policy) []Policy {
 	if len(items) == 0 {
 		return nil
 	}
-	result := make([]api.PolicyCreateRequest, len(items))
+	result := make([]Policy, len(items))
 	for i, item := range items {
 		result[i] = manifestToAPIPolicy(item)
 	}
@@ -112,14 +134,26 @@ func apiPoliciesToManifest(items []Policy) []manifest.Policy {
 	return result
 }
 
-func manifestToAPIPolicy(in manifest.Policy) api.PolicyCreateRequest {
-	return api.PolicyCreateRequest{
+func manifestToAPIPolicy(in manifest.Policy) Policy {
+	return Policy{
 		Name:              in.Name,
 		ValidityPeriod:    in.ValidityPeriod,
 		Subject:           manifestToAPISubject(in.Subject),
 		Sans:              manifestToAPISANs(in.SANs),
 		KeyUsages:         manifestToAPIKeyUsages(in.KeyUsages),
 		ExtendedKeyUsages: manifestToAPIExtendedKeyUsages(in.ExtendedKeyUsages),
+		KeyAlgorithm:      manifestToAPIKeyAlgorithm(in.KeyAlgorithm),
+	}
+}
+
+func manifestToAPIPolicyCreateRequest(in manifest.Policy) api.PolicyCreateRequest {
+	return api.PolicyCreateRequest{
+		Name:              in.Name,
+		ValidityPeriod:    in.ValidityPeriod,
+		Subject:           manifestToAPISubject(in.Subject),
+		Sans:              manifestToAPISANs(in.SANs),
+		KeyUsages:         manifestToAPIPolicyCreateRequestKeyUsages(in.KeyUsages),
+		ExtendedKeyUsages: manifestToAPIPolicyCreateRequestExtendedKeyUsages(in.ExtendedKeyUsages),
 		KeyAlgorithm:      manifestToAPIKeyAlgorithm(in.KeyAlgorithm),
 	}
 }
@@ -136,10 +170,26 @@ func apiToManifestPolicy(in Policy) manifest.Policy {
 	}
 }
 
-func manifestToAPIKeyUsages(in []string) []api.PolicyCreateRequestKeyUsages {
+func manifestToAPIKeyUsages(in []string) []api.ExtendedPolicyInformationKeyUsages {
+	result := make([]api.ExtendedPolicyInformationKeyUsages, len(in))
+	for i, v := range in {
+		result[i] = api.ExtendedPolicyInformationKeyUsages(v)
+	}
+	return result
+}
+
+func manifestToAPIPolicyCreateRequestKeyUsages(in []string) []api.PolicyCreateRequestKeyUsages {
 	result := make([]api.PolicyCreateRequestKeyUsages, len(in))
 	for i, v := range in {
 		result[i] = api.PolicyCreateRequestKeyUsages(v)
+	}
+	return result
+}
+
+func manifestToAPIPolicyCreateRequestExtendedKeyUsages(in []string) []api.PolicyCreateRequestExtendedKeyUsages {
+	result := make([]api.PolicyCreateRequestExtendedKeyUsages, len(in))
+	for i, v := range in {
+		result[i] = api.PolicyCreateRequestExtendedKeyUsages(v)
 	}
 	return result
 }
@@ -152,10 +202,10 @@ func apiToManifestKeyUsages(in []api.ExtendedPolicyInformationKeyUsages) []strin
 	return result
 }
 
-func manifestToAPIExtendedKeyUsages(in []string) []api.PolicyCreateRequestExtendedKeyUsages {
-	result := make([]api.PolicyCreateRequestExtendedKeyUsages, len(in))
+func manifestToAPIExtendedKeyUsages(in []string) []api.ExtendedPolicyInformationExtendedKeyUsages {
+	result := make([]api.ExtendedPolicyInformationExtendedKeyUsages, len(in))
 	for i, v := range in {
-		result[i] = api.PolicyCreateRequestExtendedKeyUsages(v)
+		result[i] = api.ExtendedPolicyInformationExtendedKeyUsages(v)
 	}
 	return result
 }

@@ -25,7 +25,11 @@ const (
 	// the relevant parts from the two services that I need.
 	vcamanagementOpenAPIURL = "https://api.venafi.cloud/v3/api-docs/vcamanagement-service"
 	accountOpenAPIURL       = "https://api.venafi.cloud/v3/api-docs/account-service"
-	unifiedOpenAPIURL       = "https://developer.venafi.com/tlsprotectcloud/openapi/63869db3ff852b006f5cd0ec"
+
+	// First, we need to fetch the HTML page to fetch the latest OpenAPI spec.
+	// The HTML contains somthing like this:
+	//  <div class="item"><a href="/tlsprotectcloud/openapi/691235c38218c38bed9afb9b" class="link">Certificate Manager - SaaS API - v1.0</a></div>
+	unifiedOpenAPIRootURL = "https://developer.venafi.com/tlsprotectcloud/openapi/"
 )
 
 // Usage:ServiceAccountDetails
@@ -36,6 +40,33 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: genschema\n")
 		os.Exit(1)
 	}
+
+	// Step 0: Fetch the HTML from the root OpenAPI URL to find the latest
+	// OpenAPI spec URL.
+	body, err := http.Get(unifiedOpenAPIRootURL)
+	if err != nil {
+		panic(err)
+	}
+	defer body.Body.Close()
+	data, err := io.ReadAll(body.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	html := string(data)
+	prefix := `href="/tlsprotectcloud/openapi/`
+	suffix := `"`
+	start := strings.Index(html, prefix)
+	if start == -1 {
+		panic("could not find '" + prefix + "' in HTML: " + html)
+	}
+	start += len(prefix)
+	end := strings.Index(html[start:], suffix)
+	if end == -1 {
+		panic("could not find '" + suffix + "' after '" + prefix + "' in HTML: " + html)
+	}
+	unifiedOpenAPIURL := "https://developer.venafi.com/tlsprotectcloud/openapi/" + html[start:start+end]
+	logutil.Infof("latest unified OpenAPI URL: %s", unifiedOpenAPIURL)
 
 	oapi1, err := fetchSchema(unifiedOpenAPIURL)
 	if err != nil {
@@ -101,48 +132,98 @@ func main() {
 		panic(fmt.Errorf("merging oapi3: %w", err))
 	}
 
-	// Fix a bug in the ClientAuthenticationOpenApi schema where it doesn't have
-	// a mapping in its discriminator, and the individual items don't have a
-	// reference the discriminator. See:
-	// https://venafi.atlassian.net/browse/VC-45818
+	// Fix a few bugs in the ClientAuthenticationInformation schema:
+	//
+	//  - as explained in [1], the parent discriminated object should not
+	//    contain the discriminating field (here, 'type'); the 'type' field should
+	//    be defined in the individual items instead.
+	//  - the 'mapping' field under the 'discriminator' field is missing.
+	//
+	// [1]: https://swagger.io/docs/specification/v3_0/data-models/inheritance-and-polymorphism/
+	//
+	// See: https://venafi.atlassian.net/browse/VC-45818
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any)["ClientAuthenticationInformation"].(map[string]any), "properties")
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any)["ClientAuthenticationInformation"].(map[string]any), "required")
 	err = mergo.Merge(&merged, map[string]any{
 		"components": map[string]any{
 			"schemas": map[string]any{
 				"ClientAuthenticationInformation": map[string]any{
 					"discriminator": map[string]any{
 						"mapping": map[string]string{
-							"JWT_JWKS":            "#/components/schemas/JwtStandardClaimsAuthenticationInformation",
-							"JWT_OIDC":            "#/components/schemas/JwtJwksAuthenticationInformation",
-							"JWT_STANDARD_CLAIMS": "#/components/schemas/JwtOidcAuthenticationInformation",
+							"JWT_JWKS":            "#/components/schemas/JwtJwksAuthenticationInformation",
+							"JWT_OIDC":            "#/components/schemas/JwtOidcAuthenticationInformation",
+							"JWT_STANDARD_CLAIMS": "#/components/schemas/JwtStandardClaimsAuthenticationInformation",
 						},
 					},
 				},
 				"JwtStandardClaimsAuthenticationInformation": map[string]any{
-					"allOf": []any{
-						map[string]any{
-							"$ref": "#/components/schemas/ClientAuthenticationInformation",
+					"allOf": []any{map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"type": map[string]any{
+								"type": "string",
+							},
 						},
-					},
+					}},
+					"required": []any{"type"},
 				},
 				"JwtJwksAuthenticationInformation": map[string]any{
-					"allOf": []any{
-						map[string]any{
-							"$ref": "#/components/schemas/ClientAuthenticationInformation",
+					"allOf": []any{map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"type": map[string]any{
+								"type": "string",
+							},
 						},
-					},
+					}},
+					"required": []any{"type"},
 				},
 				"JwtOidcAuthenticationInformation": map[string]any{
-					"allOf": []any{
-						map[string]any{
-							"$ref": "#/components/schemas/ClientAuthenticationInformation",
+					"allOf": []any{map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"type": map[string]any{
+								"type": "string",
+							},
 						},
-					},
+					}},
+					"required": []any{"type"},
 				},
 			},
 		},
-	}, mergo.WithOverride)
+	}, mergo.WithOverride, mergo.WithAppendSlice)
 	if err != nil {
 		panic(fmt.Errorf("merging discriminator fix: %w", err))
+	}
+
+	// The 'type', 'minOccurrences', 'maxOccurrences', 'defaultValues', and
+	// 'allowedValues' fields in PropertyInformation are mandatory, so we can't
+	// just omitzero them.
+	err = mergo.MergeWithOverwrite(&merged, map[string]any{
+		"components": map[string]any{
+			"schemas": map[string]any{
+				"PropertyInformation": map[string]any{
+					"properties": map[string]any{
+						"minOccurrences": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+						"maxOccurrences": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+						"defaultValues": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+						"allowedValues": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+					},
+					"required": []any{"type", "minOccurrences", "maxOccurrences", "defaultValues", "allowedValues"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		panic(fmt.Errorf("merging PropertyInformation fix: %w", err))
 	}
 
 	// For some reason, the ClientAuthenticationInformationRequestOpenApi is a
@@ -160,7 +241,9 @@ func main() {
 	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtStandardClaimsAuthenticationOpenApi")
 
 	// Make sure that ExtendedConfigurationInformation is a allOf of
-	// ConfigurationInformation and some extra fields.
+	// ConfigurationInformation and some extra fields. Why? I can't remember. I
+	// think it's because it was creating a lot of unecessary different Go
+	// structs that were all the same.
 	err = changeRef(merged, "#/components/schemas/ExtendedConfigurationInformation", "#/components/schemas/ConfigurationInformationRespExtended")
 	if err != nil {
 		panic(fmt.Errorf("changing ref: %w", err))
@@ -184,7 +267,8 @@ func main() {
 					"$ref": "#/components/schemas/ConfigurationInformationBase",
 				},
 
-				// Response you get from GET /intermediatecertificates and /intermediatecertificates/{id}.
+				// Response you get from GET /intermediatecertificates and
+				// /intermediatecertificates/{id}.
 				"ConfigurationInformationResp": map[string]any{
 					"allOf": []any{
 						map[string]any{
@@ -202,7 +286,7 @@ func main() {
 					},
 				},
 
-				// Response you get from GET, POST, and PATCH /
+				// Response you get from GET, POST, and PATCH /.
 				"ConfigurationInformationRespExtended": map[string]any{
 					"allOf": []any{
 						map[string]any{
