@@ -110,13 +110,7 @@ func main() {
 			vcpctl policy rm <policy-name>
 		`),
 		SilenceErrors: true,
-		SilenceUsage:  true,
-		Run: func(cmd *cobra.Command, args []string) {
-			logutil.Errorf(undent.Undent(`
-				no command specified. To get started, run:
-					vcpctl auth login
-			`))
-		},
+		SilenceUsage:  false,
 	}
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set APIURL. Flag takes precedence. When using this flag, the configuration file is not used.")
@@ -124,6 +118,10 @@ func main() {
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.AddCommand(
+		loginCmd(),
+		switchCmd(),
+		apikeyCmd(),
+		apiurlCmd(),
 		authCmd(),
 		apiCmd(),
 		lsCmd(),

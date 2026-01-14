@@ -40,6 +40,8 @@ func authCmd() *cobra.Command {
 		Long:          "Manage authentication for CyberArk Certificate Manager, SaaS (formerly known as Venafi Control Plane and also known as Venafi Cloud), including login and switch.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		Hidden:        true,
+		Deprecated:    "all auth subcommands are now available at root level. Use 'vcpctl login', 'vcpctl switch', 'vcpctl apikey', and 'vcpctl apiurl'",
 	}
 	cmd.AddCommand(authLoginCmd(), authSwitchCmd(), authAPIKeyCmd(), authAPIURLCmd())
 	return cmd
@@ -55,7 +57,7 @@ var venafiRegions = []string{
 	"https://api.sg.venafi.cloud",
 }
 
-func authLoginCmd() *cobra.Command {
+func loginCmd() *cobra.Command {
 	var apiURL, apiKey string
 	cmd := &cobra.Command{
 		Use:   "login [--api-url <url>] [--api-key <key>]",
@@ -165,7 +167,7 @@ func authLoginCmd() *cobra.Command {
 
 			if os.Getenv("APIURL") != "" || os.Getenv("APIKEY") != "" {
 				fields = append(fields, huh.NewNote().
-					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl auth login'."),
+					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
 				)
 			}
 
@@ -249,9 +251,16 @@ func authLoginCmd() *cobra.Command {
 	return cmd
 }
 
-func authAPIKeyCmd() *cobra.Command {
+// authLoginCmd is a deprecated alias for loginCmd
+func authLoginCmd() *cobra.Command {
+	cmd := loginCmd()
+	cmd.Deprecated = "use 'vcpctl login' instead; 'vcpctl auth login' will be removed in a future release"
+	return cmd
+}
+
+func apikeyCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "api-key",
+		Use:           "apikey",
 		Short:         "Prints the API key for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -269,7 +278,7 @@ func authAPIKeyCmd() *cobra.Command {
 
 			auth, ok := currentFrom(conf)
 			if !ok {
-				return fmt.Errorf("not logged in. Log in with:\n    vcpctl auth login\n")
+				return fmt.Errorf("not logged in. Log in with:\n    vcpctl login\n")
 			}
 			fmt.Println(auth.APIKey)
 			return nil
@@ -278,9 +287,17 @@ func authAPIKeyCmd() *cobra.Command {
 	return cmd
 }
 
-func authAPIURLCmd() *cobra.Command {
+// authAPIKeyCmd is a deprecated alias for apikeyCmd
+func authAPIKeyCmd() *cobra.Command {
+	cmd := apikeyCmd()
+	cmd.Use = "api-key"
+	cmd.Deprecated = "use 'vcpctl apikey' instead; 'vcpctl auth api-key' will be removed in a future release"
+	return cmd
+}
+
+func apiurlCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "api-url",
+		Use:           "apiurl",
 		Short:         "Prints the API URL for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -298,7 +315,7 @@ func authAPIURLCmd() *cobra.Command {
 
 			auth, ok := currentFrom(conf)
 			if !ok {
-				return fmt.Errorf("not logged in. Log in with:\n    vcpctl auth login\n")
+				return fmt.Errorf("not logged in. Log in with:\n    vcpctl login\n")
 			}
 			fmt.Println(auth.APIURL)
 			return nil
@@ -307,7 +324,15 @@ func authAPIURLCmd() *cobra.Command {
 	return cmd
 }
 
-func authSwitchCmd() *cobra.Command {
+// authAPIURLCmd is a deprecated alias for apiurlCmd
+func authAPIURLCmd() *cobra.Command {
+	cmd := apiurlCmd()
+	cmd.Use = "api-url"
+	cmd.Deprecated = "use 'vcpctl apiurl' instead; 'vcpctl auth api-url' will be removed in a future release"
+	return cmd
+}
+
+func switchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch [tenant-url]",
 		Short: "Switch to a different CyberArk Certificate Manager, SaaS tenant.",
@@ -315,13 +340,15 @@ func authSwitchCmd() *cobra.Command {
 			Switch to a different CyberArk Certificate Manager, SaaS tenant. If the tenant is not specified,
 				you will be prompted to select one.
 		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := loadFileConf()
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
 			if len(conf.Auths) == 0 {
-				return fmt.Errorf("no tenants found in configuration. Please run:\n    vcpctl auth login")
+				return fmt.Errorf("no tenants found in configuration. Please run:\n    vcpctl login")
 			}
 
 			if len(args) > 0 {
@@ -332,13 +359,13 @@ func authSwitchCmd() *cobra.Command {
 						return saveCurrentTenant(auth)
 					}
 				}
-				return Fixable(fmt.Errorf("tenant '%s' not found in configuration. Please run `vcpctl auth login` to add it.", tenantURL))
+				return Fixable(fmt.Errorf("tenant '%s' not found in configuration. Please run `vcpctl login` to add it.", tenantURL))
 			}
 
 			// If no tenant URL is provided, we prompt the user to select one.
 			current, ok := currentFrom(conf)
 			if !ok {
-				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl auth login` to add one.")
+				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl login` to add one.")
 			}
 
 			var opts []huh.Option[Auth]
@@ -352,7 +379,7 @@ func authSwitchCmd() *cobra.Command {
 			var fields []huh.Field
 			if os.Getenv("APIURL") != "" || os.Getenv("APIKEY") != "" {
 				fields = append(fields, huh.NewNote().
-					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl auth login'."),
+					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
 				)
 			}
 			fields = append(fields, huh.NewSelect[Auth]().
@@ -369,6 +396,13 @@ func authSwitchCmd() *cobra.Command {
 		},
 	}
 
+	return cmd
+}
+
+// authSwitchCmd is a deprecated alias for switchCmd
+func authSwitchCmd() *cobra.Command {
+	cmd := switchCmd()
+	cmd.Deprecated = "use 'vcpctl switch' instead; 'vcpctl auth switch' will be removed in a future release"
 	return cmd
 }
 
@@ -487,10 +521,10 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		}
 
 		if apiURL == "" && apiKey != "" {
-			return ToolConf{}, fmt.Errorf("you have set the API key using $APIKEY or --api-key, but you haven't set the API URL. Please use --api-url or $APIURL. If you aren't sure, unset APIKEY and remove --api-key, then use `vcpctl auth login` which will figure it out for you.")
+			return ToolConf{}, fmt.Errorf("you have set the API key using $APIKEY or --api-key, but you haven't set the API URL. Please use --api-url or $APIURL. If you aren't sure, unset APIKEY and remove --api-key, then use `vcpctl login` which will figure it out for you.")
 		}
 		if apiKey == "" && apiURL != "" {
-			return ToolConf{}, fmt.Errorf("you have set the API URL using $APIURL or --api-url, but you haven't set the API key. Please use --api-key or $APIKEY. If you aren't sure, unset APIURL and remove --api-url, then use `vcpctl auth login` which will figure it out for you.")
+			return ToolConf{}, fmt.Errorf("you have set the API URL using $APIURL or --api-url, but you haven't set the API key. Please use --api-key or $APIKEY. If you aren't sure, unset APIURL and remove --api-url, then use `vcpctl login` which will figure it out for you.")
 		}
 
 		return ToolConf{
@@ -509,7 +543,7 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	// Find the current tenant.
 	current, ok := currentFrom(conf)
 	if !ok {
-		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl auth login")
+		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl login")
 	}
 
 	// Let's make sure the URL never contains a trailing slash.
