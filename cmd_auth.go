@@ -194,7 +194,7 @@ func loginCmd() *cobra.Command {
 			vcpctl login --api-url https://api.venafi.cloud --api-key <key>
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 
 			// Check for conflicts between positional URL argument and --api-url flag or env vars
 			if len(args) > 0 {
@@ -218,17 +218,22 @@ func loginCmd() *cobra.Command {
 					return Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
 				}
 
-				// Normalize the API URL
+				// Normalize the API URL.
 				apiURL = strings.TrimRight(apiURL, "/")
 				if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
 					apiURL = "https://" + apiURL
 				}
 
-				apiClient, err := api.NewClient(apiURL, api.WithHTTPClient(&cl), api.WithBearerToken(apiKey), api.WithUserAgent())
+				cl, err := api.NewClient(
+					apiURL,
+					api.WithHTTPClient(&cl),
+					api.WithTpplAPIKey(apiKey),
+					api.WithUserAgent(),
+				)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				resp, err := checkAPIKey(context.Background(), *apiClient, apiURL, apiKey)
+				resp, err := selfCheck(context.Background(), cl)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
 				}
@@ -242,7 +247,7 @@ func loginCmd() *cobra.Command {
 				//
 				// See:
 				// https://gitlab.com/venafi/vaas/test-enablement/vaas-auto/-/merge_requests/738/diffs#note_2579353788
-				tenantURL := fmt.Sprintf("%s.venafi.cloud", resp.Company.URLPrefix)
+				tenantURL := fmt.Sprintf("%s.venafi.cloud", resp.Company.UrlPrefix)
 				if tenantURL == "stack" {
 					tenantURL = apiURL
 					tenantURL = strings.Replace(tenantURL, "api-", "ui-stack-", 1)
@@ -252,7 +257,7 @@ func loginCmd() *cobra.Command {
 					APIURL:   apiURL,
 					APIKey:   apiKey,
 					URL:      tenantURL,
-					TenantID: resp.Company.ID,
+					TenantID: resp.Company.Id.String(),
 				}
 
 				err = saveCurrentTenant(current)
@@ -295,11 +300,16 @@ func loginCmd() *cobra.Command {
 					current.APIKey = apiKey
 
 					// Validate the API key
-					apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(current.APIKey), api.WithUserAgent())
+					cl, err := api.NewClient(
+						current.APIURL,
+						api.WithHTTPClient(&cl),
+						api.WithTpplAPIKey(current.APIKey),
+						api.WithUserAgent(),
+					)
 					if err != nil {
 						return fmt.Errorf("while creating API client: %w", err)
 					}
-					_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, current.APIKey)
+					_, err = selfCheck(context.Background(), cl)
 					if err != nil {
 						return fmt.Errorf("while checking the API key's validity: %w", err)
 					}
@@ -318,16 +328,22 @@ func loginCmd() *cobra.Command {
 						if len(input) != 36 {
 							return fmt.Errorf("API key must be 36 characters long")
 						}
-						apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(input), api.WithUserAgent())
+
+						cl, err := api.NewClient(
+							current.APIURL,
+							api.WithHTTPClient(&cl),
+							api.WithTpplAPIKey(current.APIKey),
+							api.WithUserAgent(),
+						)
 						if err != nil {
 							return fmt.Errorf("while creating API client: %w", err)
 						}
-						resp, err := checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
+
+						resp, err := selfCheck(context.Background(), cl)
 						if err != nil {
 							return err
 						}
-						current.TenantID = resp.Company.ID
-						return nil
+						current.TenantID = resp.Company.Id.String()
 						return nil
 					})
 					if err != nil {
@@ -355,11 +371,16 @@ func loginCmd() *cobra.Command {
 			// Let the user know if they are already authenticated.
 			skipTenantPrompt := false
 			if current.URL != "" {
-				apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(current.APIKey), api.WithUserAgent())
+				cl, err := api.NewClient(
+					current.APIURL,
+					api.WithHTTPClient(&cl),
+					api.WithTpplAPIKey(current.APIKey),
+					api.WithUserAgent(),
+				)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, current.APIKey)
+				_, err = selfCheck(context.Background(), cl)
 				if err == nil {
 					fmt.Printf("\n%s\n\n", successStyle.Render("✓ You are already logged in to "+current.URL))
 
@@ -440,15 +461,20 @@ func loginCmd() *cobra.Command {
 				if len(input) != 36 {
 					return fmt.Errorf("API key must be 36 characters long")
 				}
-				apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(input), api.WithUserAgent())
+				cl, err := api.NewClient(
+					current.APIURL,
+					api.WithHTTPClient(&cl),
+					api.WithTpplAPIKey(input),
+					api.WithUserAgent(),
+				)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				resp, err := checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
+				resp, err := selfCheck(context.Background(), cl)
 				if err != nil {
 					return err
 				}
-				current.TenantID = resp.Company.ID
+				current.TenantID = resp.Company.Id.String()
 
 				return nil
 			})

@@ -14,12 +14,12 @@ import (
 // applyManifests walks through the provided manifests in order and applies each
 // resource to CyberArk Certificate Manager, SaaS. Note that the manifests order
 // matters.
-func applyManifests(cl *api.Client, apiURL, apiKey string, manifests []manifest.Manifest, dryRun bool) error {
+func applyManifests(cl *api.Client, manifests []manifest.Manifest, dryRun bool) error {
 	if err := validateManifests(manifests); err != nil {
 		return fmt.Errorf("pre-flight validation failed: %w", err)
 	}
 
-	if err := validateReferences(*cl, apiURL, apiKey, manifests); err != nil {
+	if err := validateReferences(cl, manifests); err != nil {
 		return fmt.Errorf("reference validation failed: %w", err)
 	}
 
@@ -27,7 +27,7 @@ func applyManifests(cl *api.Client, apiURL, apiKey string, manifests []manifest.
 		return applyManifestsDryRun(manifests)
 	}
 
-	applyCtx := newManifestApplyContext(context.Background(), *cl, apiURL, apiKey)
+	applyCtx := newManifestApplyContext(context.Background(), cl)
 
 	var successCount, failureCount int
 	var errors []error
@@ -61,7 +61,7 @@ func applyManifests(cl *api.Client, apiURL, apiKey string, manifests []manifest.
 }
 
 type manifestApplyContext struct {
-	client          api.Client
+	client          *api.Client
 	apiURL          string
 	apiKey          string
 	serviceAccounts map[string]ServiceAccount
@@ -69,11 +69,9 @@ type manifestApplyContext struct {
 	subCaProviders  map[string]SubCa
 }
 
-func newManifestApplyContext(ctx context.Context, cl api.Client, apiURL, apiKey string) *manifestApplyContext {
+func newManifestApplyContext(ctx context.Context, cl *api.Client) *manifestApplyContext {
 	return &manifestApplyContext{
 		client:          cl,
-		apiURL:          apiURL,
-		apiKey:          apiKey,
 		serviceAccounts: make(map[string]ServiceAccount),
 		policies:        make(map[string]Policy),
 		subCaProviders:  make(map[string]SubCa),
@@ -86,10 +84,10 @@ func (ctx *manifestApplyContext) applyServiceAccount(idx int, in manifest.Servic
 	}
 
 	desired := manifestToAPIServiceAccount(in)
-	existing, err := getServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, desired.Name)
+	existing, err := getServiceAccount(context.Background(), ctx.client, desired.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
-		createdResp, err := createServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, desired)
+		createdResp, err := createServiceAccount(context.Background(), ctx.client, desired)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (ServiceAccount %q): while creating: %w", idx+1, desired.Name, err)
 		}
@@ -116,7 +114,7 @@ func (ctx *manifestApplyContext) applyServiceAccount(idx int, in manifest.Servic
 		}
 
 		logutil.Infof("Updating ServiceAccount '%s'.", desired.Name)
-		err = patchServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch)
+		err = patchServiceAccount(context.Background(), ctx.client, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (ServiceAccount %q): while patching: %w", idx+1, desired.Name, err)
 		}
@@ -140,10 +138,10 @@ func (ctx *manifestApplyContext) applyPolicy(idx int, in manifest.Policy) error 
 	}
 
 	desired := manifestToAPIPolicy(in)
-	existing, err := getPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, desired.Name)
+	existing, err := getPolicy(context.Background(), ctx.client, desired.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
-		created, err := createPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, manifestToAPIPolicyCreateRequest(in))
+		created, err := createPolicy(context.Background(), ctx.client, manifestToAPIPolicyCreateRequest(in))
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while creating: %w", idx+1, desired.Name, err)
 		}
@@ -162,7 +160,7 @@ func (ctx *manifestApplyContext) applyPolicy(idx int, in manifest.Policy) error 
 		}
 
 		logutil.Infof("Updating WIMIssuerPolicy '%s'.", desired.Name)
-		updated, err := patchPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch)
+		updated, err := patchPolicy(context.Background(), ctx.client, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while patching: %w", idx+1, desired.Name, err)
 		}
@@ -182,11 +180,19 @@ func (ctx *manifestApplyContext) applySubCa(idx int, in manifest.SubCa) error {
 		return fmt.Errorf("manifest #%d (WIMSubCAProvider): name must be set", idx+1)
 	}
 
-	desired := manifestToAPISubCa(in)
-	existing, err := getSubCa(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, desired.Name)
+	// The issuing template is needed when creating a new sub CA provider due to
+	// the fields 'caType', 'caAccountId' and 'caProductOptionId'.
+	desired, err := manifestToAPISubCa(func(s string) (api.CertificateIssuingTemplateInformation1, error) {
+		return getIssuingTemplateByName(context.Background(), ctx.client, s)
+	}, in)
+	if err != nil {
+		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while converting to API request: %w", idx+1, in.Name, err)
+	}
+
+	existing, err := getSubCa(context.Background(), ctx.client, desired.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
-		created, err := createSubCaProvider(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, apiToAPISubCaProviderCreateRequest(desired))
+		created, err := createSubCaProvider(context.Background(), ctx.client, apiToAPISubCaProviderCreateRequest(desired))
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while creating: %w", idx+1, desired.Name, err)
 		}
@@ -205,7 +211,7 @@ func (ctx *manifestApplyContext) applySubCa(idx int, in manifest.SubCa) error {
 		}
 
 		logutil.Infof("Updating WIMSubCAProvider '%s'.", desired.Name)
-		updated, err := patchSubCaProvider(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch)
+		updated, err := patchSubCaProvider(context.Background(), ctx.client, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while patching: %w", idx+1, desired.Name, err)
 		}
@@ -255,10 +261,10 @@ func (ctx *manifestApplyContext) applyConfig(idx int, in manifest.WIMConfigurati
 		return fmt.Errorf("manifest #%d (WIMConfiguration %q): while converting to API request: %w", idx+1, in.Name, err)
 	}
 
-	existing, err := getConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, in.Name)
+	existing, err := getConfig(context.Background(), ctx.client, in.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
-		_, err := createConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, apiToAPIConfigurationCreateRequest(desired))
+		_, err := createConfig(context.Background(), ctx.client, apiToAPIConfigurationCreateRequest(desired))
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while creating: %w", idx+1, in.Name, err)
 		}
@@ -276,7 +282,7 @@ func (ctx *manifestApplyContext) applyConfig(idx int, in manifest.WIMConfigurati
 		}
 
 		logutil.Infof("Updating WIMConfiguration '%s' (ID '%s').", in.Name, existing.Id.String())
-		updated, err := patchConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id, patch)
+		updated, err := patchConfig(context.Background(), ctx.client, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while patching: %w", idx+1, in.Name, err)
 		}
@@ -298,7 +304,7 @@ func (ctx *manifestApplyContext) resolveServiceAccount(name string) (ServiceAcco
 }
 
 func (ctx *manifestApplyContext) refreshServiceAccount(name string) (ServiceAccount, error) {
-	sa, err := getServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
+	sa, err := getServiceAccount(context.Background(), ctx.client, name)
 	if err != nil {
 		return ServiceAccount{}, err
 	}
@@ -314,7 +320,7 @@ func (ctx *manifestApplyContext) resolvePolicy(name string) (Policy, error) {
 }
 
 func (ctx *manifestApplyContext) refreshPolicy(name string) (Policy, error) {
-	policy, err := getPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
+	policy, err := getPolicy(context.Background(), ctx.client, name)
 	if err != nil {
 		return Policy{}, err
 	}
@@ -340,7 +346,7 @@ func (ctx *manifestApplyContext) resolveSubCa(name string) (SubCa, error) {
 }
 
 func (ctx *manifestApplyContext) refreshSubCaWithName(name string) error {
-	subca, err := getSubCa(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
+	subca, err := getSubCa(context.Background(), ctx.client, name)
 	if err != nil {
 		return err
 	}
@@ -353,7 +359,7 @@ func (ctx *manifestApplyContext) refreshSubCaWithExisting(updated SubCa) {
 }
 
 func (ctx *manifestApplyContext) refreshSubCaWithID(id string) error {
-	subca, err := getSubCaByID(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, id)
+	subca, err := getSubCaByID(context.Background(), ctx.client, id)
 	if err != nil {
 		return err
 	}
@@ -405,7 +411,7 @@ func validateManifests(manifests []manifest.Manifest) error {
 
 // validateReferences checks that all referenced resources exist in manifests or
 // API.
-func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manifest.Manifest) error {
+func validateReferences(cl *api.Client, manifests []manifest.Manifest) error {
 	// Build sets of names defined in manifests
 	serviceAccountNames := make(map[string]bool)
 	policyNames := make(map[string]bool)
@@ -435,10 +441,10 @@ func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manife
 		for _, saName := range cfg.ServiceAccountNames {
 			if !serviceAccountNames[saName] {
 				// Check if it exists in API
-				_, err := getServiceAccount(context.Background(), cl, apiURL, apiKey, saName)
+				_, err := getServiceAccount(context.Background(), cl, saName)
 				if err != nil {
 					if errors.As(err, &NotFound{}) {
-					return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): service account %q not found in manifests or API", i+1, cfg.Name, saName))
+						return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): service account %q not found in manifests or API", i+1, cfg.Name, saName))
 					}
 					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking service account %q: %w", i+1, cfg.Name, saName, err)
 				}
@@ -449,10 +455,10 @@ func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manife
 		for _, policyName := range cfg.PolicyNames {
 			if !policyNames[policyName] {
 				// Check if it exists in API
-				_, err := getPolicy(context.Background(), cl, apiURL, apiKey, policyName)
+				_, err := getPolicy(context.Background(), cl, policyName)
 				if err != nil {
 					if errors.As(err, &NotFound{}) {
-					return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): policy %q not found in manifests or API", i+1, cfg.Name, policyName))
+						return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): policy %q not found in manifests or API", i+1, cfg.Name, policyName))
 					}
 					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking policy %q: %w", i+1, cfg.Name, policyName, err)
 				}
@@ -463,10 +469,10 @@ func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manife
 		if cfg.SubCaProviderName != "" {
 			if !subCaNames[cfg.SubCaProviderName] {
 				// Check if it exists in API
-				_, err := getSubCa(context.Background(), cl, apiURL, apiKey, cfg.SubCaProviderName)
+				_, err := getSubCa(context.Background(), cl, cfg.SubCaProviderName)
 				if err != nil {
 					if errors.As(err, &NotFound{}) {
-					return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): subCA provider %q not found in manifests or API", i+1, cfg.Name, cfg.SubCaProviderName))
+						return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): subCA provider %q not found in manifests or API", i+1, cfg.Name, cfg.SubCaProviderName))
 					}
 					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking subCA provider %q: %w", i+1, cfg.Name, cfg.SubCaProviderName, err)
 				}

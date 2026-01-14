@@ -34,6 +34,22 @@ const (
 	ActivityLogFilterOperatorLTE ActivityLogFilterOperator = "LTE"
 )
 
+// Defines values for ApiKeyStatus.
+const (
+	ApiKeyStatusACTIVE            ApiKeyStatus = "ACTIVE"
+	ApiKeyStatusEXPIRED           ApiKeyStatus = "EXPIRED"
+	ApiKeyStatusINACTIVE          ApiKeyStatus = "INACTIVE"
+	ApiKeyStatusPENDINGACTIVATION ApiKeyStatus = "PENDING_ACTIVATION"
+	ApiKeyStatusPENDINGROTATION   ApiKeyStatus = "PENDING_ROTATION"
+	ApiKeyStatusROTATED           ApiKeyStatus = "ROTATED"
+)
+
+// Defines values for ApiVersion.
+const (
+	ALL ApiVersion = "ALL"
+	V1  ApiVersion = "V1"
+)
+
 // Defines values for AwsCloudProviderInformationRegions.
 const (
 	AwsCloudProviderInformationRegionsAfSouth1     AwsCloudProviderInformationRegions = "af-south-1"
@@ -65,6 +81,108 @@ const (
 	AwsCloudProviderInformationRegionsUsGovWest1   AwsCloudProviderInformationRegions = "us-gov-west-1"
 	AwsCloudProviderInformationRegionsUsWest1      AwsCloudProviderInformationRegions = "us-west-1"
 	AwsCloudProviderInformationRegionsUsWest2      AwsCloudProviderInformationRegions = "us-west-2"
+)
+
+// Defines values for Capability.
+const (
+	CLOUDPROVIDERS                            Capability = "CLOUD_PROVIDERS"
+	CREDENTIALMANAGER                         Capability = "CREDENTIAL_MANAGER"
+	DEFAULT                                   Capability = "DEFAULT"
+	DISTRIBUTEDISSUER                         Capability = "DISTRIBUTED_ISSUER"
+	ENTERPRISE                                Capability = "ENTERPRISE"
+	ISSUANCE                                  Capability = "ISSUANCE"
+	KUBERNETESDISCOVERY                       Capability = "KUBERNETES_DISCOVERY"
+	KUBERNETESENTERPRISECOMPONENTS            Capability = "KUBERNETES_ENTERPRISE_COMPONENTS"
+	KUBERNETESENTERPRISECOMPONENTSAPE         Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_APE"
+	KUBERNETESENTERPRISECOMPONENTSCERTMANAGER Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_CERT_MANAGER"
+	KUBERNETESENTERPRISECOMPONENTSOS          Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_OS"
+	KUBERNETESENTERPRISECOMPONENTSVEI         Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_VEI"
+	KUBERNETESINTEGRATIONTLSPDC               Capability = "KUBERNETES_INTEGRATION_TLSPDC"
+	PROVISIONING                              Capability = "PROVISIONING"
+	SINGLESIGNON                              Capability = "SINGLE_SIGN_ON"
+	VALIDATION                                Capability = "VALIDATION"
+)
+
+// Defines values for CertificateAuthorityProductInformation1CertificateType.
+const (
+	CertificateAuthorityProductInformation1CertificateTypeDOMAINVALIDATEDSSL CertificateAuthorityProductInformation1CertificateType = "DOMAIN_VALIDATED_SSL"
+	CertificateAuthorityProductInformation1CertificateTypeOTHER              CertificateAuthorityProductInformation1CertificateType = "OTHER"
+)
+
+// Defines values for CertificateAuthorityProductInformation1HashAlgorithm.
+const (
+	CertificateAuthorityProductInformation1HashAlgorithmGOSTR341194 CertificateAuthorityProductInformation1HashAlgorithm = "GOSTR3411_94"
+	CertificateAuthorityProductInformation1HashAlgorithmMD2         CertificateAuthorityProductInformation1HashAlgorithm = "MD2"
+	CertificateAuthorityProductInformation1HashAlgorithmMD5         CertificateAuthorityProductInformation1HashAlgorithm = "MD5"
+	CertificateAuthorityProductInformation1HashAlgorithmSHA1        CertificateAuthorityProductInformation1HashAlgorithm = "SHA1"
+	CertificateAuthorityProductInformation1HashAlgorithmSHA224      CertificateAuthorityProductInformation1HashAlgorithm = "SHA224"
+	CertificateAuthorityProductInformation1HashAlgorithmSHA256      CertificateAuthorityProductInformation1HashAlgorithm = "SHA256"
+	CertificateAuthorityProductInformation1HashAlgorithmSHA384      CertificateAuthorityProductInformation1HashAlgorithm = "SHA384"
+	CertificateAuthorityProductInformation1HashAlgorithmSHA512      CertificateAuthorityProductInformation1HashAlgorithm = "SHA512"
+	CertificateAuthorityProductInformation1HashAlgorithmUNKNOWN     CertificateAuthorityProductInformation1HashAlgorithm = "UNKNOWN"
+)
+
+// Defines values for CertificateAuthorityProductInformation1ProductTypes.
+const (
+	CertificateAuthorityProductInformation1ProductTypesCODESIGN CertificateAuthorityProductInformation1ProductTypes = "CODESIGN"
+	CertificateAuthorityProductInformation1ProductTypesSSL      CertificateAuthorityProductInformation1ProductTypes = "SSL"
+)
+
+// Defines values for CertificateIssuingTemplateInformation1CertificateAuthority.
+const (
+	CertificateIssuingTemplateInformation1CertificateAuthorityACME           CertificateIssuingTemplateInformation1CertificateAuthority = "ACME"
+	CertificateIssuingTemplateInformation1CertificateAuthorityBUILTIN        CertificateIssuingTemplateInformation1CertificateAuthority = "BUILTIN"
+	CertificateIssuingTemplateInformation1CertificateAuthorityCONNECTOR      CertificateIssuingTemplateInformation1CertificateAuthority = "CONNECTOR"
+	CertificateIssuingTemplateInformation1CertificateAuthorityDIGICERT       CertificateIssuingTemplateInformation1CertificateAuthority = "DIGICERT"
+	CertificateIssuingTemplateInformation1CertificateAuthorityENTRUST        CertificateIssuingTemplateInformation1CertificateAuthority = "ENTRUST"
+	CertificateIssuingTemplateInformation1CertificateAuthorityGLOBALSIGN     CertificateIssuingTemplateInformation1CertificateAuthority = "GLOBALSIGN"
+	CertificateIssuingTemplateInformation1CertificateAuthorityGLOBALSIGNMSSL CertificateIssuingTemplateInformation1CertificateAuthority = "GLOBALSIGNMSSL"
+	CertificateIssuingTemplateInformation1CertificateAuthorityMICROSOFT      CertificateIssuingTemplateInformation1CertificateAuthority = "MICROSOFT"
+	CertificateIssuingTemplateInformation1CertificateAuthorityMOCKCA         CertificateIssuingTemplateInformation1CertificateAuthority = "MOCKCA"
+	CertificateIssuingTemplateInformation1CertificateAuthorityTPP            CertificateIssuingTemplateInformation1CertificateAuthority = "TPP"
+	CertificateIssuingTemplateInformation1CertificateAuthorityZTPKI          CertificateIssuingTemplateInformation1CertificateAuthority = "ZTPKI"
+)
+
+// Defines values for CertificateIssuingTemplateInformation1ExtendedKeyUsageValues.
+const (
+	CertificateIssuingTemplateInformation1ExtendedKeyUsageValuesCLIENT CertificateIssuingTemplateInformation1ExtendedKeyUsageValues = "CLIENT"
+	CertificateIssuingTemplateInformation1ExtendedKeyUsageValuesSERVER CertificateIssuingTemplateInformation1ExtendedKeyUsageValues = "SERVER"
+)
+
+// Defines values for CertificateIssuingTemplateInformation1Status.
+const (
+	AVAILABLE   CertificateIssuingTemplateInformation1Status = "AVAILABLE"
+	UNAVAILABLE CertificateIssuingTemplateInformation1Status = "UNAVAILABLE"
+)
+
+// Defines values for CertificateIssuingTemplateRequestCertificateAuthority.
+const (
+	CertificateIssuingTemplateRequestCertificateAuthorityACME           CertificateIssuingTemplateRequestCertificateAuthority = "ACME"
+	CertificateIssuingTemplateRequestCertificateAuthorityBUILTIN        CertificateIssuingTemplateRequestCertificateAuthority = "BUILTIN"
+	CertificateIssuingTemplateRequestCertificateAuthorityCONNECTOR      CertificateIssuingTemplateRequestCertificateAuthority = "CONNECTOR"
+	CertificateIssuingTemplateRequestCertificateAuthorityDIGICERT       CertificateIssuingTemplateRequestCertificateAuthority = "DIGICERT"
+	CertificateIssuingTemplateRequestCertificateAuthorityENTRUST        CertificateIssuingTemplateRequestCertificateAuthority = "ENTRUST"
+	CertificateIssuingTemplateRequestCertificateAuthorityGLOBALSIGN     CertificateIssuingTemplateRequestCertificateAuthority = "GLOBALSIGN"
+	CertificateIssuingTemplateRequestCertificateAuthorityGLOBALSIGNMSSL CertificateIssuingTemplateRequestCertificateAuthority = "GLOBALSIGNMSSL"
+	CertificateIssuingTemplateRequestCertificateAuthorityMICROSOFT      CertificateIssuingTemplateRequestCertificateAuthority = "MICROSOFT"
+	CertificateIssuingTemplateRequestCertificateAuthorityMOCKCA         CertificateIssuingTemplateRequestCertificateAuthority = "MOCKCA"
+	CertificateIssuingTemplateRequestCertificateAuthorityTPP            CertificateIssuingTemplateRequestCertificateAuthority = "TPP"
+	CertificateIssuingTemplateRequestCertificateAuthorityZTPKI          CertificateIssuingTemplateRequestCertificateAuthority = "ZTPKI"
+)
+
+// Defines values for CertificateIssuingTemplateRequestExtendedKeyUsageValues.
+const (
+	CertificateIssuingTemplateRequestExtendedKeyUsageValuesCLIENT CertificateIssuingTemplateRequestExtendedKeyUsageValues = "CLIENT"
+	CertificateIssuingTemplateRequestExtendedKeyUsageValuesSERVER CertificateIssuingTemplateRequestExtendedKeyUsageValues = "SERVER"
+)
+
+// Defines values for CompanyType.
+const (
+	CompanyTypeCA          CompanyType = "CA"
+	CompanyTypeINTERNAL    CompanyType = "INTERNAL"
+	CompanyTypeOTHER       CompanyType = "OTHER"
+	CompanyTypeREGULAR     CompanyType = "REGULAR"
+	CompanyTypeTPPCUSTOMER CompanyType = "TPP_CUSTOMER"
 )
 
 // Defines values for ConditionOperator.
@@ -194,6 +312,17 @@ const (
 	GoogleCloudProviderInformationRegionsUsWest4                GoogleCloudProviderInformationRegions = "us-west4"
 )
 
+// Defines values for IssuingTemplateDomainsSyncInformationStatus.
+const (
+	COMPLETED IssuingTemplateDomainsSyncInformationStatus = "COMPLETED"
+	FAILED    IssuingTemplateDomainsSyncInformationStatus = "FAILED"
+)
+
+// Defines values for IssuingTemplatesDomainsSyncRequestAction.
+const (
+	REPLACE IssuingTemplatesDomainsSyncRequestAction = "REPLACE"
+)
+
 // Defines values for KeyAlgorithmInformationAllowedValues.
 const (
 	KeyAlgorithmInformationAllowedValuesECED25519 KeyAlgorithmInformationAllowedValues = "EC_ED25519"
@@ -216,10 +345,35 @@ const (
 	KeyAlgorithmInformationDefaultValueRSA4096   KeyAlgorithmInformationDefaultValue = "RSA_4096"
 )
 
+// Defines values for KeyTypeParameters1KeyCurves.
+const (
+	KeyTypeParameters1KeyCurvesED25519 KeyTypeParameters1KeyCurves = "ED25519"
+	KeyTypeParameters1KeyCurvesP256    KeyTypeParameters1KeyCurves = "P256"
+	KeyTypeParameters1KeyCurvesP384    KeyTypeParameters1KeyCurves = "P384"
+	KeyTypeParameters1KeyCurvesP521    KeyTypeParameters1KeyCurves = "P521"
+	KeyTypeParameters1KeyCurvesUNKNOWN KeyTypeParameters1KeyCurves = "UNKNOWN"
+)
+
+// Defines values for KeyTypeParameters1KeyType.
+const (
+	KeyTypeParameters1KeyTypeEC  KeyTypeParameters1KeyType = "EC"
+	KeyTypeParameters1KeyTypeRSA KeyTypeParameters1KeyType = "RSA"
+)
+
 // Defines values for NaryOperator.
 const (
 	NaryOperatorAND NaryOperator = "AND"
 	NaryOperatorOR  NaryOperator = "OR"
+)
+
+// Defines values for Operator.
+const (
+	CONTAINS    Operator = "CONTAINS"
+	ENDSWITH    Operator = "ENDS_WITH"
+	EQUALS      Operator = "EQUALS"
+	NOTCONTAINS Operator = "NOT_CONTAINS"
+	NOTEQUALS   Operator = "NOT_EQUALS"
+	STARTSWITH  Operator = "STARTS_WITH"
 )
 
 // Defines values for PolicyCreateRequestExtendedKeyUsages.
@@ -339,6 +493,15 @@ const (
 	PolicyUpdateRequestKeyUsagesNonRepudiation   PolicyUpdateRequestKeyUsages = "nonRepudiation"
 )
 
+// Defines values for ProductEntitlement.
+const (
+	ProductEntitlementANY             ProductEntitlement = "ANY"
+	ProductEntitlementCODESIGN        ProductEntitlement = "CODESIGN"
+	ProductEntitlementDEVOPS          ProductEntitlement = "DEVOPS"
+	ProductEntitlementMIRA            ProductEntitlement = "MIRA"
+	ProductEntitlementOUTAGEDETECTION ProductEntitlement = "OUTAGE_DETECTION"
+)
+
 // Defines values for PropertyInformationType.
 const (
 	FORBIDDEN PropertyInformationType = "FORBIDDEN"
@@ -346,6 +509,54 @@ const (
 	LOCKED    PropertyInformationType = "LOCKED"
 	OPTIONAL  PropertyInformationType = "OPTIONAL"
 	REQUIRED  PropertyInformationType = "REQUIRED"
+)
+
+// Defines values for RecommendedSettingsKeyTypeInformation1Curve.
+const (
+	RecommendedSettingsKeyTypeInformation1CurveED25519 RecommendedSettingsKeyTypeInformation1Curve = "ED25519"
+	RecommendedSettingsKeyTypeInformation1CurveP256    RecommendedSettingsKeyTypeInformation1Curve = "P256"
+	RecommendedSettingsKeyTypeInformation1CurveP384    RecommendedSettingsKeyTypeInformation1Curve = "P384"
+	RecommendedSettingsKeyTypeInformation1CurveP521    RecommendedSettingsKeyTypeInformation1Curve = "P521"
+	RecommendedSettingsKeyTypeInformation1CurveUNKNOWN RecommendedSettingsKeyTypeInformation1Curve = "UNKNOWN"
+)
+
+// Defines values for RecommendedSettingsKeyTypeInformation1Type.
+const (
+	RecommendedSettingsKeyTypeInformation1TypeEC  RecommendedSettingsKeyTypeInformation1Type = "EC"
+	RecommendedSettingsKeyTypeInformation1TypeRSA RecommendedSettingsKeyTypeInformation1Type = "RSA"
+)
+
+// Defines values for RecommendedSettingsKeyTypeParameterCurve.
+const (
+	RecommendedSettingsKeyTypeParameterCurveED25519 RecommendedSettingsKeyTypeParameterCurve = "ED25519"
+	RecommendedSettingsKeyTypeParameterCurveP256    RecommendedSettingsKeyTypeParameterCurve = "P256"
+	RecommendedSettingsKeyTypeParameterCurveP384    RecommendedSettingsKeyTypeParameterCurve = "P384"
+	RecommendedSettingsKeyTypeParameterCurveP521    RecommendedSettingsKeyTypeParameterCurve = "P521"
+	RecommendedSettingsKeyTypeParameterCurveUNKNOWN RecommendedSettingsKeyTypeParameterCurve = "UNKNOWN"
+)
+
+// Defines values for RecommendedSettingsKeyTypeParameterType.
+const (
+	EC  RecommendedSettingsKeyTypeParameterType = "EC"
+	RSA RecommendedSettingsKeyTypeParameterType = "RSA"
+)
+
+// Defines values for Role.
+const (
+	RoleDEVOPSLEAD           Role = "DEVOPS_LEAD"
+	RoleDEVOPSUSER           Role = "DEVOPS_USER"
+	RoleGUEST                Role = "GUEST"
+	RoleOUTAGEDETECTIONADMIN Role = "OUTAGEDETECTION_ADMIN"
+	RolePKIADMIN             Role = "PKI_ADMIN"
+	RolePLATFORMADMIN        Role = "PLATFORM_ADMIN"
+	RoleRESOURCEOWNER        Role = "RESOURCE_OWNER"
+	RoleSECURITYADMIN        Role = "SECURITY_ADMIN"
+)
+
+// Defines values for SSOStatus.
+const (
+	SSOStatusACTIVE   SSOStatus = "ACTIVE"
+	SSOStatusINACTIVE SSOStatus = "INACTIVE"
 )
 
 // Defines values for SubCaProviderCreateRequestCaType.
@@ -409,9 +620,43 @@ const (
 	RSA4096   SubCaProviderUpdateRequestKeyAlgorithm = "RSA_4096"
 )
 
+// Defines values for SystemRole.
+const (
+	CONDORMETRICS SystemRole = "CONDOR_METRICS"
+	SYSTEMADMIN   SystemRole = "SYSTEM_ADMIN"
+)
+
+// Defines values for TeamRole.
+const (
+	TeamRoleGUEST         TeamRole = "GUEST"
+	TeamRolePKIADMIN      TeamRole = "PKI_ADMIN"
+	TeamRolePLATFORMADMIN TeamRole = "PLATFORM_ADMIN"
+	TeamRoleRESOURCEOWNER TeamRole = "RESOURCE_OWNER"
+	TeamRoleSYSTEMADMIN   TeamRole = "SYSTEM_ADMIN"
+)
+
 // Defines values for UnaryOperator.
 const (
 	UnaryOperatorNOT UnaryOperator = "NOT"
+)
+
+// Defines values for UserAccountType.
+const (
+	API   UserAccountType = "API"
+	WEBUI UserAccountType = "WEB_UI"
+)
+
+// Defines values for UserStatus.
+const (
+	ACTIVE            UserStatus = "ACTIVE"
+	INACTIVE          UserStatus = "INACTIVE"
+	PENDINGACTIVATION UserStatus = "PENDING_ACTIVATION"
+)
+
+// Defines values for UserType.
+const (
+	EXTERNAL UserType = "EXTERNAL"
+	INTERNAL UserType = "INTERNAL"
 )
 
 // ActivityLogCondition A Condition for filtering
@@ -465,8 +710,58 @@ type AdvancedSettingsInformation struct {
 // AnyValue Can be any value - string, number, boolean, array or object.
 type AnyValue = interface{}
 
+// AnyValue6 Can be any value - string, number, boolean, array or object.
+type AnyValue6 = interface{}
+
 // AnyValue8 Can be any value - string, number, boolean, array or object.
 type AnyValue8 = interface{}
+
+// ApiKeyInformation defines model for ApiKeyInformation.
+type ApiKeyInformation struct {
+	ApiKeyStatus ApiKeyStatus `json:"apiKeyStatus,omitempty,omitzero"`
+
+	// ApiVersion Indicates version of the API.
+	ApiVersion ApiVersion `json:"apiVersion,omitempty,omitzero"`
+
+	// CompanyId UUID of a company.
+	CompanyId openapi_types.UUID `json:"companyId,omitempty,omitzero"`
+
+	// CreationDate The date and time the API key was created.
+	CreationDate time.Time `json:"creationDate,omitempty,omitzero"`
+
+	// Key UUID of an API key.
+	Key openapi_types.UUID `json:"key,omitempty,omitzero"`
+
+	// MemberedTeams Membered teams of the user associated with this API key.
+	MemberedTeams []openapi_types.UUID `json:"memberedTeams,omitempty,omitzero"`
+
+	// ProductRoles Product roles of the user associated with this API key.
+	ProductRoles map[string][]Role `json:"productRoles,omitempty,omitzero"`
+
+	// SystemRoles System roles of the user associated with this API key.
+	SystemRoles []SystemRole `json:"systemRoles,omitempty,omitzero"`
+
+	// UrlPrefix Tenant URL Prefix.
+	UrlPrefix string `json:"urlPrefix,omitempty,omitzero"`
+
+	// UserId UUID of a user.
+	UserId openapi_types.UUID `json:"userId,omitempty,omitzero"`
+
+	// Username Email address of the registered user.
+	Username string `json:"username,omitempty,omitzero"`
+
+	// ValidityEndDate The date and time the API key will no longer be valid.
+	ValidityEndDate time.Time `json:"validityEndDate,omitempty,omitzero"`
+
+	// ValidityStartDate The date and time the API key became valid.
+	ValidityStartDate time.Time `json:"validityStartDate,omitempty,omitzero"`
+}
+
+// ApiKeyStatus defines model for ApiKeyStatus.
+type ApiKeyStatus string
+
+// ApiVersion Indicates version of the API.
+type ApiVersion string
 
 // Application Application ID to associate with the service account
 type Application = uuid.UUID
@@ -502,6 +797,152 @@ type BaseFilter struct {
 // CMSConfId The Credential Manager Service configuration ID.
 type CMSConfId = openapi_types.UUID
 
+// Capability defines model for Capability.
+type Capability string
+
+// CapabilityInformation defines model for CapabilityInformation.
+type CapabilityInformation struct {
+	IsTrial                bool       `json:"isTrial"`
+	Name                   Capability `json:"name"`
+	ProductExpiryDate      time.Time  `json:"productExpiryDate"`
+	ProductGraceExpiryDate time.Time  `json:"productGraceExpiryDate,omitempty,omitzero"`
+}
+
+// CertificateAuthorityProductInformation1 Product specific for external certificate authority
+type CertificateAuthorityProductInformation1 struct {
+	CertificateAuthority string                                                 `json:"certificateAuthority"`
+	CertificateType      CertificateAuthorityProductInformation1CertificateType `json:"certificateType,omitempty,omitzero"`
+	HashAlgorithm        CertificateAuthorityProductInformation1HashAlgorithm   `json:"hashAlgorithm,omitempty,omitzero"`
+	ProductName          string                                                 `json:"productName,omitempty,omitzero"`
+	ProductTypes         []CertificateAuthorityProductInformation1ProductTypes  `json:"productTypes,omitempty,omitzero"`
+
+	// ValidityPeriod ISO8601 Period Format
+	ValidityPeriod string `json:"validityPeriod,omitempty,omitzero"`
+}
+
+// CertificateAuthorityProductInformation1CertificateType defines model for CertificateAuthorityProductInformation1.CertificateType.
+type CertificateAuthorityProductInformation1CertificateType string
+
+// CertificateAuthorityProductInformation1HashAlgorithm defines model for CertificateAuthorityProductInformation1.HashAlgorithm.
+type CertificateAuthorityProductInformation1HashAlgorithm string
+
+// CertificateAuthorityProductInformation1ProductTypes defines model for CertificateAuthorityProductInformation1.ProductTypes.
+type CertificateAuthorityProductInformation1ProductTypes string
+
+// CertificateIssuingTemplateDeleteResponse defines model for CertificateIssuingTemplateDeleteResponse.
+type CertificateIssuingTemplateDeleteResponse struct {
+	Id   openapi_types.UUID `json:"id,omitempty,omitzero"`
+	Name string             `json:"name,omitempty,omitzero"`
+}
+
+// CertificateIssuingTemplateInformation1 defines model for CertificateIssuingTemplateInformation1.
+type CertificateIssuingTemplateInformation1 struct {
+	CertificateAuthority                CertificateIssuingTemplateInformation1CertificateAuthority     `json:"certificateAuthority,omitempty,omitzero"`
+	CertificateAuthorityAccountId       openapi_types.UUID                                             `json:"certificateAuthorityAccountId,omitempty,omitzero"`
+	CertificateAuthorityProductOptionId openapi_types.UUID                                             `json:"certificateAuthorityProductOptionId,omitempty,omitzero"`
+	CompanyId                           openapi_types.UUID                                             `json:"companyId,omitempty,omitzero"`
+	CreationDate                        time.Time                                                      `json:"creationDate,omitempty,omitzero"`
+	CsrUploadAllowed                    bool                                                           `json:"csrUploadAllowed,omitempty,omitzero"`
+	Description                         string                                                         `json:"description,omitempty,omitzero"`
+	DriverGeneratedCsr                  bool                                                           `json:"driverGeneratedCsr,omitempty,omitzero"`
+	DriverId                            openapi_types.UUID                                             `json:"driverId,omitempty,omitzero"`
+	EveryoneIsConsumer                  bool                                                           `json:"everyoneIsConsumer,omitempty,omitzero"`
+	ExtendedKeyUsageValues              []CertificateIssuingTemplateInformation1ExtendedKeyUsageValues `json:"extendedKeyUsageValues,omitempty,omitzero"`
+	Id                                  openapi_types.UUID                                             `json:"id,omitempty,omitzero"`
+	KeyGeneratedByVenafiAllowed         bool                                                           `json:"keyGeneratedByVenafiAllowed,omitempty,omitzero"`
+	KeyPairId                           openapi_types.UUID                                             `json:"keyPairId,omitempty,omitzero"`
+	KeyReuse                            bool                                                           `json:"keyReuse,omitempty,omitzero"`
+	KeyTypes                            []KeyTypeInformation1                                          `json:"keyTypes,omitempty,omitzero"`
+	LocationId                          openapi_types.UUID                                             `json:"locationId,omitempty,omitzero"`
+	ModificationDate                    time.Time                                                      `json:"modificationDate,omitempty,omitzero"`
+	Name                                string                                                         `json:"name,omitempty,omitzero"`
+	Priority                            int32                                                          `json:"priority,omitempty,omitzero"`
+
+	// Product Product specific for external certificate authority
+	Product                             CertificateAuthorityProductInformation1      `json:"product,omitempty,omitzero"`
+	Reason                              string                                       `json:"reason,omitempty,omitzero"`
+	RecommendedSettings                 RecommendedSettingsInformation1              `json:"recommendedSettings,omitempty,omitzero"`
+	ReferencingApplicationIds           []openapi_types.UUID                         `json:"referencingApplicationIds,omitempty,omitzero"`
+	ResourceConsumerTeamIds             []openapi_types.UUID                         `json:"resourceConsumerTeamIds,omitempty,omitzero"`
+	ResourceConsumerUserIds             []openapi_types.UUID                         `json:"resourceConsumerUserIds,omitempty,omitzero"`
+	SanDnsNameRegexes                   []string                                     `json:"sanDnsNameRegexes,omitempty,omitzero"`
+	SanIpAddressRegexes                 []string                                     `json:"sanIpAddressRegexes,omitempty,omitzero"`
+	SanRegexes                          []string                                     `json:"sanRegexes,omitempty,omitzero"`
+	SanRfc822NameRegexes                []string                                     `json:"sanRfc822NameRegexes,omitempty,omitzero"`
+	SanUniformResourceIdentifierRegexes []string                                     `json:"sanUniformResourceIdentifierRegexes,omitempty,omitzero"`
+	Status                              CertificateIssuingTemplateInformation1Status `json:"status,omitempty,omitzero"`
+	SubjectCNRegexes                    []string                                     `json:"subjectCNRegexes,omitempty,omitzero"`
+	SubjectCValues                      []string                                     `json:"subjectCValues,omitempty,omitzero"`
+	SubjectLRegexes                     []string                                     `json:"subjectLRegexes,omitempty,omitzero"`
+	SubjectORegexes                     []string                                     `json:"subjectORegexes,omitempty,omitzero"`
+	SubjectOURegexes                    []string                                     `json:"subjectOURegexes,omitempty,omitzero"`
+	SubjectSTRegexes                    []string                                     `json:"subjectSTRegexes,omitempty,omitzero"`
+	SystemGenerated                     bool                                         `json:"systemGenerated,omitempty,omitzero"`
+	TrackingData                        TrackingDataInformation                      `json:"trackingData,omitempty,omitzero"`
+}
+
+// CertificateIssuingTemplateInformation1CertificateAuthority defines model for CertificateIssuingTemplateInformation1.CertificateAuthority.
+type CertificateIssuingTemplateInformation1CertificateAuthority string
+
+// CertificateIssuingTemplateInformation1ExtendedKeyUsageValues defines model for CertificateIssuingTemplateInformation1.ExtendedKeyUsageValues.
+type CertificateIssuingTemplateInformation1ExtendedKeyUsageValues string
+
+// CertificateIssuingTemplateInformation1Status defines model for CertificateIssuingTemplateInformation1.Status.
+type CertificateIssuingTemplateInformation1Status string
+
+// CertificateIssuingTemplateRequest defines model for CertificateIssuingTemplateRequest.
+type CertificateIssuingTemplateRequest struct {
+	CertificateAuthority                CertificateIssuingTemplateRequestCertificateAuthority     `json:"certificateAuthority"`
+	CertificateAuthorityProductOptionId openapi_types.UUID                                        `json:"certificateAuthorityProductOptionId"`
+	CsrUploadAllowed                    bool                                                      `json:"csrUploadAllowed,omitempty,omitzero"`
+	Description                         string                                                    `json:"description,omitempty,omitzero"`
+	DriverGeneratedCsr                  bool                                                      `json:"driverGeneratedCsr,omitempty,omitzero"`
+	DriverId                            openapi_types.UUID                                        `json:"driverId,omitempty,omitzero"`
+	EveryoneIsConsumer                  bool                                                      `json:"everyoneIsConsumer,omitempty,omitzero"`
+	ExtendedKeyUsageValues              []CertificateIssuingTemplateRequestExtendedKeyUsageValues `json:"extendedKeyUsageValues,omitempty,omitzero"`
+	KeyGeneratedByVenafiAllowed         bool                                                      `json:"keyGeneratedByVenafiAllowed,omitempty,omitzero"`
+	KeyPairId                           openapi_types.UUID                                        `json:"keyPairId,omitempty,omitzero"`
+	KeyReuse                            bool                                                      `json:"keyReuse"`
+	KeyTypes                            []KeyTypeParameters1                                      `json:"keyTypes"`
+	LocationId                          openapi_types.UUID                                        `json:"locationId,omitempty,omitzero"`
+	Name                                string                                                    `json:"name"`
+	Priority                            int32                                                     `json:"priority,omitempty,omitzero"`
+
+	// Product Product specific for external certificate authority
+	Product                             CertificateAuthorityProductInformation1 `json:"product"`
+	RecommendedSettings                 RecommendedSettingsRequest              `json:"recommendedSettings,omitempty,omitzero"`
+	ResourceConsumerTeamIds             []openapi_types.UUID                    `json:"resourceConsumerTeamIds,omitempty,omitzero"`
+	ResourceConsumerUserIds             []openapi_types.UUID                    `json:"resourceConsumerUserIds,omitempty,omitzero"`
+	SanIpAddressRegexes                 []string                                `json:"sanIpAddressRegexes,omitempty,omitzero"`
+	SanRegexes                          []string                                `json:"sanRegexes,omitempty,omitzero"`
+	SanRfc822NameRegexes                []string                                `json:"sanRfc822NameRegexes,omitempty,omitzero"`
+	SanUniformResourceIdentifierRegexes []string                                `json:"sanUniformResourceIdentifierRegexes,omitempty,omitzero"`
+	SubjectCNRegexes                    []string                                `json:"subjectCNRegexes,omitempty,omitzero"`
+	SubjectCValues                      []string                                `json:"subjectCValues,omitempty,omitzero"`
+	SubjectLRegexes                     []string                                `json:"subjectLRegexes,omitempty,omitzero"`
+	SubjectORegexes                     []string                                `json:"subjectORegexes,omitempty,omitzero"`
+	SubjectOURegexes                    []string                                `json:"subjectOURegexes,omitempty,omitzero"`
+	SubjectSTRegexes                    []string                                `json:"subjectSTRegexes,omitempty,omitzero"`
+	TrackingData                        TrackingDataInformation                 `json:"trackingData,omitempty,omitzero"`
+}
+
+// CertificateIssuingTemplateRequestCertificateAuthority defines model for CertificateIssuingTemplateRequest.CertificateAuthority.
+type CertificateIssuingTemplateRequestCertificateAuthority string
+
+// CertificateIssuingTemplateRequestExtendedKeyUsageValues defines model for CertificateIssuingTemplateRequest.ExtendedKeyUsageValues.
+type CertificateIssuingTemplateRequestExtendedKeyUsageValues string
+
+// CertificateIssuingTemplateResponse defines model for CertificateIssuingTemplateResponse.
+type CertificateIssuingTemplateResponse struct {
+	CertificateIssuingTemplates []CertificateIssuingTemplateInformation1 `json:"certificateIssuingTemplates,omitempty,omitzero"`
+}
+
+// ChangePasswordRequest defines model for ChangePasswordRequest.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword,omitempty,omitzero"`
+	NewPassword     string `json:"newPassword"`
+}
+
 // ClientAuthenticationInformation defines model for ClientAuthenticationInformation.
 type ClientAuthenticationInformation struct {
 	union json.RawMessage
@@ -518,6 +959,23 @@ type CloudProvidersInformation struct {
 	Azure  AzureCloudProviderInformation  `json:"azure,omitempty,omitzero"`
 	Google GoogleCloudProviderInformation `json:"google,omitempty,omitzero"`
 }
+
+// CompanyInformation defines model for CompanyInformation.
+type CompanyInformation struct {
+	Active              bool                            `json:"active,omitempty,omitzero"`
+	CompanyType         CompanyType                     `json:"companyType,omitempty,omitzero"`
+	CreationDate        time.Time                       `json:"creationDate,omitempty,omitzero"`
+	Domains             []string                        `json:"domains,omitempty,omitzero"`
+	Id                  openapi_types.UUID              `json:"id"`
+	InstanceId          string                          `json:"instanceId,omitempty,omitzero"`
+	Name                string                          `json:"name,omitempty,omitzero"`
+	ProductEntitlements []ProductEntitlementInformation `json:"productEntitlements"`
+	TsgId               string                          `json:"tsgId,omitempty,omitzero"`
+	UrlPrefix           string                          `json:"urlPrefix,omitempty,omitzero"`
+}
+
+// CompanyType defines model for CompanyType.
+type CompanyType string
 
 // Condition A Condition for filtering
 type Condition struct {
@@ -704,6 +1162,15 @@ type CreateServiceAccountResponseBody struct {
 	PublicKey string `json:"publicKey,omitempty,omitzero"`
 }
 
+// CreateTeamRequest defines model for CreateTeamRequest.
+type CreateTeamRequest struct {
+	Members           []openapi_types.UUID `json:"members,omitempty,omitzero"`
+	Name              string               `json:"name"`
+	Owners            []openapi_types.UUID `json:"owners"`
+	Role              TeamRole             `json:"role"`
+	UserMatchingRules []UserMatchingRule   `json:"userMatchingRules,omitempty,omitzero"`
+}
+
 // CredentialId The ID of the Credential in our System.
 type CredentialId = openapi_types.UUID
 
@@ -742,9 +1209,21 @@ type ErrorInformation struct {
 	Message string     `json:"message,omitempty,omitzero"`
 }
 
+// ErrorInformation6 defines model for ErrorInformation6.
+type ErrorInformation6 struct {
+	Args    []AnyValue6 `json:"args,omitempty,omitzero"`
+	Code    int32       `json:"code,omitempty,omitzero"`
+	Message string      `json:"message,omitempty,omitzero"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Errors []ErrorInformation `json:"errors,omitempty,omitzero"`
+}
+
+// ErrorResponse7 defines model for ErrorResponse7.
+type ErrorResponse7 struct {
+	Errors []ErrorInformation6 `json:"errors,omitempty,omitzero"`
 }
 
 // ExtendedConfigurationInformation defines model for ExtendedConfigurationInformation.
@@ -872,6 +1351,9 @@ type FilterOperands struct {
 // FilterOperandsOperator An operator for filtering
 type FilterOperandsOperator string
 
+// GetServiceAccountScopesResponseBody defines model for GetServiceAccountScopesResponseBody.
+type GetServiceAccountScopesResponseBody = []ScopeDetails
+
 // GetServiceAccountsResponseBody defines model for GetServiceAccountsResponseBody.
 type GetServiceAccountsResponseBody = []ServiceAccountDetailsNoKey
 
@@ -886,6 +1368,33 @@ type GoogleCloudProviderInformation struct {
 
 // GoogleCloudProviderInformationRegions defines model for GoogleCloudProviderInformation.Regions.
 type GoogleCloudProviderInformationRegions string
+
+// IssuingTemplateDomainsSyncInformation defines model for IssuingTemplateDomainsSyncInformation.
+type IssuingTemplateDomainsSyncInformation struct {
+	Error             ErrorInformation6                           `json:"error,omitempty,omitzero"`
+	IssuingTemplateId openapi_types.UUID                          `json:"issuingTemplateId,omitempty,omitzero"`
+	Status            IssuingTemplateDomainsSyncInformationStatus `json:"status,omitempty,omitzero"`
+}
+
+// IssuingTemplateDomainsSyncInformationStatus defines model for IssuingTemplateDomainsSyncInformation.Status.
+type IssuingTemplateDomainsSyncInformationStatus string
+
+// IssuingTemplateDomainsSyncResponse defines model for IssuingTemplateDomainsSyncResponse.
+type IssuingTemplateDomainsSyncResponse struct {
+	IssuingTemplatesInformationList []IssuingTemplateDomainsSyncInformation `json:"issuingTemplatesInformationList,omitempty,omitzero"`
+}
+
+// IssuingTemplatesDomainsSyncRequest defines model for IssuingTemplatesDomainsSyncRequest.
+type IssuingTemplatesDomainsSyncRequest struct {
+	Action                        IssuingTemplatesDomainsSyncRequestAction `json:"action"`
+	CertificateAuthorityAccountId openapi_types.UUID                       `json:"certificateAuthorityAccountId"`
+
+	// IssuingTemplatesIds Set of UUIDs of the issuing templates
+	IssuingTemplatesIds []openapi_types.UUID `json:"issuingTemplatesIds"`
+}
+
+// IssuingTemplatesDomainsSyncRequestAction defines model for IssuingTemplatesDomainsSyncRequest.Action.
+type IssuingTemplatesDomainsSyncRequestAction string
 
 // JwtClientInformation defines model for JwtClientInformation.
 type JwtClientInformation struct {
@@ -948,8 +1457,29 @@ type KeyAlgorithmInformationAllowedValues string
 // KeyAlgorithmInformationDefaultValue Key algorithm default value
 type KeyAlgorithmInformationDefaultValue string
 
+// KeyTypeInformation1 defines model for KeyTypeInformation1.
+type KeyTypeInformation1 struct {
+	KeyType string `json:"keyType,omitempty,omitzero"`
+}
+
+// KeyTypeParameters1 defines model for KeyTypeParameters1.
+type KeyTypeParameters1 struct {
+	KeyCurves  []KeyTypeParameters1KeyCurves `json:"keyCurves,omitempty,omitzero"`
+	KeyLengths []int32                       `json:"keyLengths,omitempty,omitzero"`
+	KeyType    KeyTypeParameters1KeyType     `json:"keyType"`
+}
+
+// KeyTypeParameters1KeyCurves defines model for KeyTypeParameters1.KeyCurves.
+type KeyTypeParameters1KeyCurves string
+
+// KeyTypeParameters1KeyType defines model for KeyTypeParameters1.KeyType.
+type KeyTypeParameters1KeyType string
+
 // NaryOperator An operator for filtering
 type NaryOperator string
+
+// Operator defines model for Operator.
+type Operator string
 
 // PatchServiceAccountByClientIDRequestBody defines model for PatchServiceAccountByClientIDRequestBody.
 type PatchServiceAccountByClientIDRequestBody struct {
@@ -1103,6 +1633,16 @@ type PolicyUpdateRequestExtendedKeyUsages string
 // PolicyUpdateRequestKeyUsages defines model for PolicyUpdateRequest.KeyUsages.
 type PolicyUpdateRequestKeyUsages string
 
+// ProductEntitlement defines model for ProductEntitlement.
+type ProductEntitlement string
+
+// ProductEntitlementInformation defines model for ProductEntitlementInformation.
+type ProductEntitlementInformation struct {
+	Capabilities                     []CapabilityInformation          `json:"capabilities"`
+	Label                            ProductEntitlement               `json:"label"`
+	VisibilityConstraintsInformation VisibilityConstraintsInformation `json:"visibilityConstraintsInformation"`
+}
+
 // PropertyInformation defines model for PropertyInformation.
 type PropertyInformation struct {
 	AllowedValues  []string                `json:"allowedValues"`
@@ -1133,6 +1673,84 @@ type PutServiceAccountByClientIDOCITokenResponseBody struct {
 	OciRegistryToken string `json:"ociRegistryToken,omitempty,omitzero"`
 }
 
+// RecommendedSettingsInformation1 defines model for RecommendedSettingsInformation1.
+type RecommendedSettingsInformation1 struct {
+	Key              RecommendedSettingsKeyTypeInformation1 `json:"key,omitempty,omitzero"`
+	KeyGeneratedBy   string                                 `json:"keyGeneratedBy,omitempty,omitzero"`
+	SanRegexes       []string                               `json:"sanRegexes,omitempty,omitzero"`
+	SubjectCNRegexes []string                               `json:"subjectCNRegexes,omitempty,omitzero"`
+	SubjectCValue    string                                 `json:"subjectCValue,omitempty,omitzero"`
+	SubjectLValue    string                                 `json:"subjectLValue,omitempty,omitzero"`
+	SubjectOUValue   string                                 `json:"subjectOUValue,omitempty,omitzero"`
+	SubjectOValue    string                                 `json:"subjectOValue,omitempty,omitzero"`
+	SubjectSTValue   string                                 `json:"subjectSTValue,omitempty,omitzero"`
+}
+
+// RecommendedSettingsKeyTypeInformation1 defines model for RecommendedSettingsKeyTypeInformation1.
+type RecommendedSettingsKeyTypeInformation1 struct {
+	Curve  RecommendedSettingsKeyTypeInformation1Curve `json:"curve,omitempty,omitzero"`
+	Length int32                                       `json:"length,omitempty,omitzero"`
+	Type   RecommendedSettingsKeyTypeInformation1Type  `json:"type,omitempty,omitzero"`
+}
+
+// RecommendedSettingsKeyTypeInformation1Curve defines model for RecommendedSettingsKeyTypeInformation1.Curve.
+type RecommendedSettingsKeyTypeInformation1Curve string
+
+// RecommendedSettingsKeyTypeInformation1Type defines model for RecommendedSettingsKeyTypeInformation1.Type.
+type RecommendedSettingsKeyTypeInformation1Type string
+
+// RecommendedSettingsKeyTypeParameter defines model for RecommendedSettingsKeyTypeParameter.
+type RecommendedSettingsKeyTypeParameter struct {
+	Curve  RecommendedSettingsKeyTypeParameterCurve `json:"curve,omitempty,omitzero"`
+	Length int32                                    `json:"length,omitempty,omitzero"`
+	Type   RecommendedSettingsKeyTypeParameterType  `json:"type,omitempty,omitzero"`
+}
+
+// RecommendedSettingsKeyTypeParameterCurve defines model for RecommendedSettingsKeyTypeParameter.Curve.
+type RecommendedSettingsKeyTypeParameterCurve string
+
+// RecommendedSettingsKeyTypeParameterType defines model for RecommendedSettingsKeyTypeParameter.Type.
+type RecommendedSettingsKeyTypeParameterType string
+
+// RecommendedSettingsRequest defines model for RecommendedSettingsRequest.
+type RecommendedSettingsRequest struct {
+	Key              RecommendedSettingsKeyTypeParameter `json:"key,omitempty,omitzero"`
+	KeyGeneratedBy   string                              `json:"keyGeneratedBy,omitempty,omitzero"`
+	SanRegexes       []string                            `json:"sanRegexes,omitempty,omitzero"`
+	SubjectCNRegexes []string                            `json:"subjectCNRegexes,omitempty,omitzero"`
+	SubjectCValue    string                              `json:"subjectCValue,omitempty,omitzero"`
+	SubjectLValue    string                              `json:"subjectLValue,omitempty,omitzero"`
+	SubjectOUValue   string                              `json:"subjectOUValue,omitempty,omitzero"`
+	SubjectOValue    string                              `json:"subjectOValue,omitempty,omitzero"`
+	SubjectSTValue   string                              `json:"subjectSTValue,omitempty,omitzero"`
+}
+
+// ResendActivationRequest defines model for ResendActivationRequest.
+type ResendActivationRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
+// ResendActivationResponse defines model for ResendActivationResponse.
+type ResendActivationResponse struct {
+	User UserInformation `json:"user,omitempty,omitzero"`
+}
+
+// ResetPasswordRequest defines model for ResetPasswordRequest.
+type ResetPasswordRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
+// ResetPasswordResponse defines model for ResetPasswordResponse.
+type ResetPasswordResponse struct {
+	Message string `json:"message,omitempty,omitzero"`
+}
+
+// Role defines model for Role.
+type Role string
+
+// SSOStatus defines model for SSOStatus.
+type SSOStatus string
+
 // SansInformation Subject alternative names
 type SansInformation struct {
 	DnsNames                   PropertyInformation `json:"dnsNames,omitempty,omitzero"`
@@ -1143,6 +1761,18 @@ type SansInformation struct {
 
 // Scope The service account authorization scopes
 type Scope = string
+
+// ScopeDetails The service account authorization scopes detailed
+type ScopeDetails struct {
+	// AuthenticationType Type of authentication used in the scope
+	AuthenticationType string `json:"authenticationType,omitempty,omitzero"`
+
+	// Id ID for the given scope
+	Id string `json:"id"`
+
+	// ReadableName User friendly name for the scope
+	ReadableName string `json:"readableName"`
+}
 
 // ServiceAccountBaseObject defines model for ServiceAccountBaseObject.
 type ServiceAccountBaseObject struct {
@@ -1576,14 +2206,173 @@ type SubjectAttributesInformation struct {
 	StateOrProvince    PropertyInformation `json:"stateOrProvince,omitempty,omitzero"`
 }
 
+// SystemRole defines model for SystemRole.
+type SystemRole string
+
+// TeamInformation defines model for TeamInformation.
+type TeamInformation struct {
+	CompanyId         openapi_types.UUID   `json:"companyId,omitempty,omitzero"`
+	Id                openapi_types.UUID   `json:"id,omitempty,omitzero"`
+	Members           []openapi_types.UUID `json:"members,omitempty,omitzero"`
+	ModificationDate  time.Time            `json:"modificationDate,omitempty,omitzero"`
+	Name              string               `json:"name,omitempty,omitzero"`
+	Owners            []openapi_types.UUID `json:"owners,omitempty,omitzero"`
+	ProductRoles      map[string][]Role    `json:"productRoles,omitempty,omitzero"`
+	Role              TeamRole             `json:"role,omitempty,omitzero"`
+	SystemRoles       []SystemRole         `json:"systemRoles,omitempty,omitzero"`
+	UserMatchingRules []UserMatchingRule   `json:"userMatchingRules,omitempty,omitzero"`
+}
+
+// TeamMembersRequest defines model for TeamMembersRequest.
+type TeamMembersRequest struct {
+	Members []openapi_types.UUID `json:"members"`
+}
+
+// TeamOwnersRequest defines model for TeamOwnersRequest.
+type TeamOwnersRequest struct {
+	Owners []openapi_types.UUID `json:"owners"`
+}
+
+// TeamRole defines model for TeamRole.
+type TeamRole string
+
+// TeamsResponse defines model for TeamsResponse.
+type TeamsResponse struct {
+	Teams []TeamInformation `json:"teams,omitempty,omitzero"`
+}
+
+// TrackingDataInformation defines model for TrackingDataInformation.
+type TrackingDataInformation struct {
+	CertificateAuthority string `json:"certificateAuthority"`
+}
+
 // UnaryOperator An operator for filtering
 type UnaryOperator string
+
+// UpdateTeamRequest defines model for UpdateTeamRequest.
+type UpdateTeamRequest struct {
+	Name              string             `json:"name,omitempty,omitzero"`
+	Role              TeamRole           `json:"role,omitempty,omitzero"`
+	UserMatchingRules []UserMatchingRule `json:"userMatchingRules,omitempty,omitzero"`
+}
+
+// UserAccountRequest defines model for UserAccountRequest.
+type UserAccountRequest struct {
+	CompanyName        string            `json:"companyName,omitempty,omitzero"`
+	Firstname          string            `json:"firstname,omitempty,omitzero"`
+	GrecaptchaResponse string            `json:"grecaptchaResponse,omitempty,omitzero"`
+	Lastname           string            `json:"lastname,omitempty,omitzero"`
+	MarketoAttributes  map[string]string `json:"marketoAttributes,omitempty,omitzero"`
+	Password           string            `json:"password,omitempty,omitzero"`
+	UrlPrefix          string            `json:"urlPrefix,omitempty,omitzero"`
+	UserAccountType    UserAccountType   `json:"userAccountType"`
+	Username           string            `json:"username,omitempty,omitzero"`
+}
+
+// UserAccountResponse defines model for UserAccountResponse.
+type UserAccountResponse struct {
+	ApiKey  ApiKeyInformation  `json:"apiKey,omitempty,omitzero"`
+	Company CompanyInformation `json:"company,omitempty,omitzero"`
+	User    UserInformation    `json:"user,omitempty,omitzero"`
+}
+
+// UserAccountType defines model for UserAccountType.
+type UserAccountType string
+
+// UserInformation defines model for UserInformation.
+type UserInformation struct {
+	CompanyId                    openapi_types.UUID   `json:"companyId,omitempty,omitzero"`
+	CreationDate                 time.Time            `json:"creationDate,omitempty,omitzero"`
+	Deleted                      bool                 `json:"deleted,omitempty,omitzero"`
+	Disabled                     bool                 `json:"disabled,omitempty,omitzero"`
+	EmailAddress                 string               `json:"emailAddress,omitempty,omitzero"`
+	FirstLoginDate               time.Time            `json:"firstLoginDate,omitempty,omitzero"`
+	Firstname                    string               `json:"firstname,omitempty,omitzero"`
+	ForceLocalPasswordExpiration bool                 `json:"forceLocalPasswordExpiration,omitempty,omitzero"`
+	HasPassword                  bool                 `json:"hasPassword,omitempty,omitzero"`
+	Id                           openapi_types.UUID   `json:"id,omitempty,omitzero"`
+	Lastname                     string               `json:"lastname,omitempty,omitzero"`
+	LocalLoginDisabled           bool                 `json:"localLoginDisabled,omitempty,omitzero"`
+	MemberedTeams                []openapi_types.UUID `json:"memberedTeams,omitempty,omitzero"`
+	OwnedTeams                   []openapi_types.UUID `json:"ownedTeams,omitempty,omitzero"`
+	ProductRoles                 map[string][]Role    `json:"productRoles,omitempty,omitzero"`
+	SignupAttributes             map[string]string    `json:"signupAttributes,omitempty,omitzero"`
+	SsoStatus                    SSOStatus            `json:"ssoStatus,omitempty,omitzero"`
+	SystemRoles                  []SystemRole         `json:"systemRoles,omitempty,omitzero"`
+	UserAccountType              UserAccountType      `json:"userAccountType,omitempty,omitzero"`
+	UserStatus                   UserStatus           `json:"userStatus,omitempty,omitzero"`
+	UserType                     UserType             `json:"userType,omitempty,omitzero"`
+	Username                     string               `json:"username,omitempty,omitzero"`
+}
+
+// UserMatchingRule defines model for UserMatchingRule.
+type UserMatchingRule struct {
+	ClaimName string   `json:"claimName"`
+	Operator  Operator `json:"operator"`
+	Value     string   `json:"value"`
+}
+
+// UserStatus defines model for UserStatus.
+type UserStatus string
+
+// UserType defines model for UserType.
+type UserType string
+
+// VisibilityConstraintsInformation defines model for VisibilityConstraintsInformation.
+type VisibilityConstraintsInformation struct {
+	FullAccessDurationDays                   int32 `json:"fullAccessDurationDays,omitempty,omitzero"`
+	LimitedAccessNotificationDays            int32 `json:"limitedAccessNotificationDays,omitempty,omitzero"`
+	LimitedVisibilityCertCount               int32 `json:"limitedVisibilityCertCount,omitempty,omitzero"`
+	LimitedVisibilityCertInstallPerCertCount int32 `json:"limitedVisibilityCertInstallPerCertCount,omitempty,omitzero"`
+}
 
 // CMSConfigIdParam The Credential Manager Service configuration ID.
 type CMSConfigIdParam = CMSConfId
 
 // CredentialIdParam The ID of the Credential in our System.
 type CredentialIdParam = CredentialId
+
+// CertificateissuingtemplateGetAllParams defines parameters for CertificateissuingtemplateGetAll.
+type CertificateissuingtemplateGetAllParams struct {
+	// CertificateAuthorityAccountId UUID of a Certificate Authority Account.
+	CertificateAuthorityAccountId openapi_types.UUID `form:"certificateAuthorityAccountId,omitempty" json:"certificateAuthorityAccountId,omitempty,omitzero"`
+}
+
+// UseraccountsActivateParams defines parameters for UseraccountsActivate.
+type UseraccountsActivateParams struct {
+	K string `form:"k" json:"k"`
+	V bool   `form:"v" json:"v"`
+}
+
+// UseraccountsResendActivationParams defines parameters for UseraccountsResendActivation.
+type UseraccountsResendActivationParams struct {
+	UrlPrefix string `form:"urlPrefix,omitempty" json:"urlPrefix,omitempty,omitzero"`
+}
+
+// UseraccountsRotateApiKeyParams defines parameters for UseraccountsRotateApiKey.
+type UseraccountsRotateApiKeyParams struct {
+	K openapi_types.UUID `form:"k" json:"k"`
+	V bool               `form:"v" json:"v"`
+}
+
+// UseraccountsCheckResetPasswordTokenParams defines parameters for UseraccountsCheckResetPasswordToken.
+type UseraccountsCheckResetPasswordTokenParams struct {
+	Token string `form:"token,omitempty" json:"token,omitempty,omitzero"`
+}
+
+// UseraccountsResetPasswordParams defines parameters for UseraccountsResetPassword.
+type UseraccountsResetPasswordParams struct {
+	UrlPrefix string `form:"urlPrefix,omitempty" json:"urlPrefix,omitempty,omitzero"`
+}
+
+// CertificateissuingtemplateCreateJSONRequestBody defines body for CertificateissuingtemplateCreate for application/json ContentType.
+type CertificateissuingtemplateCreateJSONRequestBody = CertificateIssuingTemplateRequest
+
+// DomainssynchronizationJSONRequestBody defines body for Domainssynchronization for application/json ContentType.
+type DomainssynchronizationJSONRequestBody = IssuingTemplatesDomainsSyncRequest
+
+// CertificateissuingtemplateUpdateJSONRequestBody defines body for CertificateissuingtemplateUpdate for application/json ContentType.
+type CertificateissuingtemplateUpdateJSONRequestBody = CertificateIssuingTemplateRequest
 
 // ConfigurationsCreateJSONRequestBody defines body for ConfigurationsCreate for application/json ContentType.
 type ConfigurationsCreateJSONRequestBody = ConfigurationCreateRequest
@@ -1611,6 +2400,36 @@ type PatchV1ServiceaccountsByIdJSONRequestBody = PatchServiceAccountByClientIDRe
 
 // PutV1ServiceaccountsByIdCredentialsJSONRequestBody defines body for PutV1ServiceaccountsByIdCredentials for application/json ContentType.
 type PutV1ServiceaccountsByIdCredentialsJSONRequestBody = PutServiceAccountByClientIDCredentialsRequestBody
+
+// TeamsCreateJSONRequestBody defines body for TeamsCreate for application/json ContentType.
+type TeamsCreateJSONRequestBody = CreateTeamRequest
+
+// TeamsUpdateJSONRequestBody defines body for TeamsUpdate for application/json ContentType.
+type TeamsUpdateJSONRequestBody = UpdateTeamRequest
+
+// TeamsMembersDeleteJSONRequestBody defines body for TeamsMembersDelete for application/json ContentType.
+type TeamsMembersDeleteJSONRequestBody = TeamMembersRequest
+
+// TeamsMembersAddJSONRequestBody defines body for TeamsMembersAdd for application/json ContentType.
+type TeamsMembersAddJSONRequestBody = TeamMembersRequest
+
+// TeamsMembersOwnersRemoveJSONRequestBody defines body for TeamsMembersOwnersRemove for application/json ContentType.
+type TeamsMembersOwnersRemoveJSONRequestBody = TeamOwnersRequest
+
+// TeamsMembersOwnersAddJSONRequestBody defines body for TeamsMembersOwnersAdd for application/json ContentType.
+type TeamsMembersOwnersAddJSONRequestBody = TeamOwnersRequest
+
+// UseraccountsCreateJSONRequestBody defines body for UseraccountsCreate for application/json ContentType.
+type UseraccountsCreateJSONRequestBody = UserAccountRequest
+
+// UseraccountsResendActivationJSONRequestBody defines body for UseraccountsResendActivation for application/json ContentType.
+type UseraccountsResendActivationJSONRequestBody = ResendActivationRequest
+
+// UseraccountsChangePasswordJSONRequestBody defines body for UseraccountsChangePassword for application/json ContentType.
+type UseraccountsChangePasswordJSONRequestBody = ChangePasswordRequest
+
+// UseraccountsResetPasswordJSONRequestBody defines body for UseraccountsResetPassword for application/json ContentType.
+type UseraccountsResetPasswordJSONRequestBody = ResetPasswordRequest
 
 // AsActivityLogFilterOperands returns the union data inside the BaseActivityLogFilter as a ActivityLogFilterOperands
 func (t BaseActivityLogFilter) AsActivityLogFilterOperands() (ActivityLogFilterOperands, error) {
@@ -1980,6 +2799,30 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// CertificateissuingtemplateGetAll request
+	CertificateissuingtemplateGetAll(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CertificateissuingtemplateCreateWithBody request with any body
+	CertificateissuingtemplateCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CertificateissuingtemplateCreate(ctx context.Context, body CertificateissuingtemplateCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DomainssynchronizationWithBody request with any body
+	DomainssynchronizationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	Domainssynchronization(ctx context.Context, body DomainssynchronizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CertificateissuingtemplateDelete request
+	CertificateissuingtemplateDelete(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CertificateissuingtemplateGetById request
+	CertificateissuingtemplateGetById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CertificateissuingtemplateUpdateWithBody request with any body
+	CertificateissuingtemplateUpdateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CertificateissuingtemplateUpdate(ctx context.Context, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ConfigurationsGetAll request
 	ConfigurationsGetAll(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2045,6 +2888,9 @@ type ClientInterface interface {
 
 	CreateV1Serviceaccounts(ctx context.Context, body CreateV1ServiceaccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetV1Serviceaccountscopes request
+	GetV1Serviceaccountscopes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteV1ServiceaccountsById request
 	DeleteV1ServiceaccountsById(ctx context.Context, id uuid.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2063,6 +2909,185 @@ type ClientInterface interface {
 
 	// PutV1ServiceaccountsByIdOcitoken request
 	PutV1ServiceaccountsByIdOcitoken(ctx context.Context, id uuid.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsGetAll request
+	TeamsGetAll(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsCreateWithBody request with any body
+	TeamsCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TeamsCreate(ctx context.Context, body TeamsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsDelete request
+	TeamsDelete(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsGetById request
+	TeamsGetById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsUpdateWithBody request with any body
+	TeamsUpdateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TeamsUpdate(ctx context.Context, id openapi_types.UUID, body TeamsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsMembersDeleteWithBody request with any body
+	TeamsMembersDeleteWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TeamsMembersDelete(ctx context.Context, id openapi_types.UUID, body TeamsMembersDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsMembersAddWithBody request with any body
+	TeamsMembersAddWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TeamsMembersAdd(ctx context.Context, id openapi_types.UUID, body TeamsMembersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsMembersOwnersRemoveWithBody request with any body
+	TeamsMembersOwnersRemoveWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TeamsMembersOwnersRemove(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersRemoveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TeamsMembersOwnersAddWithBody request with any body
+	TeamsMembersOwnersAddWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TeamsMembersOwnersAdd(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsGetByAuth request
+	UseraccountsGetByAuth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsCreateWithBody request with any body
+	UseraccountsCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UseraccountsCreate(ctx context.Context, body UseraccountsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsActivate request
+	UseraccountsActivate(ctx context.Context, params *UseraccountsActivateParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsResendActivationWithBody request with any body
+	UseraccountsResendActivationWithBody(ctx context.Context, params *UseraccountsResendActivationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UseraccountsResendActivation(ctx context.Context, params *UseraccountsResendActivationParams, body UseraccountsResendActivationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsRotateApiKey request
+	UseraccountsRotateApiKey(ctx context.Context, params *UseraccountsRotateApiKeyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsChangePasswordWithBody request with any body
+	UseraccountsChangePasswordWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UseraccountsChangePassword(ctx context.Context, body UseraccountsChangePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsCheckResetPasswordToken request
+	UseraccountsCheckResetPasswordToken(ctx context.Context, params *UseraccountsCheckResetPasswordTokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseraccountsResetPasswordWithBody request with any body
+	UseraccountsResetPasswordWithBody(ctx context.Context, params *UseraccountsResetPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UseraccountsResetPassword(ctx context.Context, params *UseraccountsResetPasswordParams, body UseraccountsResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) CertificateissuingtemplateGetAll(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplateGetAllRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CertificateissuingtemplateCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplateCreateRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CertificateissuingtemplateCreate(ctx context.Context, body CertificateissuingtemplateCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplateCreateRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DomainssynchronizationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDomainssynchronizationRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) Domainssynchronization(ctx context.Context, body DomainssynchronizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDomainssynchronizationRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CertificateissuingtemplateDelete(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplateDeleteRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CertificateissuingtemplateGetById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplateGetByIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CertificateissuingtemplateUpdateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplateUpdateRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CertificateissuingtemplateUpdate(ctx context.Context, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplateUpdateRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ConfigurationsGetAll(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2353,6 +3378,18 @@ func (c *Client) CreateV1Serviceaccounts(ctx context.Context, body CreateV1Servi
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetV1Serviceaccountscopes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1ServiceaccountscopesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteV1ServiceaccountsById(ctx context.Context, id uuid.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteV1ServiceaccountsByIdRequest(c.Server, id)
 	if err != nil {
@@ -2435,6 +3472,570 @@ func (c *Client) PutV1ServiceaccountsByIdOcitoken(ctx context.Context, id uuid.U
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsGetAll(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsGetAllRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsCreateRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsCreate(ctx context.Context, body TeamsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsCreateRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsDelete(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsDeleteRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsGetById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsGetByIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsUpdateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsUpdateRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsUpdate(ctx context.Context, id openapi_types.UUID, body TeamsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsUpdateRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersDeleteWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersDeleteRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersDelete(ctx context.Context, id openapi_types.UUID, body TeamsMembersDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersDeleteRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersAddWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersAddRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersAdd(ctx context.Context, id openapi_types.UUID, body TeamsMembersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersAddRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersOwnersRemoveWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersOwnersRemoveRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersOwnersRemove(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersRemoveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersOwnersRemoveRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersOwnersAddWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersOwnersAddRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TeamsMembersOwnersAdd(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTeamsMembersOwnersAddRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsGetByAuth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsGetByAuthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsCreateRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsCreate(ctx context.Context, body UseraccountsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsCreateRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsActivate(ctx context.Context, params *UseraccountsActivateParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsActivateRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsResendActivationWithBody(ctx context.Context, params *UseraccountsResendActivationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsResendActivationRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsResendActivation(ctx context.Context, params *UseraccountsResendActivationParams, body UseraccountsResendActivationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsResendActivationRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsRotateApiKey(ctx context.Context, params *UseraccountsRotateApiKeyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsRotateApiKeyRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsChangePasswordWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsChangePasswordRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsChangePassword(ctx context.Context, body UseraccountsChangePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsChangePasswordRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsCheckResetPasswordToken(ctx context.Context, params *UseraccountsCheckResetPasswordTokenParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsCheckResetPasswordTokenRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsResetPasswordWithBody(ctx context.Context, params *UseraccountsResetPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsResetPasswordRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseraccountsResetPassword(ctx context.Context, params *UseraccountsResetPasswordParams, body UseraccountsResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseraccountsResetPasswordRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NewCertificateissuingtemplateGetAllRequest generates requests for CertificateissuingtemplateGetAll
+func NewCertificateissuingtemplateGetAllRequest(server string, params *CertificateissuingtemplateGetAllParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/certificateissuingtemplates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "certificateAuthorityAccountId", runtime.ParamLocationQuery, params.CertificateAuthorityAccountId); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCertificateissuingtemplateCreateRequest calls the generic CertificateissuingtemplateCreate builder with application/json body
+func NewCertificateissuingtemplateCreateRequest(server string, body CertificateissuingtemplateCreateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCertificateissuingtemplateCreateRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCertificateissuingtemplateCreateRequestWithBody generates requests for CertificateissuingtemplateCreate with any type of body
+func NewCertificateissuingtemplateCreateRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/certificateissuingtemplates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDomainssynchronizationRequest calls the generic Domainssynchronization builder with application/json body
+func NewDomainssynchronizationRequest(server string, body DomainssynchronizationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDomainssynchronizationRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewDomainssynchronizationRequestWithBody generates requests for Domainssynchronization with any type of body
+func NewDomainssynchronizationRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/certificateissuingtemplates/domainssynchronization")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCertificateissuingtemplateDeleteRequest generates requests for CertificateissuingtemplateDelete
+func NewCertificateissuingtemplateDeleteRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/certificateissuingtemplates/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCertificateissuingtemplateGetByIdRequest generates requests for CertificateissuingtemplateGetById
+func NewCertificateissuingtemplateGetByIdRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/certificateissuingtemplates/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCertificateissuingtemplateUpdateRequest calls the generic CertificateissuingtemplateUpdate builder with application/json body
+func NewCertificateissuingtemplateUpdateRequest(server string, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCertificateissuingtemplateUpdateRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewCertificateissuingtemplateUpdateRequestWithBody generates requests for CertificateissuingtemplateUpdate with any type of body
+func NewCertificateissuingtemplateUpdateRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/certificateissuingtemplates/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewConfigurationsGetAllRequest generates requests for ConfigurationsGetAll
@@ -3050,6 +4651,33 @@ func NewCreateV1ServiceaccountsRequestWithBody(server string, contentType string
 	return req, nil
 }
 
+// NewGetV1ServiceaccountscopesRequest generates requests for GetV1Serviceaccountscopes
+func NewGetV1ServiceaccountscopesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/serviceaccounts/scopes")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteV1ServiceaccountsByIdRequest generates requests for DeleteV1ServiceaccountsById
 func NewDeleteV1ServiceaccountsByIdRequest(server string, id uuid.UUID) (*http.Request, error) {
 	var err error
@@ -3246,6 +4874,758 @@ func NewPutV1ServiceaccountsByIdOcitokenRequest(server string, id uuid.UUID) (*h
 	return req, nil
 }
 
+// NewTeamsGetAllRequest generates requests for TeamsGetAll
+func NewTeamsGetAllRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewTeamsCreateRequest calls the generic TeamsCreate builder with application/json body
+func NewTeamsCreateRequest(server string, body TeamsCreateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTeamsCreateRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewTeamsCreateRequestWithBody generates requests for TeamsCreate with any type of body
+func NewTeamsCreateRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewTeamsDeleteRequest generates requests for TeamsDelete
+func NewTeamsDeleteRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewTeamsGetByIdRequest generates requests for TeamsGetById
+func NewTeamsGetByIdRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewTeamsUpdateRequest calls the generic TeamsUpdate builder with application/json body
+func NewTeamsUpdateRequest(server string, id openapi_types.UUID, body TeamsUpdateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTeamsUpdateRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewTeamsUpdateRequestWithBody generates requests for TeamsUpdate with any type of body
+func NewTeamsUpdateRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewTeamsMembersDeleteRequest calls the generic TeamsMembersDelete builder with application/json body
+func NewTeamsMembersDeleteRequest(server string, id openapi_types.UUID, body TeamsMembersDeleteJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTeamsMembersDeleteRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewTeamsMembersDeleteRequestWithBody generates requests for TeamsMembersDelete with any type of body
+func NewTeamsMembersDeleteRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s/members", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewTeamsMembersAddRequest calls the generic TeamsMembersAdd builder with application/json body
+func NewTeamsMembersAddRequest(server string, id openapi_types.UUID, body TeamsMembersAddJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTeamsMembersAddRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewTeamsMembersAddRequestWithBody generates requests for TeamsMembersAdd with any type of body
+func NewTeamsMembersAddRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s/members", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewTeamsMembersOwnersRemoveRequest calls the generic TeamsMembersOwnersRemove builder with application/json body
+func NewTeamsMembersOwnersRemoveRequest(server string, id openapi_types.UUID, body TeamsMembersOwnersRemoveJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTeamsMembersOwnersRemoveRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewTeamsMembersOwnersRemoveRequestWithBody generates requests for TeamsMembersOwnersRemove with any type of body
+func NewTeamsMembersOwnersRemoveRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s/owners", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewTeamsMembersOwnersAddRequest calls the generic TeamsMembersOwnersAdd builder with application/json body
+func NewTeamsMembersOwnersAddRequest(server string, id openapi_types.UUID, body TeamsMembersOwnersAddJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTeamsMembersOwnersAddRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewTeamsMembersOwnersAddRequestWithBody generates requests for TeamsMembersOwnersAdd with any type of body
+func NewTeamsMembersOwnersAddRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s/owners", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUseraccountsGetByAuthRequest generates requests for UseraccountsGetByAuth
+func NewUseraccountsGetByAuthRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUseraccountsCreateRequest calls the generic UseraccountsCreate builder with application/json body
+func NewUseraccountsCreateRequest(server string, body UseraccountsCreateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUseraccountsCreateRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewUseraccountsCreateRequestWithBody generates requests for UseraccountsCreate with any type of body
+func NewUseraccountsCreateRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUseraccountsActivateRequest generates requests for UseraccountsActivate
+func NewUseraccountsActivateRequest(server string, params *UseraccountsActivateParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts/activation")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "k", runtime.ParamLocationQuery, params.K); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "v", runtime.ParamLocationQuery, params.V); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUseraccountsResendActivationRequest calls the generic UseraccountsResendActivation builder with application/json body
+func NewUseraccountsResendActivationRequest(server string, params *UseraccountsResendActivationParams, body UseraccountsResendActivationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUseraccountsResendActivationRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewUseraccountsResendActivationRequestWithBody generates requests for UseraccountsResendActivation with any type of body
+func NewUseraccountsResendActivationRequestWithBody(server string, params *UseraccountsResendActivationParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts/activationresend")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "urlPrefix", runtime.ParamLocationQuery, params.UrlPrefix); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUseraccountsRotateApiKeyRequest generates requests for UseraccountsRotateApiKey
+func NewUseraccountsRotateApiKeyRequest(server string, params *UseraccountsRotateApiKeyParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts/apikeyrotation")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "k", runtime.ParamLocationQuery, params.K); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "v", runtime.ParamLocationQuery, params.V); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUseraccountsChangePasswordRequest calls the generic UseraccountsChangePassword builder with application/json body
+func NewUseraccountsChangePasswordRequest(server string, body UseraccountsChangePasswordJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUseraccountsChangePasswordRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewUseraccountsChangePasswordRequestWithBody generates requests for UseraccountsChangePassword with any type of body
+func NewUseraccountsChangePasswordRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts/password")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUseraccountsCheckResetPasswordTokenRequest generates requests for UseraccountsCheckResetPasswordToken
+func NewUseraccountsCheckResetPasswordTokenRequest(server string, params *UseraccountsCheckResetPasswordTokenParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts/passwordreset")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "token", runtime.ParamLocationQuery, params.Token); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUseraccountsResetPasswordRequest calls the generic UseraccountsResetPassword builder with application/json body
+func NewUseraccountsResetPasswordRequest(server string, params *UseraccountsResetPasswordParams, body UseraccountsResetPasswordJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUseraccountsResetPasswordRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewUseraccountsResetPasswordRequestWithBody generates requests for UseraccountsResetPassword with any type of body
+func NewUseraccountsResetPasswordRequestWithBody(server string, params *UseraccountsResetPasswordParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/useraccounts/passwordreset")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "urlPrefix", runtime.ParamLocationQuery, params.UrlPrefix); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -3289,6 +5669,30 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// CertificateissuingtemplateGetAllWithResponse request
+	CertificateissuingtemplateGetAllWithResponse(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateGetAllResponse, error)
+
+	// CertificateissuingtemplateCreateWithBodyWithResponse request with any body
+	CertificateissuingtemplateCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateCreateResponse, error)
+
+	CertificateissuingtemplateCreateWithResponse(ctx context.Context, body CertificateissuingtemplateCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateCreateResponse, error)
+
+	// DomainssynchronizationWithBodyWithResponse request with any body
+	DomainssynchronizationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DomainssynchronizationResponse, error)
+
+	DomainssynchronizationWithResponse(ctx context.Context, body DomainssynchronizationJSONRequestBody, reqEditors ...RequestEditorFn) (*DomainssynchronizationResponse, error)
+
+	// CertificateissuingtemplateDeleteWithResponse request
+	CertificateissuingtemplateDeleteWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateDeleteResponse, error)
+
+	// CertificateissuingtemplateGetByIdWithResponse request
+	CertificateissuingtemplateGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateGetByIdResponse, error)
+
+	// CertificateissuingtemplateUpdateWithBodyWithResponse request with any body
+	CertificateissuingtemplateUpdateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateUpdateResponse, error)
+
+	CertificateissuingtemplateUpdateWithResponse(ctx context.Context, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateUpdateResponse, error)
+
 	// ConfigurationsGetAllWithResponse request
 	ConfigurationsGetAllWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ConfigurationsGetAllResponse, error)
 
@@ -3354,6 +5758,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateV1ServiceaccountsWithResponse(ctx context.Context, body CreateV1ServiceaccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateV1ServiceaccountsResponse, error)
 
+	// GetV1ServiceaccountscopesWithResponse request
+	GetV1ServiceaccountscopesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetV1ServiceaccountscopesResponse, error)
+
 	// DeleteV1ServiceaccountsByIdWithResponse request
 	DeleteV1ServiceaccountsByIdWithResponse(ctx context.Context, id uuid.UUID, reqEditors ...RequestEditorFn) (*DeleteV1ServiceaccountsByIdResponse, error)
 
@@ -3372,6 +5779,225 @@ type ClientWithResponsesInterface interface {
 
 	// PutV1ServiceaccountsByIdOcitokenWithResponse request
 	PutV1ServiceaccountsByIdOcitokenWithResponse(ctx context.Context, id uuid.UUID, reqEditors ...RequestEditorFn) (*PutV1ServiceaccountsByIdOcitokenResponse, error)
+
+	// TeamsGetAllWithResponse request
+	TeamsGetAllWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*TeamsGetAllResponse, error)
+
+	// TeamsCreateWithBodyWithResponse request with any body
+	TeamsCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsCreateResponse, error)
+
+	TeamsCreateWithResponse(ctx context.Context, body TeamsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsCreateResponse, error)
+
+	// TeamsDeleteWithResponse request
+	TeamsDeleteWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*TeamsDeleteResponse, error)
+
+	// TeamsGetByIdWithResponse request
+	TeamsGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*TeamsGetByIdResponse, error)
+
+	// TeamsUpdateWithBodyWithResponse request with any body
+	TeamsUpdateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsUpdateResponse, error)
+
+	TeamsUpdateWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsUpdateResponse, error)
+
+	// TeamsMembersDeleteWithBodyWithResponse request with any body
+	TeamsMembersDeleteWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersDeleteResponse, error)
+
+	TeamsMembersDeleteWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersDeleteResponse, error)
+
+	// TeamsMembersAddWithBodyWithResponse request with any body
+	TeamsMembersAddWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersAddResponse, error)
+
+	TeamsMembersAddWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersAddResponse, error)
+
+	// TeamsMembersOwnersRemoveWithBodyWithResponse request with any body
+	TeamsMembersOwnersRemoveWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersRemoveResponse, error)
+
+	TeamsMembersOwnersRemoveWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersRemoveJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersRemoveResponse, error)
+
+	// TeamsMembersOwnersAddWithBodyWithResponse request with any body
+	TeamsMembersOwnersAddWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersAddResponse, error)
+
+	TeamsMembersOwnersAddWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersAddResponse, error)
+
+	// UseraccountsGetByAuthWithResponse request
+	UseraccountsGetByAuthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*UseraccountsGetByAuthResponse, error)
+
+	// UseraccountsCreateWithBodyWithResponse request with any body
+	UseraccountsCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsCreateResponse, error)
+
+	UseraccountsCreateWithResponse(ctx context.Context, body UseraccountsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsCreateResponse, error)
+
+	// UseraccountsActivateWithResponse request
+	UseraccountsActivateWithResponse(ctx context.Context, params *UseraccountsActivateParams, reqEditors ...RequestEditorFn) (*UseraccountsActivateResponse, error)
+
+	// UseraccountsResendActivationWithBodyWithResponse request with any body
+	UseraccountsResendActivationWithBodyWithResponse(ctx context.Context, params *UseraccountsResendActivationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsResendActivationResponse, error)
+
+	UseraccountsResendActivationWithResponse(ctx context.Context, params *UseraccountsResendActivationParams, body UseraccountsResendActivationJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsResendActivationResponse, error)
+
+	// UseraccountsRotateApiKeyWithResponse request
+	UseraccountsRotateApiKeyWithResponse(ctx context.Context, params *UseraccountsRotateApiKeyParams, reqEditors ...RequestEditorFn) (*UseraccountsRotateApiKeyResponse, error)
+
+	// UseraccountsChangePasswordWithBodyWithResponse request with any body
+	UseraccountsChangePasswordWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsChangePasswordResponse, error)
+
+	UseraccountsChangePasswordWithResponse(ctx context.Context, body UseraccountsChangePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsChangePasswordResponse, error)
+
+	// UseraccountsCheckResetPasswordTokenWithResponse request
+	UseraccountsCheckResetPasswordTokenWithResponse(ctx context.Context, params *UseraccountsCheckResetPasswordTokenParams, reqEditors ...RequestEditorFn) (*UseraccountsCheckResetPasswordTokenResponse, error)
+
+	// UseraccountsResetPasswordWithBodyWithResponse request with any body
+	UseraccountsResetPasswordWithBodyWithResponse(ctx context.Context, params *UseraccountsResetPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsResetPasswordResponse, error)
+
+	UseraccountsResetPasswordWithResponse(ctx context.Context, params *UseraccountsResetPasswordParams, body UseraccountsResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsResetPasswordResponse, error)
+}
+
+type CertificateissuingtemplateGetAllResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CertificateIssuingTemplateResponse
+	JSON400      *ErrorResponse7
+	JSON412      *ErrorResponse7
+}
+
+// Status returns HTTPResponse.Status
+func (r CertificateissuingtemplateGetAllResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CertificateissuingtemplateGetAllResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CertificateissuingtemplateCreateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *CertificateIssuingTemplateResponse
+	JSON400      *ErrorResponse7
+	JSON404      *ErrorResponse7
+	JSON409      *ErrorResponse7
+	JSON412      *ErrorResponse7
+}
+
+// Status returns HTTPResponse.Status
+func (r CertificateissuingtemplateCreateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CertificateissuingtemplateCreateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DomainssynchronizationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *IssuingTemplateDomainsSyncResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DomainssynchronizationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DomainssynchronizationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CertificateissuingtemplateDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON204      *CertificateIssuingTemplateDeleteResponse
+	JSON400      *ErrorResponse7
+	JSON404      *ErrorResponse7
+	JSON412      *ErrorResponse7
+}
+
+// Status returns HTTPResponse.Status
+func (r CertificateissuingtemplateDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CertificateissuingtemplateDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CertificateissuingtemplateGetByIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CertificateIssuingTemplateInformation1
+	JSON400      *ErrorResponse7
+	JSON404      *ErrorResponse7
+	JSON412      *ErrorResponse7
+}
+
+// Status returns HTTPResponse.Status
+func (r CertificateissuingtemplateGetByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CertificateissuingtemplateGetByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CertificateissuingtemplateUpdateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CertificateIssuingTemplateInformation1
+	JSON202      *CertificateIssuingTemplateInformation1
+	JSON400      *ErrorResponse7
+	JSON404      *ErrorResponse7
+	JSON412      *ErrorResponse7
+}
+
+// Status returns HTTPResponse.Status
+func (r CertificateissuingtemplateUpdateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CertificateissuingtemplateUpdateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ConfigurationsGetAllResponse struct {
@@ -3787,6 +6413,28 @@ func (r CreateV1ServiceaccountsResponse) StatusCode() int {
 	return 0
 }
 
+type GetV1ServiceaccountscopesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *GetServiceAccountScopesResponseBody
+}
+
+// Status returns HTTPResponse.Status
+func (r GetV1ServiceaccountscopesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetV1ServiceaccountscopesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type DeleteV1ServiceaccountsByIdResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -3893,6 +6541,493 @@ func (r PutV1ServiceaccountsByIdOcitokenResponse) StatusCode() int {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
+}
+
+type TeamsGetAllResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TeamsResponse
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsGetAllResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsGetAllResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsCreateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *TeamInformation
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsCreateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsCreateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsGetByIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TeamInformation
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsGetByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsGetByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsUpdateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TeamInformation
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsUpdateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsUpdateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsMembersDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TeamInformation
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsMembersDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsMembersDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsMembersAddResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TeamInformation
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsMembersAddResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsMembersAddResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsMembersOwnersRemoveResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TeamInformation
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsMembersOwnersRemoveResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsMembersOwnersRemoveResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TeamsMembersOwnersAddResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TeamInformation
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r TeamsMembersOwnersAddResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TeamsMembersOwnersAddResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsGetByAuthResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *UserAccountResponse
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsGetByAuthResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsGetByAuthResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsCreateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *UserAccountResponse
+	JSON202      *UserAccountResponse
+	JSON400      *ErrorResponse
+	JSON409      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsCreateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsCreateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsActivateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *UserInformation
+	JSON400      *ErrorResponse
+	JSON409      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsActivateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsActivateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsResendActivationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *ResendActivationResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsResendActivationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsResendActivationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsRotateApiKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApiKeyInformation
+	JSON400      *ErrorResponse
+	JSON409      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsRotateApiKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsRotateApiKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsChangePasswordResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsChangePasswordResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsChangePasswordResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsCheckResetPasswordTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsCheckResetPasswordTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsCheckResetPasswordTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseraccountsResetPasswordResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *ResetPasswordResponse
+	JSON400      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UseraccountsResetPasswordResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseraccountsResetPasswordResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// CertificateissuingtemplateGetAllWithResponse request returning *CertificateissuingtemplateGetAllResponse
+func (c *ClientWithResponses) CertificateissuingtemplateGetAllWithResponse(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateGetAllResponse, error) {
+	rsp, err := c.CertificateissuingtemplateGetAll(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplateGetAllResponse(rsp)
+}
+
+// CertificateissuingtemplateCreateWithBodyWithResponse request with arbitrary body returning *CertificateissuingtemplateCreateResponse
+func (c *ClientWithResponses) CertificateissuingtemplateCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateCreateResponse, error) {
+	rsp, err := c.CertificateissuingtemplateCreateWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplateCreateResponse(rsp)
+}
+
+func (c *ClientWithResponses) CertificateissuingtemplateCreateWithResponse(ctx context.Context, body CertificateissuingtemplateCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateCreateResponse, error) {
+	rsp, err := c.CertificateissuingtemplateCreate(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplateCreateResponse(rsp)
+}
+
+// DomainssynchronizationWithBodyWithResponse request with arbitrary body returning *DomainssynchronizationResponse
+func (c *ClientWithResponses) DomainssynchronizationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DomainssynchronizationResponse, error) {
+	rsp, err := c.DomainssynchronizationWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDomainssynchronizationResponse(rsp)
+}
+
+func (c *ClientWithResponses) DomainssynchronizationWithResponse(ctx context.Context, body DomainssynchronizationJSONRequestBody, reqEditors ...RequestEditorFn) (*DomainssynchronizationResponse, error) {
+	rsp, err := c.Domainssynchronization(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDomainssynchronizationResponse(rsp)
+}
+
+// CertificateissuingtemplateDeleteWithResponse request returning *CertificateissuingtemplateDeleteResponse
+func (c *ClientWithResponses) CertificateissuingtemplateDeleteWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateDeleteResponse, error) {
+	rsp, err := c.CertificateissuingtemplateDelete(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplateDeleteResponse(rsp)
+}
+
+// CertificateissuingtemplateGetByIdWithResponse request returning *CertificateissuingtemplateGetByIdResponse
+func (c *ClientWithResponses) CertificateissuingtemplateGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateGetByIdResponse, error) {
+	rsp, err := c.CertificateissuingtemplateGetById(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplateGetByIdResponse(rsp)
+}
+
+// CertificateissuingtemplateUpdateWithBodyWithResponse request with arbitrary body returning *CertificateissuingtemplateUpdateResponse
+func (c *ClientWithResponses) CertificateissuingtemplateUpdateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateUpdateResponse, error) {
+	rsp, err := c.CertificateissuingtemplateUpdateWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplateUpdateResponse(rsp)
+}
+
+func (c *ClientWithResponses) CertificateissuingtemplateUpdateWithResponse(ctx context.Context, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateUpdateResponse, error) {
+	rsp, err := c.CertificateissuingtemplateUpdate(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplateUpdateResponse(rsp)
 }
 
 // ConfigurationsGetAllWithResponse request returning *ConfigurationsGetAllResponse
@@ -4104,6 +7239,15 @@ func (c *ClientWithResponses) CreateV1ServiceaccountsWithResponse(ctx context.Co
 	return ParseCreateV1ServiceaccountsResponse(rsp)
 }
 
+// GetV1ServiceaccountscopesWithResponse request returning *GetV1ServiceaccountscopesResponse
+func (c *ClientWithResponses) GetV1ServiceaccountscopesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetV1ServiceaccountscopesResponse, error) {
+	rsp, err := c.GetV1Serviceaccountscopes(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetV1ServiceaccountscopesResponse(rsp)
+}
+
 // DeleteV1ServiceaccountsByIdWithResponse request returning *DeleteV1ServiceaccountsByIdResponse
 func (c *ClientWithResponses) DeleteV1ServiceaccountsByIdWithResponse(ctx context.Context, id uuid.UUID, reqEditors ...RequestEditorFn) (*DeleteV1ServiceaccountsByIdResponse, error) {
 	rsp, err := c.DeleteV1ServiceaccountsById(ctx, id, reqEditors...)
@@ -4163,6 +7307,507 @@ func (c *ClientWithResponses) PutV1ServiceaccountsByIdOcitokenWithResponse(ctx c
 		return nil, err
 	}
 	return ParsePutV1ServiceaccountsByIdOcitokenResponse(rsp)
+}
+
+// TeamsGetAllWithResponse request returning *TeamsGetAllResponse
+func (c *ClientWithResponses) TeamsGetAllWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*TeamsGetAllResponse, error) {
+	rsp, err := c.TeamsGetAll(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsGetAllResponse(rsp)
+}
+
+// TeamsCreateWithBodyWithResponse request with arbitrary body returning *TeamsCreateResponse
+func (c *ClientWithResponses) TeamsCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsCreateResponse, error) {
+	rsp, err := c.TeamsCreateWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsCreateResponse(rsp)
+}
+
+func (c *ClientWithResponses) TeamsCreateWithResponse(ctx context.Context, body TeamsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsCreateResponse, error) {
+	rsp, err := c.TeamsCreate(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsCreateResponse(rsp)
+}
+
+// TeamsDeleteWithResponse request returning *TeamsDeleteResponse
+func (c *ClientWithResponses) TeamsDeleteWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*TeamsDeleteResponse, error) {
+	rsp, err := c.TeamsDelete(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsDeleteResponse(rsp)
+}
+
+// TeamsGetByIdWithResponse request returning *TeamsGetByIdResponse
+func (c *ClientWithResponses) TeamsGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*TeamsGetByIdResponse, error) {
+	rsp, err := c.TeamsGetById(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsGetByIdResponse(rsp)
+}
+
+// TeamsUpdateWithBodyWithResponse request with arbitrary body returning *TeamsUpdateResponse
+func (c *ClientWithResponses) TeamsUpdateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsUpdateResponse, error) {
+	rsp, err := c.TeamsUpdateWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsUpdateResponse(rsp)
+}
+
+func (c *ClientWithResponses) TeamsUpdateWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsUpdateResponse, error) {
+	rsp, err := c.TeamsUpdate(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsUpdateResponse(rsp)
+}
+
+// TeamsMembersDeleteWithBodyWithResponse request with arbitrary body returning *TeamsMembersDeleteResponse
+func (c *ClientWithResponses) TeamsMembersDeleteWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersDeleteResponse, error) {
+	rsp, err := c.TeamsMembersDeleteWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersDeleteResponse(rsp)
+}
+
+func (c *ClientWithResponses) TeamsMembersDeleteWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersDeleteResponse, error) {
+	rsp, err := c.TeamsMembersDelete(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersDeleteResponse(rsp)
+}
+
+// TeamsMembersAddWithBodyWithResponse request with arbitrary body returning *TeamsMembersAddResponse
+func (c *ClientWithResponses) TeamsMembersAddWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersAddResponse, error) {
+	rsp, err := c.TeamsMembersAddWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersAddResponse(rsp)
+}
+
+func (c *ClientWithResponses) TeamsMembersAddWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersAddResponse, error) {
+	rsp, err := c.TeamsMembersAdd(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersAddResponse(rsp)
+}
+
+// TeamsMembersOwnersRemoveWithBodyWithResponse request with arbitrary body returning *TeamsMembersOwnersRemoveResponse
+func (c *ClientWithResponses) TeamsMembersOwnersRemoveWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersRemoveResponse, error) {
+	rsp, err := c.TeamsMembersOwnersRemoveWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersOwnersRemoveResponse(rsp)
+}
+
+func (c *ClientWithResponses) TeamsMembersOwnersRemoveWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersRemoveJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersRemoveResponse, error) {
+	rsp, err := c.TeamsMembersOwnersRemove(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersOwnersRemoveResponse(rsp)
+}
+
+// TeamsMembersOwnersAddWithBodyWithResponse request with arbitrary body returning *TeamsMembersOwnersAddResponse
+func (c *ClientWithResponses) TeamsMembersOwnersAddWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersAddResponse, error) {
+	rsp, err := c.TeamsMembersOwnersAddWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersOwnersAddResponse(rsp)
+}
+
+func (c *ClientWithResponses) TeamsMembersOwnersAddWithResponse(ctx context.Context, id openapi_types.UUID, body TeamsMembersOwnersAddJSONRequestBody, reqEditors ...RequestEditorFn) (*TeamsMembersOwnersAddResponse, error) {
+	rsp, err := c.TeamsMembersOwnersAdd(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTeamsMembersOwnersAddResponse(rsp)
+}
+
+// UseraccountsGetByAuthWithResponse request returning *UseraccountsGetByAuthResponse
+func (c *ClientWithResponses) UseraccountsGetByAuthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*UseraccountsGetByAuthResponse, error) {
+	rsp, err := c.UseraccountsGetByAuth(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsGetByAuthResponse(rsp)
+}
+
+// UseraccountsCreateWithBodyWithResponse request with arbitrary body returning *UseraccountsCreateResponse
+func (c *ClientWithResponses) UseraccountsCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsCreateResponse, error) {
+	rsp, err := c.UseraccountsCreateWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsCreateResponse(rsp)
+}
+
+func (c *ClientWithResponses) UseraccountsCreateWithResponse(ctx context.Context, body UseraccountsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsCreateResponse, error) {
+	rsp, err := c.UseraccountsCreate(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsCreateResponse(rsp)
+}
+
+// UseraccountsActivateWithResponse request returning *UseraccountsActivateResponse
+func (c *ClientWithResponses) UseraccountsActivateWithResponse(ctx context.Context, params *UseraccountsActivateParams, reqEditors ...RequestEditorFn) (*UseraccountsActivateResponse, error) {
+	rsp, err := c.UseraccountsActivate(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsActivateResponse(rsp)
+}
+
+// UseraccountsResendActivationWithBodyWithResponse request with arbitrary body returning *UseraccountsResendActivationResponse
+func (c *ClientWithResponses) UseraccountsResendActivationWithBodyWithResponse(ctx context.Context, params *UseraccountsResendActivationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsResendActivationResponse, error) {
+	rsp, err := c.UseraccountsResendActivationWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsResendActivationResponse(rsp)
+}
+
+func (c *ClientWithResponses) UseraccountsResendActivationWithResponse(ctx context.Context, params *UseraccountsResendActivationParams, body UseraccountsResendActivationJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsResendActivationResponse, error) {
+	rsp, err := c.UseraccountsResendActivation(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsResendActivationResponse(rsp)
+}
+
+// UseraccountsRotateApiKeyWithResponse request returning *UseraccountsRotateApiKeyResponse
+func (c *ClientWithResponses) UseraccountsRotateApiKeyWithResponse(ctx context.Context, params *UseraccountsRotateApiKeyParams, reqEditors ...RequestEditorFn) (*UseraccountsRotateApiKeyResponse, error) {
+	rsp, err := c.UseraccountsRotateApiKey(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsRotateApiKeyResponse(rsp)
+}
+
+// UseraccountsChangePasswordWithBodyWithResponse request with arbitrary body returning *UseraccountsChangePasswordResponse
+func (c *ClientWithResponses) UseraccountsChangePasswordWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsChangePasswordResponse, error) {
+	rsp, err := c.UseraccountsChangePasswordWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsChangePasswordResponse(rsp)
+}
+
+func (c *ClientWithResponses) UseraccountsChangePasswordWithResponse(ctx context.Context, body UseraccountsChangePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsChangePasswordResponse, error) {
+	rsp, err := c.UseraccountsChangePassword(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsChangePasswordResponse(rsp)
+}
+
+// UseraccountsCheckResetPasswordTokenWithResponse request returning *UseraccountsCheckResetPasswordTokenResponse
+func (c *ClientWithResponses) UseraccountsCheckResetPasswordTokenWithResponse(ctx context.Context, params *UseraccountsCheckResetPasswordTokenParams, reqEditors ...RequestEditorFn) (*UseraccountsCheckResetPasswordTokenResponse, error) {
+	rsp, err := c.UseraccountsCheckResetPasswordToken(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsCheckResetPasswordTokenResponse(rsp)
+}
+
+// UseraccountsResetPasswordWithBodyWithResponse request with arbitrary body returning *UseraccountsResetPasswordResponse
+func (c *ClientWithResponses) UseraccountsResetPasswordWithBodyWithResponse(ctx context.Context, params *UseraccountsResetPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsResetPasswordResponse, error) {
+	rsp, err := c.UseraccountsResetPasswordWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsResetPasswordResponse(rsp)
+}
+
+func (c *ClientWithResponses) UseraccountsResetPasswordWithResponse(ctx context.Context, params *UseraccountsResetPasswordParams, body UseraccountsResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsResetPasswordResponse, error) {
+	rsp, err := c.UseraccountsResetPassword(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseraccountsResetPasswordResponse(rsp)
+}
+
+// ParseCertificateissuingtemplateGetAllResponse parses an HTTP response from a CertificateissuingtemplateGetAllWithResponse call
+func ParseCertificateissuingtemplateGetAllResponse(rsp *http.Response) (*CertificateissuingtemplateGetAllResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CertificateissuingtemplateGetAllResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CertificateIssuingTemplateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCertificateissuingtemplateCreateResponse parses an HTTP response from a CertificateissuingtemplateCreateWithResponse call
+func ParseCertificateissuingtemplateCreateResponse(rsp *http.Response) (*CertificateissuingtemplateCreateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CertificateissuingtemplateCreateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CertificateIssuingTemplateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDomainssynchronizationResponse parses an HTTP response from a DomainssynchronizationWithResponse call
+func ParseDomainssynchronizationResponse(rsp *http.Response) (*DomainssynchronizationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DomainssynchronizationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IssuingTemplateDomainsSyncResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCertificateissuingtemplateDeleteResponse parses an HTTP response from a CertificateissuingtemplateDeleteWithResponse call
+func ParseCertificateissuingtemplateDeleteResponse(rsp *http.Response) (*CertificateissuingtemplateDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CertificateissuingtemplateDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 204:
+		var dest CertificateIssuingTemplateDeleteResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON204 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCertificateissuingtemplateGetByIdResponse parses an HTTP response from a CertificateissuingtemplateGetByIdWithResponse call
+func ParseCertificateissuingtemplateGetByIdResponse(rsp *http.Response) (*CertificateissuingtemplateGetByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CertificateissuingtemplateGetByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CertificateIssuingTemplateInformation1
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCertificateissuingtemplateUpdateResponse parses an HTTP response from a CertificateissuingtemplateUpdateWithResponse call
+func ParseCertificateissuingtemplateUpdateResponse(rsp *http.Response) (*CertificateissuingtemplateUpdateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CertificateissuingtemplateUpdateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CertificateIssuingTemplateInformation1
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest CertificateIssuingTemplateInformation1
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseConfigurationsGetAllResponse parses an HTTP response from a ConfigurationsGetAllWithResponse call
@@ -4880,6 +8525,32 @@ func ParseCreateV1ServiceaccountsResponse(rsp *http.Response) (*CreateV1Servicea
 	return response, nil
 }
 
+// ParseGetV1ServiceaccountscopesResponse parses an HTTP response from a GetV1ServiceaccountscopesWithResponse call
+func ParseGetV1ServiceaccountscopesResponse(rsp *http.Response) (*GetV1ServiceaccountscopesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetV1ServiceaccountscopesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GetServiceAccountScopesResponseBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeleteV1ServiceaccountsByIdResponse parses an HTTP response from a DeleteV1ServiceaccountsByIdWithResponse call
 func ParseDeleteV1ServiceaccountsByIdResponse(rsp *http.Response) (*DeleteV1ServiceaccountsByIdResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -4984,6 +8655,693 @@ func ParsePutV1ServiceaccountsByIdOcitokenResponse(rsp *http.Response) (*PutV1Se
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsGetAllResponse parses an HTTP response from a TeamsGetAllWithResponse call
+func ParseTeamsGetAllResponse(rsp *http.Response) (*TeamsGetAllResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsGetAllResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TeamsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsCreateResponse parses an HTTP response from a TeamsCreateWithResponse call
+func ParseTeamsCreateResponse(rsp *http.Response) (*TeamsCreateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsCreateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest TeamInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsDeleteResponse parses an HTTP response from a TeamsDeleteWithResponse call
+func ParseTeamsDeleteResponse(rsp *http.Response) (*TeamsDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsGetByIdResponse parses an HTTP response from a TeamsGetByIdWithResponse call
+func ParseTeamsGetByIdResponse(rsp *http.Response) (*TeamsGetByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsGetByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TeamInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsUpdateResponse parses an HTTP response from a TeamsUpdateWithResponse call
+func ParseTeamsUpdateResponse(rsp *http.Response) (*TeamsUpdateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsUpdateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TeamInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsMembersDeleteResponse parses an HTTP response from a TeamsMembersDeleteWithResponse call
+func ParseTeamsMembersDeleteResponse(rsp *http.Response) (*TeamsMembersDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsMembersDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TeamInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsMembersAddResponse parses an HTTP response from a TeamsMembersAddWithResponse call
+func ParseTeamsMembersAddResponse(rsp *http.Response) (*TeamsMembersAddResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsMembersAddResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TeamInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsMembersOwnersRemoveResponse parses an HTTP response from a TeamsMembersOwnersRemoveWithResponse call
+func ParseTeamsMembersOwnersRemoveResponse(rsp *http.Response) (*TeamsMembersOwnersRemoveResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsMembersOwnersRemoveResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TeamInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTeamsMembersOwnersAddResponse parses an HTTP response from a TeamsMembersOwnersAddWithResponse call
+func ParseTeamsMembersOwnersAddResponse(rsp *http.Response) (*TeamsMembersOwnersAddResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TeamsMembersOwnersAddResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TeamInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsGetByAuthResponse parses an HTTP response from a UseraccountsGetByAuthWithResponse call
+func ParseUseraccountsGetByAuthResponse(rsp *http.Response) (*UseraccountsGetByAuthResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsGetByAuthResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UserAccountResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsCreateResponse parses an HTTP response from a UseraccountsCreateWithResponse call
+func ParseUseraccountsCreateResponse(rsp *http.Response) (*UseraccountsCreateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsCreateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest UserAccountResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest UserAccountResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsActivateResponse parses an HTTP response from a UseraccountsActivateWithResponse call
+func ParseUseraccountsActivateResponse(rsp *http.Response) (*UseraccountsActivateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsActivateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UserInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsResendActivationResponse parses an HTTP response from a UseraccountsResendActivationWithResponse call
+func ParseUseraccountsResendActivationResponse(rsp *http.Response) (*UseraccountsResendActivationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsResendActivationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest ResendActivationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsRotateApiKeyResponse parses an HTTP response from a UseraccountsRotateApiKeyWithResponse call
+func ParseUseraccountsRotateApiKeyResponse(rsp *http.Response) (*UseraccountsRotateApiKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsRotateApiKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApiKeyInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsChangePasswordResponse parses an HTTP response from a UseraccountsChangePasswordWithResponse call
+func ParseUseraccountsChangePasswordResponse(rsp *http.Response) (*UseraccountsChangePasswordResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsChangePasswordResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsCheckResetPasswordTokenResponse parses an HTTP response from a UseraccountsCheckResetPasswordTokenWithResponse call
+func ParseUseraccountsCheckResetPasswordTokenResponse(rsp *http.Response) (*UseraccountsCheckResetPasswordTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsCheckResetPasswordTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseraccountsResetPasswordResponse parses an HTTP response from a UseraccountsResetPasswordWithResponse call
+func ParseUseraccountsResetPasswordResponse(rsp *http.Response) (*UseraccountsResetPasswordResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseraccountsResetPasswordResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest ResetPasswordResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
 
 	}
 

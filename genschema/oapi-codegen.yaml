@@ -7,32 +7,11 @@ generate:
 output-options:
   prefer-skip-optional-pointer: true
   prefer-skip-optional-pointer-with-omitzero: true
-  include-operation-ids:
-    - configurations_create
-    - configurations_delete
-    - configurations_getAll
-    - configurations_getById
-    - configurations_update
-
-    - intermediatecertificates_getAll
-    - intermediatecertificates_getById
-
-    - create-v1-serviceaccounts
-    - delete-v1-serviceaccounts-byId
-    - get-v1-serviceaccounts
-    - get-v1-serviceaccounts-byId
-    - patch-v1-serviceaccounts-byId
-    - put-v1-serviceaccounts-byId-credentials
-    - put-v1-serviceaccounts-byId-ocitoken
-
-    - subcaprovider_getAll
-    - subcaproviders_create
-    - subcaproviders_delete
-    - subcaproviders_getById
-    - subcaproviders_update
-
-    - policies_create
-    - policies_delete
-    - policies_getAll
-    - policies_getById
-    - policies_update
+  include-tags:
+    - Service Accounts
+    - Issuer Configurations
+    - Issuer Sub CA Providers
+    - Workload Issuance Policies
+    - Certificate Policy
+    - User Accounts # Only for check API key.
+    - Teams

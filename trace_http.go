@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	Transport = &loghttp.Transport{LogRequest: LogRequest, LogResponse: LogResponse, Transport: http.DefaultTransport}
+	LogTransport = &loghttp.Transport{LogRequest: LogRequest, LogResponse: LogResponse, Transport: http.DefaultTransport}
 )
 
 // Redact the 90% first characters of the API key in the header for security.

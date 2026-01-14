@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	api "github.com/maelvls/vcpctl/internal/api"
 	manifest "github.com/maelvls/vcpctl/internal/manifest"
 
@@ -592,17 +593,20 @@ func apiToManifestServiceAccount(in ServiceAccount) manifest.ServiceAccount {
 	}
 }
 
-func manifestToAPISubCa(in manifest.SubCa) SubCa {
-	caAccountUUID := openapi_types.UUID{}
-	_ = caAccountUUID.UnmarshalText([]byte(in.CaAccountID))
-	caProductOptionUUID := openapi_types.UUID{}
-	_ = caProductOptionUUID.UnmarshalText([]byte(in.CaProductOptionID))
+func manifestToAPISubCa(resolveIssuingTmpl func(string) (api.CertificateIssuingTemplateInformation1, error), in manifest.SubCa) (SubCa, error) {
+	tmpl, err := resolveIssuingTmpl(in.IssuingTemplateName)
+	if err != nil {
+		return SubCa{}, fmt.Errorf("manifestToAPISubCa: while resolving 'issuingTemplateName' %q: %w", in.IssuingTemplateName, err)
+	}
 
 	return SubCa{
-		Name:               in.Name,
-		CaType:             api.SubCaProviderInformationCaType(in.CaType),
-		CaAccountId:        caAccountUUID,
-		CaProductOptionId:  caProductOptionUUID,
+		Name: in.Name,
+
+		// These three values are taken from the issuing template.
+		CaType:            api.SubCaProviderInformationCaType(tmpl.CertificateAuthority),
+		CaAccountId:       tmpl.CertificateAuthorityAccountId,
+		CaProductOptionId: tmpl.CertificateAuthorityProductOptionId,
+
 		ValidityPeriod:     in.ValidityPeriod,
 		CommonName:         in.CommonName,
 		Organization:       in.Organization,
@@ -612,15 +616,20 @@ func manifestToAPISubCa(in manifest.SubCa) SubCa {
 		StateOrProvince:    in.StateOrProvince,
 		KeyAlgorithm:       api.SubCaProviderInformationKeyAlgorithm(in.KeyAlgorithm),
 		Pkcs11:             manifestToAPIPKCS11(in.PKCS11),
-	}
+	}, nil
 }
 
-func apiToManifestSubCa(in SubCa) manifest.SubCa {
+func apiToManifestSubCa(resolve func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error), in SubCa) (manifest.SubCa, error) {
+	tmpl, err := resolve(in.CaAccountId, in.CaProductOptionId)
+	if err != nil {
+		return manifest.SubCa{}, fmt.Errorf("apiToManifestSubCa: while resolving issuing template for CaAccountId=%q and CaProductOptionId=%q: %w", in.CaAccountId, in.CaProductOptionId, err)
+	}
+
 	return manifest.SubCa{
-		Name:               in.Name,
-		CaType:             string(in.CaType),
-		CaAccountID:        in.CaAccountId.String(),
-		CaProductOptionID:  in.CaProductOptionId.String(),
+		Name: in.Name,
+
+		IssuingTemplateName: tmpl.Name,
+
 		ValidityPeriod:     in.ValidityPeriod,
 		CommonName:         in.CommonName,
 		Organization:       in.Organization,
@@ -630,7 +639,7 @@ func apiToManifestSubCa(in SubCa) manifest.SubCa {
 		StateOrProvince:    in.StateOrProvince,
 		KeyAlgorithm:       string(in.KeyAlgorithm),
 		PKCS11:             apiToManifestPKCS11(in.Pkcs11),
-	}
+	}, nil
 }
 
 func manifestToAPIPKCS11(in manifest.PKCS11) PKCS11 {
@@ -683,4 +692,22 @@ func copyStringAnyMapFromMap(input map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
+}
+
+func apiToAPICreateServiceAccountRequestBody(in ServiceAccount) api.CreateServiceAccountRequestBody {
+	return api.CreateServiceAccountRequestBody{
+		AuthenticationType: in.AuthenticationType,
+		CredentialLifetime: in.CredentialLifetime,
+		Name:               in.Name,
+		Owner:              in.Owner,
+		Scopes:             in.Scopes,
+		Applications:       in.Applications,
+		Audience:           in.Audience,
+		IssuerURL:          in.IssuerURL,
+		JwksURI:            in.JwksURI,
+		Subject:            in.Subject,
+		PublicKey:          in.PublicKey,
+
+		CompanyId: uuid.Nil, // Not set.
+	}
 }

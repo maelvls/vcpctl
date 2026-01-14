@@ -88,10 +88,9 @@ type Subject struct {
 }
 
 type SubCa struct {
-	Name               string `yaml:"name"`
-	CaType             string `yaml:"caType"`
-	CaAccountID        string `yaml:"caAccountId,omitempty"`
-	CaProductOptionID  string `yaml:"caProductOptionId,omitempty"`
+	Name                string `yaml:"name"`
+	IssuingTemplateName string `yaml:"issuingTemplateName,omitempty"`
+
 	ValidityPeriod     string `yaml:"validityPeriod"`
 	CommonName         string `yaml:"commonName"`
 	Organization       string `yaml:"organization"`

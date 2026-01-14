@@ -9,9 +9,9 @@ const (
 	userAgent = "vcpctl/v0.0.1"
 )
 
-// WithBearerToken returns a copy of the provided http.Client that adds the header
-// "tppl-api-key" with the provided token.
-func WithBearerToken(token string) ClientOption {
+// WithTpplAPIKey returns a copy of the provided http.Client that adds the
+// header "tppl-api-key" with the provided token.
+func WithTpplAPIKey(token string) ClientOption {
 	return func(c *Client) error {
 		c.RequestEditors = append(c.RequestEditors, func(ctx context.Context, req *http.Request) error {
 			req.Header.Set("tppl-api-key", token)

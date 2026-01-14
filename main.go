@@ -28,6 +28,7 @@ import (
 	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/printer"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/internal/api"
 	manifest "github.com/maelvls/vcpctl/internal/manifest"
@@ -56,7 +57,7 @@ type (
 	Config = api.ExtendedConfigurationInformation
 
 	// ServiceAccountPatch represents a service account patch request
-	ServiceAccountPatch = api.ServiceAccountPatchBaseObject
+	ServiceAccountPatch = api.PatchServiceAccountByClientIDRequestBody
 
 	// PolicyPatch represents a policy patch request
 	PolicyPatch = api.PolicyUpdateRequest
@@ -160,30 +161,6 @@ func main() {
 	}
 }
 
-// Turn `serviceAccountIds` into `serviceAccounts` in the config.
-func populateServiceAccountsInConfig(config *Config, sa []ServiceAccount) {
-	// If the Service Account already exists in the config, update it.
-	for _, saItem := range sa {
-		if slices.Contains(config.ServiceAccountIds, saItem.Id) {
-			// ServiceAccounts field doesn't exist, using ServiceAccountIds instead
-		}
-	}
-
-	// Let's hide the IDs so that the user only sees the Service Accounts names.
-	// ServiceAccountIds field doesn't exist in Config type
-}
-
-// Turn `clientAuthentication.clients[].allowedPolicyIds` into
-// `clientAuthentication.clients[].allowedPolicies` with the real policy names.
-// NOTE: ClientAuthenticationInformation is a union type and doesn't have a Clients field.
-// This function is currently disabled as the union type structure doesn't support direct field access.
-func populatePoliciesInConfig(config *Config, knownPolicies []Policy) {
-	// TODO: Implement proper union type handling for ClientAuthenticationInformation
-	// ClientAuthenticationInformation is a union type with only Type and union json.RawMessage fields.
-	// To access Clients, we would need to unmarshal the union field based on the Type.
-	// For now, this function is a no-op.
-}
-
 // In Go, you can't compare structs that contain slices, maps, or functions
 // directly, so it was impossible to do:
 //
@@ -224,16 +201,16 @@ func saLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa ls: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			svcaccts, err := getServiceAccounts(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+			svcaccts, err := getServiceAccounts(context.Background(), apiClient)
 			if err != nil {
 				return fmt.Errorf("sa ls: while listing service accounts: %w", err)
 			}
@@ -380,7 +357,7 @@ func saGenkeypairCmd() *cobra.Command {
 				return fmt.Errorf("expects a single argument (the service account name), got: %s", args)
 			}
 
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: %w", err)
@@ -388,13 +365,13 @@ func saGenkeypairCmd() *cobra.Command {
 
 			saName := args[0]
 
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
 			// Does it already exist?
-			existingSA, err := getServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saName)
+			existingSA, err := getServiceAccount(context.Background(), apiClient, saName)
 			switch {
 			case errors.As(err, &NotFound{}):
 				return fmt.Errorf(undent.Undent(`
@@ -419,13 +396,13 @@ func saGenkeypairCmd() *cobra.Command {
 				return fmt.Errorf("sa gen keypair: while creating service account patch: %w", err)
 			}
 
-			err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
+			err = patchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: while patching service account: %w", err)
 			}
 
 			if logutil.EnableDebug {
-				updatedSA, err := getServiceAccountByID(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String())
+				updatedSA, err := getServiceAccountByID(context.Background(), apiClient, existingSA.Id.String())
 				if err != nil {
 					return fmt.Errorf("sa gen keypair: while retrieving updated service account: %w", err)
 				}
@@ -473,7 +450,7 @@ func saPutKeypairCmd() *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa put keypair: %w", err)
@@ -482,15 +459,15 @@ func saPutKeypairCmd() *cobra.Command {
 			saName := args[0]
 
 			// Does it already exist?
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			existingSA, err := getServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saName)
+			existingSA, err := getServiceAccount(context.Background(), apiClient, saName)
 			switch {
 			case errors.As(err, &NotFound{}):
 				// Doesn't exist yet.
-				resp, err := createServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, ServiceAccount{
+				resp, err := createServiceAccount(context.Background(), apiClient, ServiceAccount{
 					Name:               saName,
 					CredentialLifetime: 365, // days
 					Scopes:             scopes,
@@ -516,13 +493,13 @@ func saPutKeypairCmd() *cobra.Command {
 					return nil
 				}
 
-				err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
+				err = patchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
 				if err != nil {
 					return fmt.Errorf("sa put keypair: while patching service account: %w", err)
 				}
 
 				if logutil.EnableDebug {
-					updatedSA, err := getServiceAccountByID(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String())
+					updatedSA, err := getServiceAccountByID(context.Background(), apiClient, existingSA.Id.String())
 					if err != nil {
 						return fmt.Errorf("sa put keypair: while retrieving updated service account: %w", err)
 					}
@@ -571,7 +548,7 @@ func saPutWifCmd() *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa put wif: %w", err)
@@ -594,7 +571,7 @@ func saPutWifCmd() *cobra.Command {
 			}
 
 			// Create API client
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -620,11 +597,11 @@ func saPutWifCmd() *cobra.Command {
 			}
 
 			// Check if service account exists
-			existingSA, err := getServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saName)
+			existingSA, err := getServiceAccount(context.Background(), apiClient, saName)
 			switch {
 			case errors.As(err, &NotFound{}):
 				// Doesn't exist yet, create it
-				resp, err := createServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, ServiceAccount{
+				resp, err := createServiceAccount(context.Background(), apiClient, ServiceAccount{
 					Name:               saName,
 					AuthenticationType: "rsaKeyFederated",
 					CredentialLifetime: 365, // days
@@ -666,13 +643,13 @@ func saPutWifCmd() *cobra.Command {
 					return nil
 				}
 
-				err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
+				err = patchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
 				if err != nil {
 					return fmt.Errorf("sa put wif: while patching service account: %w", err)
 				}
 
 				if logutil.EnableDebug {
-					updatedSA, err := getServiceAccountByID(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String())
+					updatedSA, err := getServiceAccountByID(context.Background(), apiClient, existingSA.Id.String())
 					if err != nil {
 						return fmt.Errorf("sa put wif: while retrieving updated service account: %w", err)
 					}
@@ -714,7 +691,7 @@ func saGetCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa get: %w", err)
@@ -726,11 +703,11 @@ func saGetCmd() *cobra.Command {
 
 			saName := args[0]
 
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			sa, err := getServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saName)
+			sa, err := getServiceAccount(context.Background(), apiClient, saName)
 			if err != nil {
 				if errors.As(err, &NotFound{}) {
 					return fmt.Errorf("sa get: service account '%s' not found", saName)
@@ -786,17 +763,17 @@ func saScopesCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa scopes: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			scopes, err := getServiceAccountScopes(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+			scopes, err := getServiceAccountScopes(context.Background(), apiClient)
 			if err != nil {
 				return fmt.Errorf("sa scopes: while listing scopes: %w", err)
 			}
@@ -849,7 +826,7 @@ func saRmCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			if interactive {
 				if len(args) > 0 {
 					return fmt.Errorf("sa rm -i: expected no arguments when using --interactive, got %s", args)
@@ -860,11 +837,11 @@ func saRmCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("sa rm -i: %w", err)
 				}
-				apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+				apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				svcaccts, err := getServiceAccounts(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+				svcaccts, err := getServiceAccounts(context.Background(), apiClient)
 				if err != nil {
 					return fmt.Errorf("sa rm -i: while listing service accounts: %w", err)
 				}
@@ -872,7 +849,7 @@ func saRmCmd() *cobra.Command {
 				// Use a simple prompt to select the service account to remove.
 				selected := rmInteractive(svcaccts)
 				for _, saID := range selected {
-					err = removeServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saID)
+					err = removeServiceAccount(context.Background(), apiClient, saID)
 					if err != nil {
 						return fmt.Errorf("sa rm -i: while removing service account '%s': %w", saID, err)
 					}
@@ -891,11 +868,11 @@ func saRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = removeServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saName)
+			err = removeServiceAccount(context.Background(), apiClient, saName)
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}
@@ -920,22 +897,22 @@ func lsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("ls: %w", err)
 			}
 
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			confs, err := listConfigs(context.Background(), *apiClient)
+			confs, err := listConfigs(context.Background(), apiClient)
 			if err != nil {
 				return fmt.Errorf("ls: while listing configurations: %w", err)
 			}
 
-			knownSvcaccts, err := getServiceAccounts(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+			knownSvcaccts, err := getServiceAccounts(context.Background(), apiClient)
 			if err != nil {
 				return fmt.Errorf("ls: fetching service accounts: %w", err)
 			}
@@ -1042,16 +1019,16 @@ func subcaLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("subca ls: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			providers, err := getSubCas(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+			providers, err := getSubCas(context.Background(), apiClient)
 			if err != nil {
 				return fmt.Errorf("subca ls: while listing subCA providers: %w", err)
 			}
@@ -1089,16 +1066,16 @@ func subcaRmCmd() *cobra.Command {
 			}
 			providerNameOrID := args[0]
 
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = removeSubCaProvider(context.Background(), *apiClient, conf.APIURL, conf.APIKey, providerNameOrID)
+			err = removeSubCaProvider(context.Background(), apiClient, providerNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
@@ -1146,16 +1123,16 @@ func policyLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("policy ls: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			policies, err := getPolicies(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+			policies, err := getPolicies(context.Background(), apiClient)
 			if err != nil {
 				return fmt.Errorf("policy ls: while listing policies: %w", err)
 			}
@@ -1198,16 +1175,16 @@ func policyRmCmd() *cobra.Command {
 			}
 			policyNameOrID := args[0]
 
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = removePolicy(context.Background(), *apiClient, conf.APIURL, conf.APIKey, policyNameOrID)
+			err = removePolicy(context.Background(), apiClient, policyNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
@@ -1218,20 +1195,14 @@ func policyRmCmd() *cobra.Command {
 	return cmd
 }
 
-func removePolicy(ctx context.Context, cl api.Client, apiURL, apiKey, policyName string) error {
+func removePolicy(ctx context.Context, cl *api.Client, policyName string) error {
 	// Find the policy by name.
-	policy, err := getPolicy(ctx, cl, apiURL, apiKey, policyName)
+	policy, err := getPolicy(ctx, cl, policyName)
 	if err != nil {
 		return fmt.Errorf("removePolicy: while getting policy by name %q: %w", policyName, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "DELETE", apiURL+"/v1/distributedissuers/policies/"+policy.Id.String(), nil)
-	if err != nil {
-		return fmt.Errorf("removePolicy: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", "vcpctl/1.0")
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.PoliciesDelete(ctx, policy.Id.String())
 	if err != nil {
 		return fmt.Errorf("removePolicy: while making request: %w", err)
 	}
@@ -1246,14 +1217,8 @@ func removePolicy(ctx context.Context, cl api.Client, apiURL, apiKey, policyName
 	}
 }
 
-func getSubCas(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]SubCa, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
-	if err != nil {
-		return nil, fmt.Errorf("getSubCas: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", "vcpctl/1.0")
-	resp, err := cl.Client.Do(req)
+func getSubCas(ctx context.Context, cl *api.Client) ([]SubCa, error) {
+	resp, err := cl.SubcaproviderGetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getSubCas: while making request: %w", err)
 	}
@@ -1281,18 +1246,10 @@ func getSubCas(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]Sub
 	return result.SubCaProviders, nil
 }
 
-func getSubCaByID(ctx context.Context, cl api.Client, apiURL, apiKey, id string) (SubCa, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL+"/v1/distributedissuers/subcaproviders/"+id, nil)
-	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCaByID: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", "vcpctl/1.0")
-	resp, err := cl.Client.Do(req)
-	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCaByID: while making request: %w", err)
-	}
+func getSubCaByID(ctx context.Context, cl *api.Client, id string) (SubCa, error) {
+	resp, err := cl.SubcaprovidersGetById(ctx, id)
 	defer resp.Body.Close()
+
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// Continue.
@@ -1316,12 +1273,12 @@ func getSubCaByID(ctx context.Context, cl api.Client, apiURL, apiKey, id string)
 	return result, nil
 }
 
-func removeSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID string) error {
+func removeSubCaProvider(ctx context.Context, cl *api.Client, nameOrID string) error {
 	if looksLikeAnID(nameOrID) {
 		return removeSubCaProviderByID(ctx, cl, nameOrID)
 	}
 
-	subCA, err := getSubCa(ctx, cl, apiURL, apiKey, nameOrID)
+	subCA, err := getSubCa(ctx, cl, nameOrID)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while getting SubCA provider by name '%s': %w", nameOrID, err)
 	}
@@ -1331,7 +1288,7 @@ func removeSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey, nam
 	return removeSubCaProviderByID(ctx, cl, subCA.Id.String())
 }
 
-func removeSubCaProviderByID(ctx context.Context, cl api.Client, id string) error {
+func removeSubCaProviderByID(ctx context.Context, cl *api.Client, id string) error {
 	req, err := http.NewRequestWithContext(ctx, "DELETE", cl.Server+"/v1/distributedissuers/subcaproviders/"+id, nil)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while creating request: %w", err)
@@ -1373,16 +1330,16 @@ func attachSaCmd() *cobra.Command {
 			}
 			confName := args[0]
 
-			cl := http.Client{Transport: Transport}
+			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("attach-sa: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = attachSAToConf(context.Background(), *apiClient, conf.APIURL, conf.APIKey, confName, saName)
+			err = attachSAToConf(context.Background(), apiClient, confName, saName)
 			if err != nil {
 				return fmt.Errorf("attach-sa: %w", err)
 			}
@@ -1395,15 +1352,15 @@ func attachSaCmd() *cobra.Command {
 	return cmd
 }
 
-func attachSAToConf(ctx context.Context, cl api.Client, apiURL, apiKey, confName, saName string) error {
+func attachSAToConf(ctx context.Context, cl *api.Client, confName, saName string) error {
 	// Get configuration name by ID.
-	existing, err := getConfig(ctx, cl, apiURL, apiKey, confName)
+	existing, err := getConfig(ctx, cl, confName)
 	if err != nil {
 		return fmt.Errorf("while fetching the ID of the Workload Identity Manager configuration '%s': %w", confName, err)
 	}
 
 	// Find service accounts.
-	knownSvcaccts, err := getServiceAccounts(context.Background(), cl, apiURL, apiKey)
+	knownSvcaccts, err := getServiceAccounts(context.Background(), cl)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
@@ -1450,7 +1407,7 @@ func attachSAToConf(ctx context.Context, cl api.Client, apiURL, apiKey, confName
 		logutil.Debugf("Service account '%s' (ID: %s) is already in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), existing.Name)
 		return nil
 	}
-	updated, err := patchConfig(ctx, cl, apiURL, apiKey, existing.Id, patch)
+	updated, err := patchConfig(ctx, cl, existing.Id.String(), patch)
 	if err != nil {
 		return fmt.Errorf("while patching Workload Identity Manager configuration: %w", err)
 	}
@@ -1485,12 +1442,17 @@ func editCmd() *cobra.Command {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			client, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: Transport}), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			client, err := api.NewClient(
+				conf.APIURL,
+				api.WithHTTPClient(&http.Client{Transport: LogTransport}),
+				api.WithTpplAPIKey(conf.APIKey),
+				api.WithUserAgent(),
+			)
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			err = editConfig(context.Background(), *client, conf.APIURL, conf.APIKey, args[0])
+			err = editConfig(context.Background(), client, args[0])
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
@@ -1562,7 +1524,7 @@ func runApply(cmd *cobra.Command, filePath string, args []string, dryRun bool) e
 		return fmt.Errorf("%s: expected no arguments. The configuration name is read from the 'name' field in the provided YAML manifest.", cmdName)
 	}
 
-	cl := http.Client{Transport: Transport}
+	cl := http.Client{Transport: LogTransport}
 	conf, err := getToolConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("%s: %w", cmdName, err)
@@ -1578,11 +1540,11 @@ func runApply(cmd *cobra.Command, filePath string, args []string, dryRun bool) e
 		return fmt.Errorf("%s: while decoding WIM manifests from '%s': %w", cmdName, filePath, err)
 	}
 
-	apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+	apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 	if err != nil {
 		return fmt.Errorf("%s: while creating API client: %w", cmdName, err)
 	}
-	err = applyManifests(apiClient, conf.APIURL, conf.APIKey, manifests, dryRun)
+	err = applyManifests(apiClient, manifests, dryRun)
 	if err != nil {
 		return fmt.Errorf("%s: while applying manifests: %w", cmdName, err)
 	}
@@ -1615,12 +1577,12 @@ func rmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: Transport}), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: LogTransport}), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("rm: while creating API client: %w", err)
 			}
 			// Get the configuration by name or ID.
-			c, err := getConfig(context.Background(), *apiClient, conf.APIURL, conf.APIKey, nameOrID)
+			c, err := getConfig(context.Background(), apiClient, nameOrID)
 			if err != nil {
 				if errors.As(err, &NotFound{}) {
 					return fmt.Errorf("rm: Workload Identity Manager configuration '%s' not found", nameOrID)
@@ -1628,7 +1590,7 @@ func rmCmd() *cobra.Command {
 				return fmt.Errorf("rm: while getting Workload Identity Manager configuration by name or ID '%s': %w", nameOrID, err)
 			}
 			// Remove the configuration.
-			err = removeConfig(context.Background(), *apiClient, conf.APIURL, conf.APIKey, c.Id.String())
+			err = removeConfig(context.Background(), apiClient, c.Id.String())
 			if err != nil {
 				return fmt.Errorf("rm: while removing Workload Identity Manager configuration '%s': %w", nameOrID, err)
 			}
@@ -1639,12 +1601,12 @@ func rmCmd() *cobra.Command {
 	return cmd
 }
 
-func getPolicy(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID string) (Policy, error) {
+func getPolicy(ctx context.Context, cl *api.Client, nameOrID string) (Policy, error) {
 	if looksLikeAnID(nameOrID) {
-		return getPolicyByID(ctx, cl, apiURL, apiKey, nameOrID)
+		return getPolicyByID(ctx, cl, nameOrID)
 	}
 
-	policies, err := getPolicies(ctx, cl, apiURL, apiKey)
+	policies, err := getPolicies(ctx, cl)
 	if err != nil {
 		return Policy{}, fmt.Errorf("getPolicy: while getting policies: %w", err)
 	}
@@ -1676,14 +1638,8 @@ func getPolicy(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID stri
 	return found[0], nil
 }
 
-func getPolicyByID(ctx context.Context, cl api.Client, apiURL, apiKey, id string) (Policy, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies/"+id, nil)
-	if err != nil {
-		return Policy{}, fmt.Errorf("getPolicyByID: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+func getPolicyByID(ctx context.Context, cl *api.Client, id string) (Policy, error) {
+	resp, err := cl.PoliciesGetById(ctx, id)
 	if err != nil {
 		return Policy{}, fmt.Errorf("getPolicyByID: while making request: %w", err)
 	}
@@ -1706,18 +1662,13 @@ func getPolicyByID(ctx context.Context, cl api.Client, apiURL, apiKey, id string
 	return result, nil
 }
 
-func getSubCa(ctx context.Context, cl api.Client, apiURL, apiKey, name string) (SubCa, error) {
+func getSubCa(ctx context.Context, cl *api.Client, name string) (SubCa, error) {
 	if looksLikeAnID(name) {
-		return getSubCaByID(ctx, cl, apiURL, apiKey, name)
+		id := name
+		return getSubCaByID(ctx, cl, id)
 	}
 
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/subcaproviders", nil)
-	if err != nil {
-		return SubCa{}, fmt.Errorf("getSubCa: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.SubcaproviderGetAll(ctx)
 	if err != nil {
 		return SubCa{}, fmt.Errorf("getSubCa: while making request: %w", err)
 	}
@@ -1764,12 +1715,12 @@ func getSubCa(ctx context.Context, cl api.Client, apiURL, apiKey, name string) (
 	return found[0], nil
 }
 
-func getConfig(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID string) (Config, error) {
+func getConfig(ctx context.Context, cl *api.Client, nameOrID string) (Config, error) {
 	if looksLikeAnID(nameOrID) {
-		return getConfigByID(ctx, cl, apiURL, apiKey, nameOrID)
+		return getConfigByID(ctx, cl, nameOrID)
 	}
 
-	confs, err := getConfigs(ctx, cl, apiURL, apiKey)
+	confs, err := getConfigs(ctx, cl)
 	if err != nil {
 		return Config{}, fmt.Errorf("getConfigByName:urations: %w", err)
 	}
@@ -1801,14 +1752,8 @@ func getConfig(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID stri
 	return found[0], nil
 }
 
-func getConfigs(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]Config, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/configurations", nil)
-	if err != nil {
-		return nil, fmt.Errorf("getConfigs: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+func getConfigs(ctx context.Context, cl *api.Client) ([]Config, error) {
+	resp, err := cl.ConfigurationsGetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getConfigs: while making request: %w", err)
 	}
@@ -1833,25 +1778,19 @@ func getConfigs(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]Co
 	return result.Configurations, nil
 }
 
-func removeConfig(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID string) error {
+func removeConfig(ctx context.Context, cl *api.Client, nameOrID string) error {
 	var id string
 	if looksLikeAnID(nameOrID) {
 		id = nameOrID
 	} else {
-		config, err := getConfig(ctx, cl, apiURL, apiKey, nameOrID)
+		config, err := getConfig(ctx, cl, nameOrID)
 		if err != nil {
-			return fmt.Errorf("removeConfig:uration by name %q: %w", nameOrID, err)
+			return fmt.Errorf("removeConfig: while getting the configuration with the name '%s': %w", nameOrID, err)
 		}
 		id = config.Id.String()
 	}
 
-	req, err := http.NewRequest("DELETE", apiURL+"/v1/distributedissuers/configurations/"+id, nil)
-	if err != nil {
-		return fmt.Errorf("removeConfig: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.ConfigurationsDelete(ctx, id)
 	if err != nil {
 		return fmt.Errorf("removeConfig: while making request: %w", err)
 	}
@@ -1866,14 +1805,8 @@ func removeConfig(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID s
 	}
 }
 
-func getPolicies(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]Policy, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/distributedissuers/policies", nil)
-	if err != nil {
-		return nil, fmt.Errorf("getPolicies: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+func getPolicies(ctx context.Context, cl *api.Client) ([]Policy, error) {
+	resp, err := cl.PoliciesGetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getPolicies: while making request: %w", err)
 	}
@@ -1928,29 +1861,24 @@ func getCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: Transport}), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: LogTransport}), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
 			if err != nil {
 				return fmt.Errorf("get: while creating API client: %w", err)
 			}
 
-			knownSvcaccts, err := getServiceAccounts(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+			knownSvcaccts, err := getServiceAccounts(context.Background(), apiClient)
 			if err != nil {
 				return fmt.Errorf("get: while fetching service accounts: %w", err)
 			}
-			knownPolicies, err := getPolicies(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
-			if err != nil {
-				return fmt.Errorf("get: while fetching policies: %w", err)
-			}
 
-			config, err := getConfig(context.Background(), *apiClient, conf.APIURL, conf.APIKey, idOrName)
+			config, err := getConfig(context.Background(), apiClient, idOrName)
 			if err != nil {
 				return fmt.Errorf("get: while getting original Workload Identity Manager configuration: %w", err)
 			}
-			populateServiceAccountsInConfig(&config, knownSvcaccts)
-			populatePoliciesInConfig(&config, knownPolicies)
-			hideMisleadingFields(&config)
 
-			yamlData, err := renderToYAML(saResolver(knownSvcaccts), config)
+			issuingTemplates, err := getIssuingTemplates(context.Background(), apiClient)
+
+			yamlData, err := renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
 			if err != nil {
 				return err
 			}
@@ -1985,6 +1913,17 @@ func saResolver(svcAccts []ServiceAccount) func(id openapi_types.UUID) (ServiceA
 	}
 }
 
+func issuingtemplateResolver(templates []api.CertificateIssuingTemplateInformation1) func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
+	return func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
+		for _, t := range templates {
+			if t.CertificateAuthorityAccountId == caAccountId && t.CertificateAuthorityProductOptionId == caProductOptionId {
+				return t, nil
+			}
+		}
+		return api.CertificateIssuingTemplateInformation1{}, fmt.Errorf("issuing template with CaAccountId %s and CaProductOptionId %s not found", caAccountId.String(), caProductOptionId.String())
+	}
+}
+
 // Zero out the config ID, subCA provider ID, and policy IDs in the
 // configuration. Service account IDs are kept. Useful for removing misleading
 // fields before marshalling to YAML.
@@ -2010,21 +1949,8 @@ func hideMisleadingFields(c *Config) {
 
 // createConfig creates a new Workload Identity Manager configuration or updates an
 // existing one. Also deals with creating the subCA policies.
-func createConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, config api.ConfigurationCreateRequest) (api.ExtendedConfigurationInformation, error) {
-	body, err := json.Marshal(config)
-	if err != nil {
-		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while marshaling configuration: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/configurations", bytes.NewReader(body))
-	if err != nil {
-		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while creating request: %w", err)
-	}
-
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+func createConfig(ctx context.Context, cl *api.Client, config api.ConfigurationCreateRequest) (api.ExtendedConfigurationInformation, error) {
+	resp, err := cl.ConfigurationsCreate(ctx, config)
 	if err != nil {
 		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while making request: %w", err)
 	}
@@ -2037,7 +1963,7 @@ func createConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, con
 		return api.ExtendedConfigurationInformation{}, HTTPErrorf(resp, "createConfig: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	body, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while reading response body: %w", err)
 	}
@@ -2051,20 +1977,8 @@ func createConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, con
 	return result, nil
 }
 
-func createPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, policy api.PolicyCreateRequest) (api.ExtendedPolicyInformation, error) {
-	body, err := json.Marshal(policy)
-	if err != nil {
-		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while marshaling policy: %w", err)
-	}
-	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/policies", bytes.NewReader(body))
-	if err != nil {
-		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while creating request: %w", err)
-	}
-
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+func createPolicy(ctx context.Context, cl *api.Client, policy api.PolicyCreateRequest) (api.ExtendedPolicyInformation, error) {
+	resp, err := cl.PoliciesCreate(ctx, policy)
 	if err != nil {
 		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while making request: %w", err)
 	}
@@ -2077,7 +1991,7 @@ func createPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, pol
 		return api.ExtendedPolicyInformation{}, HTTPErrorf(resp, "createFireflyPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	body, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while reading response body: %w", err)
 	}
@@ -2091,7 +2005,7 @@ func createPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, pol
 	return result, nil
 }
 
-func createSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey string, provider SubCaProviderCreateRequest) (SubCa, error) {
+func createSubCaProvider(ctx context.Context, cl *api.Client, provider SubCaProviderCreateRequest) (SubCa, error) {
 	resp, err := cl.SubcaprovidersCreate(ctx, provider)
 	if err != nil {
 		return SubCa{}, fmt.Errorf("createSubCaProvider: while creating request: %w", err)
@@ -2119,7 +2033,7 @@ func createSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	return result, nil
 }
 
-func patchSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch SubCaProviderUpdateRequest) (SubCa, error) {
+func patchSubCaProvider(ctx context.Context, cl *api.Client, id string, patch SubCaProviderUpdateRequest) (SubCa, error) {
 	resp, err := cl.SubcaprovidersUpdate(ctx, id, patch)
 	if err != nil {
 		return SubCa{}, fmt.Errorf("patchSubCaProvider: while creating request: %w", err)
@@ -2146,7 +2060,7 @@ type ConfigInfo struct {
 	ServiceAccountIds []string
 }
 
-func listConfigs(ctx context.Context, cl api.Client) ([]api.ExtendedConfigurationInformation, error) {
+func listConfigs(ctx context.Context, cl *api.Client) ([]api.ExtendedConfigurationInformation, error) {
 	resp, err := cl.ConfigurationsGetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/distributedissuers/configurations: while making request: %w", err)
@@ -2180,7 +2094,7 @@ func (e NotFound) Error() string {
 	return fmt.Sprintf("'%s' not found", e.NameOrID)
 }
 
-func getConfigByID(ctx context.Context, cl api.Client, apiURL, apiKey, id string) (Config, error) {
+func getConfigByID(ctx context.Context, cl *api.Client, id string) (Config, error) {
 	resp, err := cl.ConfigurationsGetById(ctx, id)
 	if err != nil {
 		return Config{}, fmt.Errorf("getConfig: while making request: %w", err)
@@ -3097,17 +3011,13 @@ func PatchToManifest(patch ConfigPatch) (manifest.WIMConfiguration, error) {
 	}, nil
 }
 
-func editConfig(ctx context.Context, cl api.Client, apiURL, apiKey, name string) error {
-	knownSvcaccts, err := getServiceAccounts(ctx, cl, apiURL, apiKey)
+func editConfig(ctx context.Context, cl *api.Client, name string) error {
+	knownSvcaccts, err := getServiceAccounts(ctx, cl)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
-	knownPolicies, err := getPolicies(ctx, cl, apiURL, apiKey)
-	if err != nil {
-		return fmt.Errorf("while fetching policies: %w", err)
-	}
 
-	config, err := getConfig(ctx, cl, apiURL, apiKey, name)
+	config, err := getConfig(ctx, cl, name)
 	switch {
 	case errors.Is(err, NotFound{}):
 		return Fixable(fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl apply config.yaml'", name))
@@ -3115,11 +3025,12 @@ func editConfig(ctx context.Context, cl api.Client, apiURL, apiKey, name string)
 		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
 
-	populateServiceAccountsInConfig(&config, knownSvcaccts)
-	populatePoliciesInConfig(&config, knownPolicies)
-	hideMisleadingFields(&config)
+	templates, err := getIssuingTemplates(ctx, cl)
+	if err != nil {
+		return fmt.Errorf("while fetching issuing templates: %w", err)
+	}
 
-	yamlData, err := renderToYAML(saResolver(knownSvcaccts), config)
+	yamlData, err := renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
 	if err != nil {
 		return err
 	}
@@ -3193,11 +3104,10 @@ edit:
 		return fmt.Errorf("while parsing modified Workload Identity Manager manifests: %w", err)
 	}
 
-	apiClient, err := api.NewClient(apiURL, api.WithHTTPClient(&http.Client{Transport: Transport}), api.WithBearerToken(apiKey), api.WithUserAgent())
 	if err != nil {
 		return fmt.Errorf("edit: while creating API client: %w", err)
 	}
-	err = applyManifests(apiClient, apiURL, apiKey, modified, false)
+	err = applyManifests(cl, modified, false)
 	switch {
 	// In case we were returned a 400 Bad Request or if it's a fixable error,
 	// let's give a chance to the user to fix the problem.
@@ -3349,21 +3259,8 @@ func fullToPatchPolicy(full Policy) PolicyPatch {
 }
 
 // https://api.venafi.cloud/v1/distributedissuers/policies/{id}
-func patchPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch PolicyPatch) (Policy, error) {
-	patchJSON, err := json.Marshal(patch)
-	if err != nil {
-		return Policy{}, err
-	}
-
-	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/distributedissuers/policies/%s", apiURL, id), bytes.NewReader(patchJSON))
-	if err != nil {
-		return Policy{}, err
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+func patchPolicy(ctx context.Context, cl *api.Client, id string, patch PolicyPatch) (Policy, error) {
+	resp, err := cl.PoliciesUpdate(ctx, id, patch)
 	if err != nil {
 		return Policy{}, err
 	}
@@ -3386,21 +3283,8 @@ func patchPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, id s
 }
 
 // https://api.venafi.cloud/v1/distributedissuers/configurations/{id}
-func patchConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, id openapi_types.UUID, patch ConfigPatch) (Config, error) {
-	patchJSON, err := json.Marshal(patch)
-	if err != nil {
-		return Config{}, fmt.Errorf("patchConfig: while marshaling patch: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "PATCH", fmt.Sprintf("%s/v1/distributedissuers/configurations/%s", apiURL, id.String()), bytes.NewReader(patchJSON))
-	if err != nil {
-		return Config{}, fmt.Errorf("patchConfig: while creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+func patchConfig(ctx context.Context, cl *api.Client, id string, patch ConfigPatch) (Config, error) {
+	resp, err := cl.ConfigurationsUpdate(ctx, id, patch)
 	if err != nil {
 		return Config{}, fmt.Errorf("patchConfig: while sending request: %w", err)
 	}
@@ -3410,7 +3294,7 @@ func patchConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, id o
 	case http.StatusOK:
 		// The patch was successful, continue below.
 	case http.StatusNotFound:
-		return Config{}, fmt.Errorf("WIM configuration: %w", NotFound{NameOrID: id.String()})
+		return Config{}, fmt.Errorf("WIM configuration: %w", NotFound{NameOrID: id})
 	default:
 		return Config{}, HTTPErrorf(resp, "patchConfig: unexpected http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
@@ -3430,15 +3314,8 @@ func patchConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, id o
 	return result, nil
 }
 
-func getServiceAccounts(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]ServiceAccount, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+func getServiceAccounts(ctx context.Context, cl *api.Client) ([]ServiceAccount, error) {
+	resp, err := cl.GetV1Serviceaccounts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -3464,15 +3341,8 @@ func getServiceAccounts(ctx context.Context, cl api.Client, apiURL, apiKey strin
 	return result, nil
 }
 
-func getServiceAccountScopes(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]ScopeDetails, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts/scopes", nil)
-	if err != nil {
-		return nil, fmt.Errorf("getServiceAccountScopes: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+func getServiceAccountScopes(ctx context.Context, cl *api.Client) ([]ScopeDetails, error) {
+	resp, err := cl.GetV1Serviceaccountscopes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getServiceAccountScopes: while making request: %w", err)
 	}
@@ -3498,12 +3368,12 @@ func getServiceAccountScopes(ctx context.Context, cl api.Client, apiURL, apiKey 
 	return result, nil
 }
 
-func removeServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID string) error {
+func removeServiceAccount(ctx context.Context, cl *api.Client, nameOrID string) error {
 	var id string
 	if looksLikeAnID(nameOrID) {
 		id = nameOrID
 	} else {
-		sa, err := getServiceAccount(ctx, cl, apiURL, apiKey, nameOrID)
+		sa, err := getServiceAccount(ctx, cl, nameOrID)
 		if err != nil {
 			if errors.Is(err, NotFound{}) {
 				return fmt.Errorf("service account '%s' not found", nameOrID)
@@ -3513,14 +3383,11 @@ func removeServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey, na
 		id = sa.Id.String()
 	}
 
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
+	uuidID, err := uuid.Parse(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("removeServiceAccount: while parsing service account ID '%s' as UUID: %w", id, err)
 	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.DeleteV1ServiceaccountsById(ctx, uuidID)
 	if err != nil {
 		return err
 	}
@@ -3555,12 +3422,12 @@ func findServiceAccount(nameOrID string, allSAs []ServiceAccount) (ServiceAccoun
 	return ServiceAccount{}, NotFound{NameOrID: nameOrID}
 }
 
-func getServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey, nameOrID string) (ServiceAccount, error) {
+func getServiceAccount(ctx context.Context, cl *api.Client, nameOrID string) (ServiceAccount, error) {
 	if looksLikeAnID(nameOrID) {
-		return getServiceAccountByID(ctx, cl, apiURL, apiKey, nameOrID)
+		return getServiceAccountByID(ctx, cl, nameOrID)
 	}
 
-	sas, err := getServiceAccounts(ctx, cl, apiURL, apiKey)
+	sas, err := getServiceAccounts(ctx, cl)
 	if err != nil {
 		return ServiceAccount{}, fmt.Errorf("getServiceAccount: while getting service accounts: %w", err)
 	}
@@ -3596,15 +3463,12 @@ func getServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey, nameO
 		`), nameOrID, b.String(), found[0].Id.String())
 }
 
-func getServiceAccountByID(ctx context.Context, cl api.Client, apiURL, apiKey, id string) (ServiceAccount, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), nil)
+func getServiceAccountByID(ctx context.Context, cl *api.Client, id string) (ServiceAccount, error) {
+	parsedID, err := uuid.Parse(id)
 	if err != nil {
-		return ServiceAccount{}, err
+		return ServiceAccount{}, fmt.Errorf("getServiceAccountByID: while parsing service account ID '%s' as UUID: %w", id, err)
 	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.GetV1ServiceaccountsById(ctx, parsedID)
 	if err != nil {
 		return ServiceAccount{}, err
 	}
@@ -3654,10 +3518,10 @@ func genECKeyPair() (string, string, error) {
 
 // Owner can be left empty, in which case the first team will be used as the
 // owner.
-func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, desired ServiceAccount) (api.CreateServiceAccountResponseBody, error) {
+func createServiceAccount(ctx context.Context, cl *api.Client, desired ServiceAccount) (api.CreateServiceAccountResponseBody, error) {
 	// If no owner is specified, let's just use the first team we can find.
 	if desired.Owner == (openapi_types.UUID{}) {
-		teams, err := getTeams(ctx, cl, apiURL, apiKey)
+		teams, err := getTeams(ctx, cl)
 		if err != nil {
 			return api.CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: while getting teams: %w", err)
 		}
@@ -3674,20 +3538,7 @@ func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey str
 		desired.Owner = ownerUUID
 	}
 
-	jsonStr, err := json.Marshal(desired)
-	if err != nil {
-		return api.CreateServiceAccountResponseBody{}, err
-	}
-
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/serviceaccounts", apiURL), bytes.NewReader(jsonStr))
-	if err != nil {
-		return api.CreateServiceAccountResponseBody{}, err
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.CreateV1Serviceaccounts(ctx, apiToAPICreateServiceAccountRequestBody(desired))
 	if err != nil {
 		return api.CreateServiceAccountResponseBody{}, err
 	}
@@ -3710,10 +3561,10 @@ func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey str
 	return result, nil
 }
 
-func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch ServiceAccountPatch) error {
+func patchServiceAccount(ctx context.Context, cl *api.Client, id string, patch ServiceAccountPatch) error {
 	// If no owner is specified, let's just use the first team we can find.
 	if patch.Owner == (openapi_types.UUID{}) {
-		teams, err := getTeams(ctx, cl, apiURL, apiKey)
+		teams, err := getTeams(ctx, cl)
 		if err != nil {
 			return fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
 		}
@@ -3726,20 +3577,12 @@ func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey stri
 		logutil.Debugf("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].ID)
 	}
 
-	patchJSON, err := json.Marshal(patch)
+	uuidID, err := uuid.Parse(id)
 	if err != nil {
-		return fmt.Errorf("patchServiceAccount: while marshalling patch: %w", err)
+		return fmt.Errorf("patchServiceAccount: while parsing service account ID '%s' as UUID: %w", id, err)
 	}
 
-	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), bytes.NewReader(patchJSON))
-	if err != nil {
-		return fmt.Errorf("patchServiceAccount: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.PatchV1ServiceaccountsById(ctx, uuidID, patch)
 	if err != nil {
 		return fmt.Errorf("patchServiceAccount: while sending request: %w", err)
 	}
@@ -3789,15 +3632,24 @@ func ANSIDiff(x, y any, opts ...cmp.Option) string {
 	return strings.Join(ss, "\n")
 }
 
-func getIssuingTemplates(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]any, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/certificateissuingtemplates", nil)
+func getIssuingTemplateByName(ctx context.Context, cl *api.Client, name string) (api.CertificateIssuingTemplateInformation1, error) {
+	templates, err := getIssuingTemplates(ctx, cl)
 	if err != nil {
-		return nil, fmt.Errorf("getIssuingTemplates: while creating request: %w", err)
+		return api.CertificateIssuingTemplateInformation1{}, err
 	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := cl.Client.Do(req)
+	// Find the template with the desired name.
+	for _, template := range templates {
+		if template.Name == name {
+			return template, nil
+		}
+	}
+
+	return api.CertificateIssuingTemplateInformation1{}, NotFound{NameOrID: name}
+}
+
+func getIssuingTemplates(ctx context.Context, cl *api.Client) ([]api.CertificateIssuingTemplateInformation1, error) {
+	resp, err := cl.CertificateissuingtemplateGetAll(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while making request: %w", err)
 	}
@@ -3810,15 +3662,14 @@ func getIssuingTemplates(ctx context.Context, cl api.Client, apiURL, apiKey stri
 		return nil, HTTPErrorf(resp, "got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var result struct {
-		CertificateIssuingTemplates []any `json:"certificateIssuingTemplates"`
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while reading response body: %w", err)
 	}
 
+	var result struct {
+		CertificateIssuingTemplates []api.CertificateIssuingTemplateInformation1 `json:"certificateIssuingTemplates"`
+	}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, fmt.Errorf("getIssuingTemplates: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
@@ -3827,74 +3678,10 @@ func getIssuingTemplates(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	return result.CertificateIssuingTemplates, nil
 }
 
-type CheckResp struct {
-	User struct {
-		Username        string   `json:"username"`
-		ID              string   `json:"id"`
-		CompanyID       string   `json:"companyId"`
-		Firstname       string   `json:"firstname"`
-		Lastname        string   `json:"lastname"`
-		EmailAddress    string   `json:"emailAddress"`
-		UserType        string   `json:"userType"`
-		UserAccountType string   `json:"userAccountType"`
-		SsoStatus       string   `json:"ssoStatus"`
-		UserStatus      string   `json:"userStatus"`
-		SystemRoles     []string `json:"systemRoles"`
-		ProductRoles    struct {
-		} `json:"productRoles"`
-		LocalLoginDisabled           bool      `json:"localLoginDisabled"`
-		HasPassword                  bool      `json:"hasPassword"`
-		ForceLocalPasswordExpiration bool      `json:"forceLocalPasswordExpiration"`
-		FirstLoginDate               time.Time `json:"firstLoginDate"`
-		CreationDate                 time.Time `json:"creationDate"`
-		OwnedTeams                   []any     `json:"ownedTeams"`
-		MemberedTeams                []any     `json:"memberedTeams"`
-		Disabled                     bool      `json:"disabled"`
-		SignupAttributes             struct {
-		} `json:"signupAttributes"`
-	} `json:"user"`
-	Company struct {
-		ID                  string    `json:"id"`
-		Name                string    `json:"name"`
-		URLPrefix           string    `json:"urlPrefix"` // e.g. "ven-cert-manager-uk"
-		CompanyType         string    `json:"companyType"`
-		Active              bool      `json:"active"`
-		CreationDate        time.Time `json:"creationDate"`
-		Domains             []string  `json:"domains"`
-		ProductEntitlements []struct {
-			Label        string `json:"label"`
-			Capabilities []struct {
-				Name              string    `json:"name"`
-				ProductExpiryDate time.Time `json:"productExpiryDate"`
-				IsTrial           bool      `json:"isTrial"`
-			} `json:"capabilities"`
-			VisibilityConstraintsInformation struct {
-			} `json:"visibilityConstraintsInformation"`
-		} `json:"productEntitlements"`
-	} `json:"company"`
-	APIKey struct {
-		UserID            string    `json:"userId"`
-		Username          string    `json:"username"`
-		CompanyID         string    `json:"companyId"`
-		APIVersion        string    `json:"apiVersion"`
-		APIKeyStatus      string    `json:"apiKeyStatus"`
-		CreationDate      time.Time `json:"creationDate"`
-		ValidityStartDate time.Time `json:"validityStartDate"`
-		ValidityEndDate   time.Time `json:"validityEndDate"`
-	} `json:"apiKey"`
-}
-
-func checkAPIKey(ctx context.Context, cl api.Client, apiURL, apiKey string) (CheckResp, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/useraccounts", apiURL), nil)
+func selfCheck(ctx context.Context, cl *api.Client) (api.UserAccountResponse, error) {
+	resp, err := cl.UseraccountsGetByAuth(ctx)
 	if err != nil {
-		return CheckResp{}, fmt.Errorf("while creating request for GET /v1/useraccounts: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := cl.Client.Do(req)
-	if err != nil {
-		return CheckResp{}, fmt.Errorf("while making request to GET /v1/useraccounts: %w", err)
+		return api.UserAccountResponse{}, fmt.Errorf("while making request to check API key: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -3902,20 +3689,21 @@ func checkAPIKey(ctx context.Context, cl api.Client, apiURL, apiKey string) (Che
 	case http.StatusOK:
 	// The request was successful, the token is valid. Continue below.
 	case http.StatusUnauthorized:
-		return CheckResp{}, HTTPErrorf(resp, "please check your API key")
+		return api.UserAccountResponse{}, HTTPErrorf(resp, "please check your API key")
 	case http.StatusForbidden:
-		return CheckResp{}, HTTPErrorf(resp, "please check your API key and permissions")
+		return api.UserAccountResponse{}, HTTPErrorf(resp, "please check your API key and permissions")
 	default:
-		return CheckResp{}, HTTPErrorf(resp, "while checking API key, got unexpected http %s", resp.Status)
+		return api.UserAccountResponse{}, HTTPErrorf(resp, "while checking API key, got unexpected http %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return CheckResp{}, fmt.Errorf("while reading response body: %w", err)
+		return api.UserAccountResponse{}, fmt.Errorf("while reading response body: %w", err)
 	}
-	var result CheckResp
+
+	var result api.UserAccountResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return CheckResp{}, fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
+		return api.UserAccountResponse{}, fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
 	}
 
 	return result, nil
@@ -3969,14 +3757,8 @@ type Team struct {
 }
 
 // URL: https://api-dev210.qa.venafi.io/v1/teams?includeSystemGenerated=true
-func getTeams(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]Team, error) {
-	req, err := http.NewRequest("GET", apiURL+"/v1/teams?includeSystemGenerated=true", nil)
-	if err != nil {
-		return nil, fmt.Errorf("getTeams: while creating request: %w", err)
-	}
-	req.Header.Set("tppl-api-key", apiKey)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := cl.Client.Do(req)
+func getTeams(ctx context.Context, cl *api.Client) ([]Team, error) {
+	resp, err := cl.TeamsGetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getTeams: while making request: %w", err)
 	}

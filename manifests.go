@@ -8,6 +8,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	_ "github.com/maelvls/vcpctl/internal/api"
+	api "github.com/maelvls/vcpctl/internal/api"
 	manifest "github.com/maelvls/vcpctl/internal/manifest"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -90,7 +91,11 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 	}
 }
 
-func renderToManifests(resolveSA func(openapi_types.UUID) (ServiceAccount, error), cfg Config) (manifest.WIMConfiguration, []manifest.ServiceAccount, []manifest.Policy, manifest.SubCa, error) {
+func renderToManifests(
+	resolveSA func(openapi_types.UUID) (ServiceAccount, error),
+	resolveIssuingTemplates func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	cfg Config,
+) (manifest.WIMConfiguration, []manifest.ServiceAccount, []manifest.Policy, manifest.SubCa, error) {
 	var wimConfig manifest.WIMConfiguration
 	wimConfig.SubCaProviderName = cfg.SubCaProvider.Name
 
@@ -114,15 +119,22 @@ func renderToManifests(resolveSA func(openapi_types.UUID) (ServiceAccount, error
 	}
 
 	var subCa manifest.SubCa
-	subCa = apiToManifestSubCa(cfg.SubCaProvider)
+	subCa, err = apiToManifestSubCa(resolveIssuingTemplates, cfg.SubCaProvider)
+	if err != nil {
+		return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("renderToManifests: while converting SubCaProvider: %w", err)
+	}
 
 	return wimConfig, serviceAccounts, policies, subCa, nil
 }
 
-func renderToYAML(resolveSA func(openapi_types.UUID) (ServiceAccount, error), cfg Config) ([]byte, error) {
+func renderToYAML(
+	resolveSA func(openapi_types.UUID) (ServiceAccount, error),
+	resolveIssuingTemplates func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	cfg Config,
+) ([]byte, error) {
 	manifests := []manifest.Manifest{}
 
-	wimConfig, serviceAccounts, policies, subCa, err := renderToManifests(resolveSA, cfg)
+	wimConfig, serviceAccounts, policies, subCa, err := renderToManifests(resolveSA, resolveIssuingTemplates, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("while rendering to manifests: %w", err)
 	}

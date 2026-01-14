@@ -267,7 +267,7 @@ func makeAPIRequest(ctx context.Context, method, path string, params map[string]
 
 	// Create HTTP client with tracing
 	client := &http.Client{
-		Transport: Transport,
+		Transport: LogTransport,
 	}
 
 	// Execute request
