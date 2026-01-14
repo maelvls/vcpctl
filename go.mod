@@ -5,6 +5,7 @@ go 1.24
 require (
 	dario.cat/mergo v1.0.2
 	github.com/charmbracelet/huh v0.7.0
+	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fatih/color v1.18.0
 	github.com/goccy/go-yaml v1.16.0
 	github.com/google/go-cmp v0.7.0
@@ -16,6 +17,8 @@ require (
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.10.0
+	github.com/tidwall/sjson v1.2.5
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 )
 
 require (
@@ -26,7 +29,6 @@ require (
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/charmbracelet/bubbles v0.21.0 // indirect
 	github.com/charmbracelet/bubbletea v1.3.5 // indirect
-	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -45,7 +47,6 @@ require (
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
-	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/sync v0.13.0 // indirect

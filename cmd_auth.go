@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	json "encoding/json/v2"
 	"errors"
@@ -11,12 +12,13 @@ import (
 	"path"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/internal/api"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // This CLI stores its authentication information in ~/.config/vcpctl.yaml.
@@ -31,6 +33,103 @@ type Auth struct {
 	URL    string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
 	APIURL string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
 	APIKey string `json:"apiKey"`
+}
+
+// Styles for prompts
+var (
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
+	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
+	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+)
+
+// promptYesNo prompts for a yes/no answer
+func promptYesNo(question string) (bool, error) {
+	fmt.Printf("%s %s: ", question, subtleStyle.Render("(y/n)"))
+
+	// Try to set raw mode for immediate single-character input
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		// Fallback to line-based input if raw mode not available
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return false, err
+		}
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input == "y" || input == "yes" {
+			return true, nil
+		} else if input == "n" || input == "no" {
+			return false, nil
+		}
+		fmt.Println(errorStyle.Render("✗ Please enter 'y' or 'n'"))
+		return promptYesNo(question)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	// Read single character without waiting for Enter
+	for {
+		var buf [1]byte
+		_, err = os.Stdin.Read(buf[:])
+		if err != nil {
+			term.Restore(int(os.Stdin.Fd()), oldState)
+			return false, err
+		}
+
+		char := strings.ToLower(string(buf[0]))
+
+		if char == "y" {
+			fmt.Println("y")
+			return true, nil
+		} else if char == "n" {
+			fmt.Println("n")
+			return false, nil
+		}
+		// Invalid input - continue reading without error message for better UX
+	}
+}
+
+// promptString prompts for a string with optional validation
+func promptString(prompt string, validate func(string) error) (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Printf("%s", prompt)
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		input = strings.TrimSpace(input)
+		if validate != nil {
+			if err := validate(input); err != nil {
+				fmt.Println(errorStyle.Render("✗ " + err.Error()))
+				continue
+			}
+		}
+		return input, nil
+	}
+}
+
+// promptSelect displays a numbered list and prompts for selection
+func promptSelect(title string, items []string) (int, error) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println(title)
+	for i, item := range items {
+		fmt.Printf("  %d) %s\n", i+1, item)
+	}
+	for {
+		fmt.Printf("\nSelect (1-%d): ", len(items))
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return 0, err
+		}
+		input = strings.TrimSpace(input)
+		var choice int
+		_, err = fmt.Sscanf(input, "%d", &choice)
+		if err != nil || choice < 1 || choice > len(items) {
+			fmt.Println(errorStyle.Render(fmt.Sprintf("✗ Please enter a number between 1 and %d", len(items))))
+			continue
+		}
+		return choice - 1, nil
+	}
 }
 
 func authCmd() *cobra.Command {
@@ -139,6 +238,7 @@ func loginCmd() *cobra.Command {
 			current, _ := currentFrom(conf)
 
 			// Let the user know if they are already authenticated.
+			skipTenantPrompt := false
 			if current.URL != "" {
 				apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(current.APIKey), api.WithUserAgent())
 				if err != nil {
@@ -146,36 +246,46 @@ func loginCmd() *cobra.Command {
 				}
 				_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, current.APIKey)
 				if err == nil {
-					var continueAuth bool
-					f := huh.NewForm(huh.NewGroup(huh.NewConfirm().
-						Title("Already authenticated").
-						Description(fmt.Sprintf("You're already authenticated to '%s'. Do you want to continue editing the authentication details?", current.URL)).
-						Value(&continueAuth).
-						Affirmative("Yes").
-						Negative("No"),
-					))
-					if err := f.Run(); err != nil {
-						return fmt.Errorf("while asking if the user wants to continue: %w", err)
+					fmt.Printf("\n%s\n\n", successStyle.Render("✓ You are already logged in to "+current.URL))
+
+					// Ask if they want to add a new tenant or re-login to existing one
+					addNew, err := promptYesNo("Do you want to add a new tenant?")
+					if err != nil {
+						return fmt.Errorf("prompt cancelled: %w", err)
 					}
-					if !continueAuth {
-						return nil
+
+					if !addNew {
+						relogin, err := promptYesNo("Do you want to re-login to " + current.URL + "?")
+						if err != nil {
+							return fmt.Errorf("prompt cancelled: %w", err)
+						}
+						if !relogin {
+							fmt.Println("\nLogin cancelled.")
+							return nil
+						}
+						// If re-login, skip the tenant URL prompt
+						skipTenantPrompt = true
+					} else {
+						// If adding new tenant, clear the current URL so they enter a new one
+						current = Auth{}
 					}
+					fmt.Println() // Add spacing
 				}
 			}
 
-			var fields []huh.Field
-
 			if os.Getenv("APIURL") != "" || os.Getenv("APIKEY") != "" {
-				fields = append(fields, huh.NewNote().
-					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
-				)
+				fmt.Println(errorStyle.Render("⚠  WARNING: the env var APIURL or APIKEY is set."))
+				fmt.Println(errorStyle.Render("⚠  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."))
+				fmt.Println()
 			}
 
-			fields = append(fields, huh.NewInput().
-				Prompt("Tenant URL: ").
-				Description("Enter the URL you use to log into CyberArk Certificate Manager, SaaS. Example: https://ven-cert-manager-uk.venafi.cloud").
-				Value(&current.URL).
-				Validate(func(input string) error {
+			// Prompt for Tenant URL (skip if re-logging in)
+			if !skipTenantPrompt {
+				fmt.Println(subtleStyle.Render("Enter the URL you use to log into CyberArk Certificate Manager, SaaS"))
+				fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
+				fmt.Println()
+
+				tenantURL, err := promptString("Tenant URL: ", func(input string) error {
 					if strings.HasSuffix(input, "/") {
 						return fmt.Errorf("Tenant URL should not have a trailing slash")
 					}
@@ -194,47 +304,45 @@ func loginCmd() *cobra.Command {
 					default:
 						return fmt.Errorf("while getting API URL for tenant '%s': %w", input, err)
 					}
-				}),
-			)
-			fields = append(fields, huh.NewInput().
-				Prompt("API Key: ").
-				EchoMode(huh.EchoModePassword).
-				DescriptionFunc(func() string {
-					if current.URL == "" {
-						return ""
-					}
-					return fmt.Sprintf("To get the API key, open: %s/platform-settings/user-preferences?key=api-keys", current.URL)
-				}, &current.URL).
-				Validate(func(input string) error {
-					if input == "" {
-						return fmt.Errorf("API key cannot be empty")
-					}
-					if strings.TrimSpace(input) != input {
-						return fmt.Errorf("API key cannot contain leading or trailing spaces")
-					}
-					if len(input) != 36 {
-						return fmt.Errorf("API key must be 36 characters long")
-					}
-					apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(input), api.WithUserAgent())
-					if err != nil {
-						return fmt.Errorf("while creating API client: %w", err)
-					}
-					_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
-					if err != nil {
-						return err
-					}
+				})
+				if err != nil {
+					return err
+				}
+				current.URL = tenantURL
+				fmt.Println()
+			}
 
-					return nil
-				}).
-				Value(&current.APIKey),
-			)
+			// Prompt for API Key
+			fmt.Println(subtleStyle.Render("To get the API key, open: " + current.URL + "/platform-settings/user-preferences?key=api-keys"))
+			fmt.Println()
 
-			err = huh.NewForm(huh.NewGroup(fields...)).Run()
+			apiKeyInput, err := promptString("API Key: ", func(input string) error {
+				if input == "" {
+					return fmt.Errorf("API key cannot be empty")
+				}
+				if strings.TrimSpace(input) != input {
+					return fmt.Errorf("API key cannot contain leading or trailing spaces")
+				}
+				if len(input) != 36 {
+					return fmt.Errorf("API key must be 36 characters long")
+				}
+				apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(input), api.WithUserAgent())
+				if err != nil {
+					return fmt.Errorf("while creating API client: %w", err)
+				}
+				_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
 			if err != nil {
 				return err
 			}
+			current.APIKey = apiKeyInput
 
-			logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
+			logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.URL+"'."))
 
 			// Save the configuration to ~/.config/vcpctl.yaml
 			err = saveCurrentTenant(current)
@@ -368,30 +476,29 @@ func switchCmd() *cobra.Command {
 				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl login` to add one.")
 			}
 
-			var opts []huh.Option[Auth]
-			for _, auth := range conf.Auths {
-				opts = append(opts, huh.Option[Auth]{
-					Value: auth,
-					Key:   auth.URL,
-				})
+			if os.Getenv("VEN_API_URL") != "" || os.Getenv("VEN_API_KEY") != "" {
+				fmt.Println(errorStyle.Render("⚠  WARNING: the env var VEN_API_URL or VEN_API_KEY is set."))
+				fmt.Println(errorStyle.Render("⚠  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."))
+				fmt.Println()
 			}
 
-			var fields []huh.Field
-			if os.Getenv("VEN_API_URL") != "" || os.Getenv("VEN_API_KEY") != "" {
-				fields = append(fields, huh.NewNote().
-					Description("⚠️  WARNING: the env var VEN_API_URL or VEN_API_KEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
-				)
+			// Build list of tenant URLs with current one marked
+			items := make([]string, len(conf.Auths))
+			for i, auth := range conf.Auths {
+				marker := " "
+				if auth.URL == current.URL {
+					marker = successStyle.Render("*")
+				}
+				items[i] = fmt.Sprintf("%s %s", marker, auth.URL)
 			}
-			fields = append(fields, huh.NewSelect[Auth]().
-				Options(opts...).
-				Description("Select the tenant you want to switch to.").
-				Value(&current),
-			)
-			err = huh.NewForm(huh.NewGroup(fields...)).Run()
+
+			selectedIdx, err := promptSelect("Select the tenant you want to switch to:", items)
 			if err != nil {
 				return fmt.Errorf("selecting tenant: %w", err)
 			}
-			conf.CurrentURL = current.URL
+
+			selectedAuth := conf.Auths[selectedIdx]
+			conf.CurrentURL = selectedAuth.URL
 			return saveFileConf(conf)
 		},
 	}
