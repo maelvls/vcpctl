@@ -90,9 +90,9 @@ func main() {
 			vcpctl is a CLI tool for managing WIM (Workload Identity Manager,
 			formerly Firefly) configurations in CyberArk Certificate Manager, SaaS
 			(formerly known as Venafi Control Plane and Venafi Cloud).
-            To configure it, set the APIKEY environment variable to your
+            To configure it, set the VEN_API_KEY environment variable to your
             CyberArk Certificate Manager, SaaS API key. You can also set the
-            APIURL environment variable to override the default API URL.
+            VEN_API_URL environment variable to override the default API URL.
         `),
 		Example: undent.Undent(`
 			vcpctl ls
@@ -113,8 +113,8 @@ func main() {
 		SilenceUsage:  false,
 	}
 
-	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set APIURL. Flag takes precedence. When using this flag, the configuration file is not used.")
-	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given CyberArk Certificate Manager, SaaS API key. You can also set APIKEY. Flag takes precedence. When using this flag, the configuration file is not used.")
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set VEN_API_URL. Flag takes precedence. When using this flag, the configuration file is not used.")
+	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given CyberArk Certificate Manager, SaaS API key. You can also set VEN_API_KEY. Flag takes precedence. When using this flag, the configuration file is not used.")
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.AddCommand(

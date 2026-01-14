@@ -70,7 +70,7 @@ func loginCmd() *cobra.Command {
 			--api-key (in which case the prompts are disabled).
 
 			If you prefer using environment variables, you can pass:
-			    --api-url $APIURL --api-key $APIKEY
+			    --api-url $VEN_API_URL --api-key $VEN_API_KEY
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl := http.Client{Transport: Transport}
@@ -82,15 +82,15 @@ func loginCmd() *cobra.Command {
 					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
 				}
 				if apiKey == "" {
-				return Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
-			}
+					return Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
+				}
 
 				if strings.HasSuffix(apiURL, "/") {
 					return fmt.Errorf("Tenant URL should not have a trailing slash, got: '%s'", apiURL)
 				}
 				if !strings.HasPrefix(apiURL, "https://") {
-				return Fixable(fmt.Errorf("API URL should start with 'https://', got: '%s'", apiURL))
-			}
+					return Fixable(fmt.Errorf("API URL should start with 'https://', got: '%s'", apiURL))
+				}
 
 				apiClient, err := api.NewClient(apiURL, api.WithHTTPClient(&cl), api.WithBearerToken(apiKey), api.WithUserAgent())
 				if err != nil {
@@ -265,10 +265,10 @@ func apikeyCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			envAPIKey := os.Getenv("APIKEY")
+			envAPIKey := os.Getenv("VEN_API_KEY")
 			flagAPIKey, _ := cmd.Flags().GetString("api-key")
 			if envAPIKey != "" || flagAPIKey != "" {
-				logutil.Debugf("$APIKEY or --api-key has been passed but will be ignored. This command only prints the API key from the configuration file at %s", configPath)
+				logutil.Debugf("$VEN_API_KEY or --api-key has been passed but will be ignored. This command only prints the API key from the configuration file at %s", configPath)
 			}
 
 			conf, err := loadFileConf()
@@ -302,10 +302,10 @@ func apiurlCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			envAPIURL := os.Getenv("APIURL")
+			envAPIURL := os.Getenv("VEN_API_URL")
 			flagAPIURL, _ := cmd.Flags().GetString("api-url")
 			if envAPIURL != "" || flagAPIURL != "" {
-				logutil.Debugf("$APIURL or --api-url has been passed but will be ignored. This command only prints the API URL from the configuration file at %s", configPath)
+				logutil.Debugf("$VEN_API_URL or --api-url has been passed but will be ignored. This command only prints the API URL from the configuration file at %s", configPath)
 			}
 
 			conf, err := loadFileConf()
@@ -377,9 +377,9 @@ func switchCmd() *cobra.Command {
 			}
 
 			var fields []huh.Field
-			if os.Getenv("APIURL") != "" || os.Getenv("APIKEY") != "" {
+			if os.Getenv("VEN_API_URL") != "" || os.Getenv("VEN_API_KEY") != "" {
 				fields = append(fields, huh.NewNote().
-					Description("⚠️  WARNING: the env var APIURL or APIKEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
+					Description("⚠️  WARNING: the env var VEN_API_URL or VEN_API_KEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
 				)
 			}
 			fields = append(fields, huh.NewSelect[Auth]().
@@ -500,15 +500,15 @@ func toAPIURL(cl http.Client, tenantURL string) (string, error) {
 
 // This must be used by all other commands to get the API key and API URL.
 func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
-	envAPIURL := os.Getenv("APIURL")
-	envAPIKey := os.Getenv("APIKEY")
+	envAPIURL := os.Getenv("VEN_API_URL")
+	envAPIKey := os.Getenv("VEN_API_KEY")
 	flagAPIURL, _ := cmd.Flags().GetString("api-url")
 	flagAPIKey, _ := cmd.Flags().GetString("api-key")
 
-	// If any of $APIKEY, $APIURL, --api-key, or --api-url is set, we don't use
+	// If any of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set, we don't use
 	// the configuration file.
 	if flagAPIKey != "" || envAPIKey != "" || flagAPIURL != "" || envAPIURL != "" {
-		logutil.Debugf("one of $APIKEY, $APIURL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
+		logutil.Debugf("one of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
 		// Priority: $APIURL > --api-url.
 		apiURL := envAPIURL
 		if apiURL == "" {
@@ -521,10 +521,10 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		}
 
 		if apiURL == "" && apiKey != "" {
-			return ToolConf{}, fmt.Errorf("you have set the API key using $APIKEY or --api-key, but you haven't set the API URL. Please use --api-url or $APIURL. If you aren't sure, unset APIKEY and remove --api-key, then use `vcpctl login` which will figure it out for you.")
+			return ToolConf{}, fmt.Errorf("you have set the API key using $VEN_API_KEY or --api-key, but you haven't set the API URL. Please use --api-url or $VEN_API_URL. If you aren't sure, unset VEN_API_KEY and remove --api-key, then use `vcpctl login` which will figure it out for you.")
 		}
 		if apiKey == "" && apiURL != "" {
-			return ToolConf{}, fmt.Errorf("you have set the API URL using $APIURL or --api-url, but you haven't set the API key. Please use --api-key or $APIKEY. If you aren't sure, unset APIURL and remove --api-url, then use `vcpctl login` which will figure it out for you.")
+			return ToolConf{}, fmt.Errorf("you have set the API URL using $VEN_API_URL or --api-url, but you haven't set the API key. Please use --api-key or $VEN_API_KEY. If you aren't sure, unset VEN_API_URL and remove --api-url, then use `vcpctl login` which will figure it out for you.")
 		}
 
 		return ToolConf{
@@ -533,7 +533,7 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		}, nil
 	}
 
-	logutil.Debugf("none of $APIKEY, $APIURL, --api-key, or --api-url is set, using the configuration file at ~/%s", configPath)
+	logutil.Debugf("none of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set, using the configuration file at ~/%s", configPath)
 
 	conf, err := loadFileConf()
 	if err != nil {

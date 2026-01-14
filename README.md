@@ -4,11 +4,11 @@
 
 To edit the CyberArk Workload Identity Manager configuration (formerly known as Firefly), the associated Sub CA configuration, and policy configuration, you can use the `vcpctl` command line tool.
 
-First off, set the `APIKEY` and optionally `APIURL` environment variables for CyberArk Certificate Manager, SaaS:
+First off, set the `VEN_API_KEY` and optionally `VEN_API_URL` environment variables for CyberArk Certificate Manager, SaaS:
 
 ```bash
-export APIKEY=yourapikey
-export APIURL=https://api.uk.venafi.cloud
+export VEN_API_KEY=yourapikey
+export VEN_API_URL=https://api.uk.venafi.cloud
 ```
 
 Then you can use the `vcpctl` command to manage your Workload Identity Manager configurations.
