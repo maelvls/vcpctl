@@ -139,9 +139,9 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		if err != nil {
 			return fmt.Errorf("reading response body: %w", err)
 		}
-		
+
 		os.Stdout.Write(body)
-		
+
 		// Add a newline if the output doesn't end with one
 		if len(body) > 0 && body[len(body)-1] != '\n' {
 			fmt.Println()

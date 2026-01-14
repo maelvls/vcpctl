@@ -162,7 +162,7 @@ func apiToManifestWIMConfiguration(resolveSA func(openapi_types.UUID) (ServiceAc
 func apiToManifestClientAuthentication(in api.ClientAuthenticationInformation) (manifest.ClientAuthentication, error) {
 	v, err := in.ValueByDiscriminator()
 	if err != nil {
-		return manifest.ClientAuthentication{}, fmt.Errorf("apiToManifestClientAuthentication: %w", err)
+		return manifest.ClientAuthentication{}, fmt.Errorf("could not figure out what type the 'clientAuthentication' field is: %w", err)
 	}
 	switch val := v.(type) {
 	case api.JwtJwksAuthenticationInformation:
@@ -173,7 +173,7 @@ func apiToManifestClientAuthentication(in api.ClientAuthenticationInformation) (
 	case api.JwtStandardClaimsAuthenticationInformation:
 		clients, err := apiToManifestJwtClientInformation(val.Clients)
 		if err != nil {
-			return manifest.ClientAuthentication{}, fmt.Errorf("apiToManifestClientAuthentication: while converting clients for clientAuthentication type=JWT_STANDARD_CLAIMS: %w", err)
+			return manifest.ClientAuthentication{}, fmt.Errorf("while looking at 'clientAuthentication' of type=JWT_STANDARD_CLAIMS: %w", err)
 		}
 		return manifest.ClientAuthentication{
 			Type:     "JWT_STANDARD_CLAIMS",

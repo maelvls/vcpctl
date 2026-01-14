@@ -159,24 +159,57 @@ var venafiRegions = []string{
 func loginCmd() *cobra.Command {
 	var apiURL, apiKey string
 	cmd := &cobra.Command{
-		Use:   "login [--api-url <url>] [--api-key <key>]",
-		Short: "Authenticate to a CyberArk Certificate Manager, SaaS tenant.",
+		Use:           "login [url]",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.MaximumNArgs(1),
+		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant.",
 		Long: undent.Undent(`
-			Authenticate to a CyberArk Certificate Manager, SaaS tenant. If the tenant is not specified,
-			you will be prompted to enter it.
+			Authenticate to a CyberArk Certificate Manager, SaaS tenant.
 
-			If you prefer avoiding prompts, you can either use --api-url and
-			--api-key (in which case the prompts are disabled).
+			You can provide the tenant UI URL (the URL you use to access the web interface in
+			your browser) as a positional argument. If no URL is provided, you will be prompted
+			to enter it.
 
-			If you prefer using environment variables, you can pass:
-			    --api-url $VEN_API_URL --api-key $VEN_API_KEY
+			Note: The positional [url] argument is the tenant UI URL (e.g.,
+			https://ui-stack-dev130.qa.venafi.io), not the API URL. The API URL will be
+			automatically determined from the tenant URL.
+
+			If you prefer avoiding prompts entirely, you can provide --api-key along with the
+			tenant URL, or use --api-url and --api-key together to bypass the automatic API URL
+			discovery.
+
+			You can also use environment variables:
+			    VEN_API_URL and VEN_API_KEY
+		`),
+		Example: undent.Undent(`
+			# Provide tenant URL, will prompt for API key:
+			vcpctl login https://ui-stack-dev130.qa.venafi.io
+
+			# Fully non-interactive with tenant URL and API key:
+			vcpctl login https://ui-stack-dev130.qa.venafi.io --api-key <key>
+
+			# Bypass tenant URL to API URL conversion (for advanced use):
+			vcpctl login --api-url https://api.venafi.cloud --api-key <key>
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl := http.Client{Transport: Transport}
 
+			// Check for conflicts between positional URL argument and --api-url flag or env vars
+			if len(args) > 0 {
+				if apiURL != "" {
+					logutil.Infof("⚠️  Warning: --api-url will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
+					apiURL = "" // Clear it to use the tenant URL flow
+				} else if os.Getenv("VEN_API_URL") != "" {
+					logutil.Infof("⚠️  Warning: VEN_API_URL will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
+				} else if os.Getenv("APIURL") != "" {
+					logutil.Infof("⚠️  Warning: APIURL will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
+				}
+			}
+
 			// If the user provided the --api-url and --api-key flags, we use
-			// them.
-			if apiURL != "" || apiKey != "" {
+			// them. (But not if there are positional args - those take precedence)
+			if len(args) == 0 && (apiURL != "" || apiKey != "") {
 				if apiURL == "" {
 					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
 				}
@@ -184,11 +217,10 @@ func loginCmd() *cobra.Command {
 					return Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
 				}
 
-				if strings.HasSuffix(apiURL, "/") {
-					return fmt.Errorf("Tenant URL should not have a trailing slash, got: '%s'", apiURL)
-				}
-				if !strings.HasPrefix(apiURL, "https://") {
-					return Fixable(fmt.Errorf("API URL should start with 'https://', got: '%s'", apiURL))
+				// Normalize the API URL
+				apiURL = strings.TrimRight(apiURL, "/")
+				if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
+					apiURL = "https://" + apiURL
 				}
 
 				apiClient, err := api.NewClient(apiURL, api.WithHTTPClient(&cl), api.WithBearerToken(apiKey), api.WithUserAgent())
@@ -227,6 +259,85 @@ func loginCmd() *cobra.Command {
 				}
 
 				logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
+				return nil
+			}
+
+			// If the user provided a positional URL argument, use it instead of prompting
+			if len(args) > 0 {
+				tenantURL := args[0]
+
+				// Normalize tenant URL
+				tenantURL = strings.TrimRight(tenantURL, "/")
+				if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
+					tenantURL = "https://" + tenantURL
+				}
+
+				// Convert tenant URL to API URL
+				apiURLFromTenant, err := toAPIURL(cl, tenantURL)
+				switch {
+				case err == nil:
+					// Success
+				case errors.As(err, &NotFound{}):
+					return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
+				default:
+					return fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
+				}
+
+				current := Auth{
+					URL:    tenantURL,
+					APIURL: apiURLFromTenant,
+				}
+
+				// If --api-key was provided, use it; otherwise prompt for it
+				if apiKey != "" {
+					current.APIKey = apiKey
+
+					// Validate the API key
+					apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(current.APIKey), api.WithUserAgent())
+					if err != nil {
+						return fmt.Errorf("while creating API client: %w", err)
+					}
+					_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, current.APIKey)
+					if err != nil {
+						return fmt.Errorf("while checking the API key's validity: %w", err)
+					}
+				} else {
+					// Prompt for API key
+					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.URL + "/platform-settings/user-preferences?key=api-keys"))
+					fmt.Println()
+
+					apiKeyInput, err := promptString("API Key: ", func(input string) error {
+						if input == "" {
+							return fmt.Errorf("API key cannot be empty")
+						}
+						if strings.TrimSpace(input) != input {
+							return fmt.Errorf("API key cannot contain leading or trailing spaces")
+						}
+						if len(input) != 36 {
+							return fmt.Errorf("API key must be 36 characters long")
+						}
+						apiClient, err := api.NewClient(current.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(input), api.WithUserAgent())
+						if err != nil {
+							return fmt.Errorf("while creating API client: %w", err)
+						}
+						_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
+						if err != nil {
+							return err
+						}
+						return nil
+					})
+					if err != nil {
+						return err
+					}
+					current.APIKey = apiKeyInput
+				}
+
+				err = saveCurrentTenant(current)
+				if err != nil {
+					return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
+				}
+
+				logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.URL+"'."))
 				return nil
 			}
 
@@ -286,11 +397,10 @@ func loginCmd() *cobra.Command {
 				fmt.Println()
 
 				tenantURL, err := promptString("Tenant URL: ", func(input string) error {
-					if strings.HasSuffix(input, "/") {
-						return fmt.Errorf("Tenant URL should not have a trailing slash")
-					}
-					if !strings.HasPrefix(input, "https://") {
-						return fmt.Errorf("Tenant URL should start with 'https://'")
+					// Normalize tenant URL
+					input = strings.TrimRight(input, "/")
+					if !strings.HasPrefix(input, "https://") && !strings.HasPrefix(input, "http://") {
+						input = "https://" + input
 					}
 
 					apiURL, err := toAPIURL(cl, input)
