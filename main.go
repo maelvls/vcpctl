@@ -78,6 +78,13 @@ type (
 
 	// SubCaProviderPkcs11ConfigurationInformation represents PKCS11 configuration
 	SubCaProviderPkcs11ConfigurationInformation = api.SubCaProviderPkcs11ConfigurationInformation
+
+	// ScopeDetails represents detailed information about a scope
+	ScopeDetails struct {
+		Id                 string `json:"id"`
+		ReadableName       string `json:"readableName"`
+		AuthenticationType string `json:"authenticationType,omitempty"`
+	}
 )
 
 // Replace the old flag-based main() with cobra execution.
@@ -104,6 +111,7 @@ func main() {
 			vcpctl sa rm <sa-name>
 			vcpctl sa put keypair <sa-name>
 			vcpctl sa gen keypair <sa-name>
+			vcpctl sa scopes
 			vcpctl subca ls
 			vcpctl subca rm <subca-name>
 			vcpctl policy ls
@@ -273,9 +281,11 @@ func saCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl sa ls
 			vcpctl sa rm <sa-name>
+			vcpctl sa get <sa-name>
+			vcpctl sa put wif <sa-name>
 			vcpctl sa put keypair <sa-name>
 			vcpctl sa gen keypair <sa-name>
-			vcpctl sa get <sa-name>
+			vcpctl sa scopes
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -286,6 +296,7 @@ func saCmd() *cobra.Command {
 		saPutCmd(),
 		saGenCmd(),
 		saGetCmd(),
+		saScopesCmd(),
 		&cobra.Command{Use: "gen-rsa", Deprecated: "the 'gen-rsa' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
 		&cobra.Command{Use: "keygen", Deprecated: "the 'keygen' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
 		&cobra.Command{Use: "get-clientid", Deprecated: "the 'get-clientid' command is deprecated, please use 'get-clientid' instead.", RunE: saGenkeypairCmd().RunE},
@@ -320,11 +331,13 @@ func saPutCmd() *cobra.Command {
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
+			vcpctl sa put wif <sa-name>
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
 	cmd.AddCommand(saPutKeypairCmd())
+	cmd.AddCommand(saPutWifCmd())
 	return cmd
 }
 
@@ -332,7 +345,7 @@ func saGenkeypairCmd() *cobra.Command {
 	var outputFormat string
 	cmd := &cobra.Command{
 		Use:   "keypair <sa-name>",
-		Short: "Generates an EC private key and registers it to the given Service Account, or create it if it doesn't exist",
+		Short: "Generates an EC private key and registers it to the given Service Account (authenticationType: 'rsaKey')",
 		Long: undent.Undent(`
 			Generates an EC private key and registers it to the given Service
 			Account in CyberArk Certificate Manager, SaaS.
@@ -447,7 +460,7 @@ func saPutKeypairCmd() *cobra.Command {
 	var scopes []string
 	cmd := &cobra.Command{
 		Use:   "keypair <sa-name>",
-		Short: "Creates or updates the given Key Pair Authentication Service Account",
+		Short: "Creates or updates the given Key Pair Authentication Service Account (authenticationType: 'rsaKey')",
 		Long: undent.Undent(`
 			Creates or updates the given 'Private Key JWT' authentication
 			(also known as 'Key Pair Authentication') Service Account in
@@ -529,6 +542,161 @@ func saPutKeypairCmd() *cobra.Command {
 	return cmd
 }
 
+func saPutWifCmd() *cobra.Command {
+	var scopes []string
+	var subject string
+	var audience string
+	var issuerURL string
+	var jwksURI string
+	var apps []string
+	var ownerTeam string
+	cmd := &cobra.Command{
+		Use:   "wif <sa-name>",
+		Short: "Creates or updates the given Workload Identity Federation Service Account (authenticationType: 'rsaKeyFederated')",
+		Long: undent.Undent(`
+			Creates or updates the given 'Workload Identity Federation'
+			(also known as 'RSA Key Federated') Service Account in
+			CyberArk Certificate Manager, SaaS. Returns the Service Account's client ID.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa put wif my-sa \
+			  --scope kubernetes-discovery-federated \
+			  --scope certificate-issuance \
+			  --subject "system:serviceaccount:default:my-sa" \
+			  --audience "venafi-cloud" \
+			  --issuer-url "https://oidc.example.com" \
+			  --jwks-uri "https://oidc.example.com/.well-known/jwks.json"
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("sa put wif: %w", err)
+			}
+
+			saName := args[0]
+
+			// Validate required flags
+			if subject == "" {
+				return fmt.Errorf("sa put wif: --subject is required")
+			}
+			if audience == "" {
+				return fmt.Errorf("sa put wif: --audience is required")
+			}
+			if issuerURL == "" {
+				return fmt.Errorf("sa put wif: --issuer-url is required")
+			}
+			if jwksURI == "" {
+				return fmt.Errorf("sa put wif: --jwks-uri is required")
+			}
+
+			// Create API client
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			if err != nil {
+				return fmt.Errorf("while creating API client: %w", err)
+			}
+
+			// Parse applications (UUIDs)
+			applications := make([]api.Application, len(apps))
+			for i, app := range apps {
+				appUUID := openapi_types.UUID{}
+				err := appUUID.UnmarshalText([]byte(app))
+				if err != nil {
+					return fmt.Errorf("sa put wif: invalid application UUID '%s': %w", app, err)
+				}
+				applications[i] = appUUID
+			}
+
+			// Parse owner team (UUID) if provided
+			ownerUUID := openapi_types.UUID{}
+			if ownerTeam != "" {
+				err := ownerUUID.UnmarshalText([]byte(ownerTeam))
+				if err != nil {
+					return fmt.Errorf("sa put wif: invalid owner team UUID '%s': %w", ownerTeam, err)
+				}
+			}
+
+			// Check if service account exists
+			existingSA, err := getServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, saName)
+			switch {
+			case errors.As(err, &NotFound{}):
+				// Doesn't exist yet, create it
+				resp, err := createServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, ServiceAccount{
+					Name:               saName,
+					AuthenticationType: "rsaKeyFederated",
+					CredentialLifetime: 365, // days
+					Scopes:             scopes,
+					Subject:            subject,
+					Audience:           audience,
+					IssuerURL:          issuerURL,
+					JwksURI:            jwksURI,
+					Applications:       applications,
+					Owner:              ownerUUID,
+				})
+				if err != nil {
+					return fmt.Errorf("sa put wif: while creating service account: %w", err)
+				}
+				logutil.Debugf("Service Account '%s' created.\nScopes: %s\nSubject: %s\nAudience: %s\nIssuer URL: %s\nJWKS URI: %s",
+					saName, strings.Join(scopes, ", "), subject, audience, issuerURL, jwksURI)
+
+				fmt.Println(resp.Id.String())
+				return nil
+			case err == nil:
+				// Exists, update it
+				desiredSA := existingSA
+				desiredSA.Scopes = scopes
+				desiredSA.Subject = subject
+				desiredSA.Audience = audience
+				desiredSA.IssuerURL = issuerURL
+				desiredSA.JwksURI = jwksURI
+				if len(applications) > 0 {
+					desiredSA.Applications = applications
+				}
+
+				patch, smthChanged, err := diffToPatchServiceAccount(existingSA, desiredSA)
+				if err != nil {
+					return fmt.Errorf("sa put wif: while creating service account patch: %w", err)
+				}
+				if !smthChanged {
+					logutil.Debugf("Service Account '%s' is already up to date.", saName)
+					fmt.Println(existingSA.Id.String())
+					return nil
+				}
+
+				err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
+				if err != nil {
+					return fmt.Errorf("sa put wif: while patching service account: %w", err)
+				}
+
+				if logutil.EnableDebug {
+					updatedSA, err := getServiceAccountByID(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String())
+					if err != nil {
+						return fmt.Errorf("sa put wif: while retrieving updated service account: %w", err)
+					}
+					d := ANSIDiff(existingSA, updatedSA)
+					logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
+				}
+
+				fmt.Println(existingSA.Id.String())
+				return nil
+			default:
+				return fmt.Errorf("sa put wif: while checking if service account exists: %w", err)
+			}
+		},
+	}
+	cmd.Flags().StringArrayVar(&scopes, "scope", []string{}, "Scopes for the Service Account (can be specified multiple times, e.g. '--scope kubernetes-discovery-federated --scope certificate-issuance')")
+	cmd.Flags().StringVar(&subject, "subject", "", "The subject of the entity (required)")
+	cmd.Flags().StringVar(&audience, "audience", "", "The intended audience or recipients of the entity (required)")
+	cmd.Flags().StringVar(&issuerURL, "issuer-url", "", "The URL of the entity issuer (required)")
+	cmd.Flags().StringVar(&jwksURI, "jwks-uri", "", "The URI pointing to the JSON Web Key Set (JWKS) (required)")
+	cmd.Flags().StringArrayVar(&apps, "app", []string{}, "Application UUID to associate with the service account (can be specified multiple times)")
+	cmd.Flags().StringVar(&ownerTeam, "owner-team", "", "Owner team UUID (if not provided, the first team will be used)")
+	return cmd
+}
+
 func saGetCmd() *cobra.Command {
 	var format string
 	cmd := &cobra.Command{
@@ -598,6 +766,70 @@ func saGetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&format, "output", "o", "yaml", "Output format (id, json, yaml). The 'id' is the service account's client ID.")
+	return cmd
+}
+
+func saScopesCmd() *cobra.Command {
+	var outputFormat string
+	cmd := &cobra.Command{
+		Use:   "scopes",
+		Short: "List all available Service Account scopes",
+		Long: undent.Undent(`
+			List all available Service Account scopes. Scopes define what
+			permissions a service account has when authenticating with
+			CyberArk Certificate Manager, SaaS.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa scopes
+			vcpctl sa scopes -o json
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl := http.Client{Transport: Transport}
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("sa scopes: %w", err)
+			}
+			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithBearerToken(conf.APIKey), api.WithUserAgent())
+			if err != nil {
+				return fmt.Errorf("while creating API client: %w", err)
+			}
+
+			scopes, err := getServiceAccountScopes(context.Background(), *apiClient, conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("sa scopes: while listing scopes: %w", err)
+			}
+
+			switch outputFormat {
+			case "json":
+				b, err := marshalIndent(scopes, "", "  ")
+				if err != nil {
+					return fmt.Errorf("sa scopes: while marshaling scopes to JSON: %w", err)
+				}
+				fmt.Println(string(b))
+				return nil
+			case "table":
+				var rows [][]string
+				for _, scope := range scopes {
+					authType := scope.AuthenticationType
+					if authType == "" {
+						authType = "-"
+					}
+					rows = append(rows, []string{
+						scope.Id,
+						authType,
+						scope.ReadableName,
+					})
+				}
+				printTable([]string{"Scope ID", "Auth Type", "Description"}, rows)
+				return nil
+			default:
+				return Fixable(fmt.Errorf("sa scopes: invalid output format: %s", outputFormat))
+			}
+		},
+	}
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, table)")
 	return cmd
 }
 
@@ -3227,6 +3459,40 @@ func getServiceAccounts(ctx context.Context, cl api.Client, apiURL, apiKey strin
 	var result []ServiceAccount
 	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
 		return nil, fmt.Errorf("while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
+	}
+
+	return result, nil
+}
+
+func getServiceAccountScopes(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]ScopeDetails, error) {
+	req, err := http.NewRequest("GET", apiURL+"/v1/serviceaccounts/scopes", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getServiceAccountScopes: while creating request: %w", err)
+	}
+	req.Header.Set("tppl-api-key", apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := cl.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getServiceAccountScopes: while making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// The request was successful. Continue below to decode the response.
+	default:
+		return nil, HTTPErrorf(resp, "getServiceAccountScopes: http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+	}
+
+	body := new(bytes.Buffer)
+	if _, err := io.Copy(body, resp.Body); err != nil {
+		return nil, fmt.Errorf("getServiceAccountScopes: while reading response body: %w", err)
+	}
+
+	var result []ScopeDetails
+	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
+		return nil, fmt.Errorf("getServiceAccountScopes: while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
 	}
 
 	return result, nil
