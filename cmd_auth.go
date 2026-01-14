@@ -80,15 +80,15 @@ func authLoginCmd() *cobra.Command {
 					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
 				}
 				if apiKey == "" {
-					return fmt.Errorf("the --api-key flag is required when using the --api-url flag")
-				}
+				return Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
+			}
 
 				if strings.HasSuffix(apiURL, "/") {
 					return fmt.Errorf("Tenant URL should not have a trailing slash, got: '%s'", apiURL)
 				}
 				if !strings.HasPrefix(apiURL, "https://") {
-					return fmt.Errorf("API URL should start with 'https://', got: '%s'", apiURL)
-				}
+				return Fixable(fmt.Errorf("API URL should start with 'https://', got: '%s'", apiURL))
+			}
 
 				apiClient, err := api.NewClient(apiURL, api.WithHTTPClient(&cl), api.WithBearerToken(apiKey), api.WithUserAgent())
 				if err != nil {
@@ -332,7 +332,7 @@ func authSwitchCmd() *cobra.Command {
 						return saveCurrentTenant(auth)
 					}
 				}
-				return fmt.Errorf("tenant '%s' not found in configuration. Please run `vcpctl auth login` to add it.", tenantURL)
+				return Fixable(fmt.Errorf("tenant '%s' not found in configuration. Please run `vcpctl auth login` to add it.", tenantURL))
 			}
 
 			// If no tenant URL is provided, we prompt the user to select one.

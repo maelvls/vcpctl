@@ -254,7 +254,7 @@ func saLsCmd() *cobra.Command {
 				}
 				return nil
 			default:
-				return fmt.Errorf("sa ls: invalid output format: %s", outputFormat)
+				return Fixable(fmt.Errorf("sa ls: invalid output format: %s", outputFormat))
 			}
 		},
 	}
@@ -712,6 +712,9 @@ func lsCmd() *cobra.Command {
 				saByID[sa.Id.String()] = sa
 			}
 
+			// Build a map to store formatted service account names for each config
+			configSANames := make(map[string][]string)
+
 			for _, m := range confs {
 				type resolvedEntry struct {
 					name  string
@@ -747,21 +750,14 @@ func lsCmd() *cobra.Command {
 
 					saNames = append(saNames, entry.name)
 				}
-				// Note: ServiceAccountIds is []uuid.UUID, we can't assign []string to it
-				// The display will use saNames for the table output below
+				configSANames[m.Id.String()] = saNames
 			}
 
 			var rows [][]string
 			for _, m := range confs {
 				rows = append(rows, []string{
 					m.Name,
-					strings.Join(func() []string {
-						result := make([]string, len(m.ServiceAccountIds))
-						for i, id := range m.ServiceAccountIds {
-							result[i] = id.String()
-						}
-						return result
-					}(), ", "),
+					strings.Join(configSANames[m.Id.String()], ", "),
 				})
 			}
 
@@ -1082,7 +1078,7 @@ func getSubCaByID(ctx context.Context, cl api.Client, apiURL, apiKey, id string)
 		return SubCa{}, fmt.Errorf("getSubCaByID: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 	if result.Id.String() == "" {
-		return SubCa{}, fmt.Errorf("getSubCaByID: SubCA provider '%s' not found", id)
+		return SubCa{}, Fixable(fmt.Errorf("getSubCaByID: SubCA provider '%s' not found", id))
 	}
 	return result, nil
 }
@@ -1097,7 +1093,7 @@ func removeSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey, nam
 		return fmt.Errorf("removeSubCaProvider: while getting SubCA provider by name '%s': %w", nameOrID, err)
 	}
 	if subCA.Id.String() == "" {
-		return fmt.Errorf("removeSubCaProvider: SubCA provider '%s' not found", nameOrID)
+		return Fixable(fmt.Errorf("removeSubCaProvider: SubCA provider '%s' not found", nameOrID))
 	}
 	return removeSubCaProviderByID(ctx, cl, subCA.Id.String())
 }
@@ -1201,7 +1197,7 @@ func attachSAToConf(ctx context.Context, cl api.Client, apiURL, apiKey, confName
 	}
 
 	if sa == nil {
-		return fmt.Errorf("service account '%s' not found (not a valid name or client ID)", saName)
+		return Fixable(fmt.Errorf("service account '%s' not found (not a valid name or client ID)", saName))
 	}
 
 	// Is this SA already in the configuration?
@@ -2470,7 +2466,7 @@ func validatePropertyInformation(pi api.PropertyInformation) error {
 	}
 
 	if pi.Type == "" {
-		return fmt.Errorf("property information 'type' field is required")
+		return Fixable(fmt.Errorf("property information 'type' field is required"))
 	}
 
 	switch pi.Type {
@@ -2538,7 +2534,7 @@ func validatePropertyInformation(pi api.PropertyInformation) error {
 			}
 		}
 	default:
-		return fmt.Errorf("property information 'type' field has invalid value: %s", pi.Type)
+		return Fixable(fmt.Errorf("property information 'type' field has invalid value: %s", pi.Type))
 	}
 
 	return nil
@@ -2881,7 +2877,7 @@ func editConfig(ctx context.Context, cl api.Client, apiURL, apiKey, name string)
 	config, err := getConfig(ctx, cl, apiURL, apiKey, name)
 	switch {
 	case errors.Is(err, NotFound{}):
-		return fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl apply config.yaml'", name)
+		return Fixable(fmt.Errorf("configuration '%s' not found. Please create it first using 'vcpctl apply config.yaml'", name))
 	case err != nil:
 		return fmt.Errorf("while getting configuration ID: %w", err)
 	}
@@ -3023,7 +3019,7 @@ func removeNoticeFromYAML(yamlData []byte) []byte {
 
 // Doesn't work anymore since `serviceAccountIds` is hidden in the 'get', 'put,
 // and 'edit' commands.
-var ErrPINRequired = fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider")
+var ErrPINRequired = Fixable(fmt.Errorf("subCaProvider.pkcs11.pin is required when patching the subCA provider"))
 
 // To check whether an error is fixable by the user, wrap it with Fixable(err).
 // Then, check with errors.As(err, Fixable{}).
@@ -3052,7 +3048,7 @@ func parseJSONErrorOrDumpBody(resp *http.Response) error {
 	// For some reason, CyberArk Certificate Manager, SaaS returns a plain text error message when the
 	// API key is invalid.
 	if resp.Header.Get("Content-Type") == "text/plain" && bytes.Equal(body, []byte("Invalid api key")) {
-		return APIKeyInvalid
+		return Fixable(APIKeyInvalid)
 	}
 
 	var v VenafiError

@@ -438,7 +438,7 @@ func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manife
 				_, err := getServiceAccount(context.Background(), cl, apiURL, apiKey, saName)
 				if err != nil {
 					if errors.As(err, &NotFound{}) {
-						return fmt.Errorf("manifest #%d (WIMConfiguration %q): service account %q not found in manifests or API", i+1, cfg.Name, saName)
+					return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): service account %q not found in manifests or API", i+1, cfg.Name, saName))
 					}
 					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking service account %q: %w", i+1, cfg.Name, saName, err)
 				}
@@ -452,7 +452,7 @@ func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manife
 				_, err := getPolicy(context.Background(), cl, apiURL, apiKey, policyName)
 				if err != nil {
 					if errors.As(err, &NotFound{}) {
-						return fmt.Errorf("manifest #%d (WIMConfiguration %q): policy %q not found in manifests or API", i+1, cfg.Name, policyName)
+					return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): policy %q not found in manifests or API", i+1, cfg.Name, policyName))
 					}
 					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking policy %q: %w", i+1, cfg.Name, policyName, err)
 				}
@@ -466,7 +466,7 @@ func validateReferences(cl api.Client, apiURL, apiKey string, manifests []manife
 				_, err := getSubCa(context.Background(), cl, apiURL, apiKey, cfg.SubCaProviderName)
 				if err != nil {
 					if errors.As(err, &NotFound{}) {
-						return fmt.Errorf("manifest #%d (WIMConfiguration %q): subCA provider %q not found in manifests or API", i+1, cfg.Name, cfg.SubCaProviderName)
+					return Fixable(fmt.Errorf("manifest #%d (WIMConfiguration %q): subCA provider %q not found in manifests or API", i+1, cfg.Name, cfg.SubCaProviderName))
 					}
 					return fmt.Errorf("manifest #%d (WIMConfiguration %q): while checking subCA provider %q: %w", i+1, cfg.Name, cfg.SubCaProviderName, err)
 				}
