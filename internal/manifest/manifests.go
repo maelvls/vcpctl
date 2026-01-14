@@ -15,10 +15,11 @@ type WIMConfiguration struct {
 	ClientAuthorization  ClientAuthorization           `yaml:"clientAuthorization,omitempty"`
 	CloudProviders       api.CloudProvidersInformation `yaml:"cloudProviders"`
 	MinTLSVersion        string                        `yaml:"minTlsVersion"`
-	PolicyNames          []string                      `yaml:"policies,omitempty"`
-	SubCaProviderName    string                        `yaml:"subCaProvider"`
 	AdvancedSettings     AdvancedSettings              `yaml:"advancedSettings,omitempty"`
-	ServiceAccountNames  []string                      `yaml:"serviceAccount,omitempty"`
+
+	PolicyNames         []string `yaml:"policyNames,omitempty"` // Doesn't existing in the API.
+	SubCaProviderName   string   `yaml:"subCaProviderName"`     // Doesn't existing in the API.
+	ServiceAccountNames []string `yaml:"serviceAccountNames"`   // Doesn't existing in the API.
 }
 
 type ClientAuthentication struct {
@@ -73,8 +74,8 @@ type CommonName struct {
 	Type           string   `yaml:"type"`
 	AllowedValues  []string `yaml:"allowedValues"`
 	DefaultValues  []string `yaml:"defaultValues"`
-	MinOccurrences int      `yaml:"minOccurrences"`
-	MaxOccurrences int      `yaml:"maxOccurrences"`
+	MinOccurrences int32    `yaml:"minOccurrences"`
+	MaxOccurrences int32    `yaml:"maxOccurrences"`
 }
 
 type Subject struct {
@@ -117,10 +118,10 @@ type AdvancedSettings struct {
 }
 
 type ServiceAccount struct {
+	Name               string   `yaml:"name,omitempty"`
 	AuthenticationType string   `yaml:"authenticationType,omitempty"`
 	CredentialLifetime int      `yaml:"credentialLifetime,omitempty"`
 	Enabled            bool     `yaml:"enabled,omitempty"`
-	Name               string   `yaml:"name,omitempty"`
 	Owner              string   `yaml:"owner,omitempty"`
 	Scopes             []string `yaml:"scopes,omitempty"`
 	Applications       []string `yaml:"applications,omitempty"`

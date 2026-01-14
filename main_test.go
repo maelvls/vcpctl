@@ -3,11 +3,8 @@ package main
 import (
 	"context"
 	json "encoding/json/v2"
-	"errors"
 	"fmt"
 	"net/http"
-	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -15,6 +12,7 @@ import (
 	api "github.com/maelvls/vcpctl/internal/api"
 	"github.com/maelvls/vcpctl/internal/manifest"
 	"github.com/maelvls/vcpctl/mocksrv"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,9 +34,7 @@ func Test_withoutANSI(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
 			result := withoutANSI(test.input)
-			if result != test.expected {
-				t.Errorf("Expected %q but got %q", test.expected, result)
-			}
+			assert.Equal(t, test.expected, result)
 		})
 	}
 }
@@ -65,43 +61,26 @@ func TestClientAuthenticationJWTStandardClaims(t *testing.T) {
 	var cfg struct {
 		ClientAuthentication manifest.ClientAuthentication `yaml:"clientAuthentication"`
 	}
-	if err := yaml.UnmarshalWithOptions(input, &cfg, yaml.Strict()); err != nil {
-		t.Fatalf("unexpected error while unmarshalling YAML: %v", err)
-	}
+	err := yaml.UnmarshalWithOptions(input, &cfg, yaml.Strict())
+	require.NoError(t, err, "unexpected error while unmarshalling YAML")
 
 	auth := cfg.ClientAuthentication
-	if auth.Type != "JWT_STANDARD_CLAIMS" {
-		t.Fatalf("unexpected type: %q", auth.Type)
-	}
-	if auth.Audience != "firefly.example.com" {
-		t.Fatalf("unexpected audience: %q", auth.Audience)
-	}
-	if len(auth.Clients) != 2 {
-		t.Fatalf("expected 2 clients, got %d", len(auth.Clients))
-	}
-	if auth.Clients[0].Issuer != "https://example.com" {
-		t.Fatalf("unexpected issuer for client[0]: %q", auth.Clients[0].Issuer)
-	}
-	if len(auth.Clients[0].AllowedPolicies) != 1 || auth.Clients[0].AllowedPolicies[0] != "Policy" {
-		t.Fatalf("unexpected allowedPolicies for client[0]: %#v", auth.Clients[0].AllowedPolicies)
-	}
-	if auth.Clients[1].JwksURI != "https://example.com/.well-known/jwks.json" {
-		t.Fatalf("unexpected jwksURI for client[1]: %q", auth.Clients[1].JwksURI)
-	}
-	if len(auth.Clients[1].Subjects) != 1 || auth.Clients[1].Subjects[0] != "^system:serviceaccount:test-app-namespace:.*$" {
-		t.Fatalf("unexpected subjects for client[1]: %#v", auth.Clients[1].Subjects)
-	}
+	require.Equal(t, "JWT_STANDARD_CLAIMS", auth.Type)
+	require.Equal(t, "firefly.example.com", auth.Audience)
+	require.Len(t, auth.Clients, 2)
+	require.Equal(t, "https://example.com", auth.Clients[0].Issuer)
+	require.Len(t, auth.Clients[0].AllowedPolicies, 1)
+	require.Equal(t, "Policy", auth.Clients[0].AllowedPolicies[0])
+	require.Equal(t, "https://example.com/.well-known/jwks.json", auth.Clients[1].JwksURI)
+	require.Len(t, auth.Clients[1].Subjects, 1)
+	require.Equal(t, "^system:serviceaccount:test-app-namespace:.*$", auth.Clients[1].Subjects[0])
 
 	data, err := json.Marshal(auth)
-	if err != nil {
-		t.Fatalf("unexpected error while marshalling JSON: %v", err)
-	}
+	require.NoError(t, err, "unexpected error while marshalling JSON")
 	jsonStr := string(data)
 	// Note: The manifest.ClientAuthentication struct uses Go's default JSON marshaling (capitalized fields)
 	for _, key := range []string{"\"Audience\":", "\"Clients\":", "\"AllowedPolicies\":", "\"JwksURI\":"} {
-		if !strings.Contains(jsonStr, key) {
-			t.Fatalf("expected JSON output to contain %s, got %s", key, jsonStr)
-		}
+		assert.Contains(t, jsonStr, key)
 	}
 }
 
@@ -165,11 +144,11 @@ clientAuthorization:
     allowedPolicies: ""
 cloudProviders: {}
 minTlsVersion: TLS13
-policies:
+policyNames:
   - policy-1
-serviceAccount:
+serviceAccountNames:
   - sa-1
-subCaProvider: demo
+subCaProviderName: demo
 advancedSettings:
   enableIssuanceAuditLog: true
   includeRawCertDataInAuditLog: false
@@ -178,38 +157,27 @@ advancedSettings:
 
 func TestParseFireflyConfigManifests_MultiDocument(t *testing.T) {
 	items, err := parseManifests([]byte(sampleMultiDoc))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(items) != 4 {
-		t.Fatalf("expected 4 manifests, got %d", len(items))
-	}
+	require.NoError(t, err)
+	assert.Len(t, items, 4)
 
 	sa := items[0].ServiceAccount
-	if sa == nil || sa.Name != "sa-1" {
-		t.Fatalf("unexpected service account manifest: %#v", sa)
-	}
+	require.NotNil(t, sa)
+	assert.Equal(t, "sa-1", sa.Name)
+
 	policy := items[1].Policy
-	if policy == nil || policy.Name != "policy-1" {
-		t.Fatalf("unexpected policy manifest: %#v", policy)
-	}
+	require.NotNil(t, policy)
+	require.Equal(t, "policy-1", policy.Name)
 	subca := items[2].SubCa
-	if subca == nil || subca.Name != "demo" {
-		t.Fatalf("unexpected SubCA manifest: %#v", subca)
-	}
+	require.NotNil(t, subca)
+	require.Equal(t, "demo", subca.Name)
 	config := items[3].WIMConfiguration
-	if config == nil || config.Name != "demo" {
-		t.Fatalf("unexpected config manifest: %#v", config)
-	}
-	if len(config.PolicyNames) != 1 || config.PolicyNames[0] != "policy-1" {
-		t.Fatalf("unexpected config policy names: %#v", config.PolicyNames)
-	}
-	if len(config.ServiceAccountNames) != 1 || config.ServiceAccountNames[0] != "sa-1" {
-		t.Fatalf("unexpected config service account names: %#v", config.ServiceAccountNames)
-	}
-	if config.SubCaProviderName != "demo" {
-		t.Fatalf("unexpected config subCA provider name: %q", config.SubCaProviderName)
-	}
+	require.NotNil(t, config)
+	require.Equal(t, "demo", config.Name)
+	require.Len(t, config.PolicyNames, 1)
+	require.Equal(t, "policy-1", config.PolicyNames[0])
+	require.Len(t, config.ServiceAccountNames, 1)
+	require.Equal(t, "sa-1", config.ServiceAccountNames[0])
+	require.Equal(t, "demo", config.SubCaProviderName)
 }
 
 func TestParseFireflyConfigManifests_AllowsAnyOrder(t *testing.T) {
@@ -236,7 +204,9 @@ name: out-of-order
 cloudProviders: {}
 minTlsVersion: TLS13
 clientAuthentication: {}
-subCaProvider: x
+subCaProviderName: x
+serviceAccountNames: [y]
+policyNames: [foo]
 advancedSettings:
   enableIssuanceAuditLog: true
   includeRawCertDataInAuditLog: false
@@ -246,12 +216,8 @@ kind: ServiceAccount
 name: late
 `
 	items, err := parseManifests([]byte(input))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(items) != 3 {
-		t.Fatalf("expected 3 manifests, got %d", len(items))
-	}
+	require.NoError(t, err)
+	assert.Len(t, items, 3)
 }
 
 func TestPatchConfig_OK(t *testing.T) {
@@ -261,9 +227,7 @@ func TestPatchConfig_OK(t *testing.T) {
 		MinTlsVersion: api.ConfigurationUpdateRequestMinTlsVersionTLS13,
 	}
 	wantBody, err := json.Marshal(patch)
-	if err != nil {
-		t.Fatalf("unexpected error marshaling patch: %v", err)
-	}
+	require.NoError(t, err, "unexpected error marshaling patch")
 
 	for _, status := range []int{http.StatusOK, http.StatusNoContent} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
@@ -272,29 +236,17 @@ func TestPatchConfig_OK(t *testing.T) {
 					Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id.String()),
 					MockCode: status,
 					Assert: func(t *testing.T, r *http.Request, body string) {
-						if got := r.Header.Get("Content-Type"); got != "application/json" {
-							t.Errorf("Content-Type = %q, want %q", got, "application/json")
-						}
-						if got := r.Header.Get("tppl-api-key"); got != "api-key" {
-							t.Errorf("tppl-api-key = %q, want %q", got, "api-key")
-						}
-						if got := r.Header.Get("User-Agent"); got != userAgent {
-							t.Errorf("User-Agent = %q, want %q", got, userAgent)
-						}
+						assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+						assert.Equal(t, "api-key", r.Header.Get("tppl-api-key"))
+						assert.Equal(t, userAgent, r.Header.Get("User-Agent"))
 
 						var gotBody map[string]any
-						if err := json.Unmarshal([]byte(body), &gotBody); err != nil {
-							t.Errorf("unexpected error decoding request body: %v", err)
-							return
-						}
+						err := json.Unmarshal([]byte(body), &gotBody)
+						require.NoError(t, err, "unexpected error decoding request body")
 						var wantBodyMap map[string]any
-						if err := json.Unmarshal(wantBody, &wantBodyMap); err != nil {
-							t.Errorf("unexpected error decoding expected body: %v", err)
-							return
-						}
-						if !reflect.DeepEqual(gotBody, wantBodyMap) {
-							t.Errorf("request body mismatch: got %#v, want %#v", gotBody, wantBodyMap)
-						}
+						err = json.Unmarshal(wantBody, &wantBodyMap)
+						require.NoError(t, err, "unexpected error decoding expected body")
+						assert.Equal(t, wantBodyMap, gotBody)
 					},
 				},
 			}, nil)
@@ -323,19 +275,11 @@ func TestPatchConfig_NotFound(t *testing.T) {
 		Client: server.Client(),
 	}
 	_, err := patchConfig(context.Background(), cl, server.URL, "api-key", id, ConfigPatch{Name: "demo"})
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
+	require.Error(t, err)
 	var notFound NotFound
-	if !errors.As(err, &notFound) {
-		t.Fatalf("expected NotFound error, got %T: %v", err, err)
-	}
-	if notFound.NameOrID != id.String() {
-		t.Fatalf("unexpected NotFound NameOrID: %q", notFound.NameOrID)
-	}
-	if !strings.Contains(err.Error(), "WIM configuration") {
-		t.Fatalf("expected error to mention WIM configuration, got %v", err)
-	}
+	require.ErrorAs(t, err, &notFound)
+	require.Equal(t, id.String(), notFound.NameOrID)
+	assert.Contains(t, err.Error(), "WIM configuration")
 }
 
 func TestPatchConfig_HTTPError(t *testing.T) {
@@ -353,19 +297,12 @@ func TestPatchConfig_HTTPError(t *testing.T) {
 		Client: server.Client(),
 	}
 	_, err := patchConfig(context.Background(), cl, server.URL, "api-key", id, ConfigPatch{Name: "demo"})
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
+	require.Error(t, err)
 	var httpErr HTTPError
-	if !errors.As(err, &httpErr) {
-		t.Fatalf("expected HTTPError, got %T: %v", err, err)
-	}
-	if httpErr.StatusCode != http.StatusInternalServerError {
-		t.Fatalf("unexpected status code: %d", httpErr.StatusCode)
-	}
-	if !strings.Contains(err.Error(), "patchConfig:") || !strings.Contains(err.Error(), "http") {
-		t.Fatalf("unexpected error message: %v", err)
-	}
+	require.ErrorAs(t, err, &httpErr)
+	require.Equal(t, http.StatusInternalServerError, httpErr.StatusCode)
+	assert.Contains(t, err.Error(), "patchConfig:")
+	assert.Contains(t, err.Error(), "http")
 }
 
 func TestParseFireflyConfigManifests_MissingKind(t *testing.T) {
@@ -373,25 +310,19 @@ func TestParseFireflyConfigManifests_MissingKind(t *testing.T) {
 cloudProviders: {}
 minTlsVersion: TLS13
 clientAuthentication: {}
-subCaProvider: legacy
+subCaProviderName: legacy
 advancedSettings:
   enableIssuanceAuditLog: true
   includeRawCertDataInAuditLog: false
   requireFIPSCompliantBuild: false
-serviceAccounts: []
-policies: []
+serviceAccountNames: []
+policyNames: []
 `
 	_, err := parseManifests([]byte(single))
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
+	require.Error(t, err)
 	var fix FixableError
-	if !errors.As(err, &fix) {
-		t.Fatalf("expected FixableError, got %T: %v", err, err)
-	}
-	if !strings.Contains(err.Error(), "kind") {
-		t.Fatalf("unexpected error message: %v", err)
-	}
+	require.ErrorAs(t, err, &fix)
+	assert.Contains(t, err.Error(), "kind")
 }
 
 func TestRenderFireflyConfigManifests(t *testing.T) {

@@ -15,14 +15,14 @@ import (
 func Test_applyManifests(t *testing.T) {
 	t.Run("WIMConfiguration patching", func(t *testing.T) {
 		existingConf := with(sampleConfig,
-			"advancedSettings.enableIssuanceAuditLog", false,
-			"clientAuthentication.type", "JWT_JWKS",
-			"clientAuthentication.urls", []string{"http://original/jwks.json"},
+			"advancedSettings.enableIssuanceAuditLog", false, // <- EXISTING
+			"clientAuthentication.type", "JWT_JWKS", // <- EXISTING
+			"clientAuthentication.urls", []string{"http://original/jwks.json"}, // <- EXISTING
 		)
 		givenManifests := undent.Undent(`
 			kind: WIMConfiguration
 			name: mael
-			subCaProvider: mael
+			subCaProviderName: mael
 			clientAuthentication:
 			  type: JWT_STANDARD_CLAIMS                      # <- CHANGED
 			  clients:                                       # <- CHANGED
@@ -67,8 +67,8 @@ func Test_applyManifests(t *testing.T) {
 
 	t.Run("WIMSubCA patching", func(t *testing.T) {
 		existingSubCA := with(sampleSubCA,
-			"subCAProvider.organizationalUnit", "FooBar",
-			"organizationalUnit", "Engineering",
+			"subCAProvider.organizationalUnit", "FooBar", // <- EXISTING
+			"organizationalUnit", "Engineering", // <- EXISTING
 		)
 		givenManifests := undent.Undent(`
 			kind: WIMSubCAProvider
@@ -101,7 +101,6 @@ func Test_applyManifests(t *testing.T) {
 					require.JSONEq(t, expectPatch, gotBody)
 				},
 			},
-			{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + existingSubCA + `]}`},
 		}
 		run(t, givenManifests, mock)
 	})
@@ -109,14 +108,15 @@ func Test_applyManifests(t *testing.T) {
 	t.Run("WIMIssuerPolicy patching", func(t *testing.T) {
 		existingPolicy := with(samplePolicy,
 			"subject.commonName.type", "REQUIRED", // <- EXISTING
-			"subject.commonName.maxOccurrences", 22, // <- EXISTING
+			"subject.commonName.minOccurrences", 1, // <- EXISTING
+			"subject.commonName.maxOccurrences", 5, // <- EXISTING
 		)
 		givenManifests := undent.Undent(`
       kind: WIMIssuerPolicy
       name: mael
       validityPeriod: P90D
       subject:
-        commonName: { type: OPTIONAL, maxOccurrences: 5 }        # <- CHANGED
+        commonName: { type: OPTIONAL, minOccurrences: 0, maxOccurrences: 5 }        # <- CHANGED
         country: { type: OPTIONAL, maxOccurrences: 10 }
         locality: { type: OPTIONAL, maxOccurrences: 10 }
         organization: { type: OPTIONAL, maxOccurrences: 10 }
@@ -127,6 +127,44 @@ func Test_applyManifests(t *testing.T) {
         ipAddresses: { type: OPTIONAL, maxOccurrences: 10 }
         rfc822Names: { type: OPTIONAL, maxOccurrences: 10 }
         uniformResourceIdentifiers: { type: OPTIONAL, maxOccurrences: 10 }
+      keyUsages:
+        - digitalSignature
+      extendedKeyUsages:
+        - ANY
+      keyAlgorithm:
+        allowedValues:
+          - EC_P256
+        defaultValue: EC_P256
+    `)
+		expectPatch := `{
+      "subject": {
+        "commonName": { "type": "OPTIONAL", "maxOccurrences": 5, "minOccurrences":0 , "allowedValues":[], "defaultValues":[]}
+      }
+    }`
+		mock := []mocksrv.Interaction{
+			{Expect: "GET /v1/distributedissuers/policies", MockCode: 200, MockBody: `{"policies": [` + existingPolicy + `]}`},
+			{Expect: "PATCH /v1/distributedissuers/policies/d7a09670-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200,
+				MockBody: `{"policies": [` + existingPolicy + `]}`,
+				Assert: func(t *testing.T, r *http.Request, gotBody string) {
+					require.JSONEq(t, expectPatch, gotBody)
+				},
+			},
+		}
+		run(t, givenManifests, mock)
+	})
+
+	t.Run("WIMIssuerPolicy patching", func(t *testing.T) {
+		existingPolicy := with(samplePolicy,
+			"subject.commonName.type", "REQUIRED", // <- EXISTING
+			"subject.commonName.minOccurrences", 1, // <- EXISTING
+			"subject.commonName.maxOccurrences", 5, // <- EXISTING
+		)
+		givenManifests := undent.Undent(`
+      kind: WIMIssuerPolicy
+      name: mael
+      validityPeriod: P90D
+      subject:
+        commonName: { type: OPTIONAL, minOccurrences: 0, maxOccurrences: 5 }        # <- CHANGED
       keyUsages:
         - digitalSignature
       extendedKeyUsages:
@@ -155,7 +193,6 @@ func Test_applyManifests(t *testing.T) {
 					require.JSONEq(t, expectPatch, gotBody)
 				},
 			},
-			{Expect: "GET /v1/distributedissuers/policies", MockCode: 200, MockBody: `{"policies": [` + existingPolicy + `]}`},
 		}
 		run(t, givenManifests, mock)
 	})
@@ -197,6 +234,7 @@ func run(t *testing.T, givenManifests string, mock []mocksrv.Interaction) {
 	srv := mocksrv.Mock(t, mock, cancel)
 
 	manifests, err := parseManifests([]byte(givenManifests))
+	require.NoError(t, err)
 	dryrun := false
 
 	cl, err := api.NewClient(srv.URL)

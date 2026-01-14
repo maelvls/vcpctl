@@ -9,6 +9,7 @@ import (
 	"github.com/goccy/go-yaml"
 	_ "github.com/maelvls/vcpctl/internal/api"
 	manifest "github.com/maelvls/vcpctl/internal/manifest"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
@@ -89,37 +90,91 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 	}
 }
 
-func manifestsToAPI(manifests []manifest.Manifest) (any, error) {
-	var result []any
+func renderToManifests(resolveSA func(openapi_types.UUID) (ServiceAccount, error), cfg Config) (manifest.WIMConfiguration, []manifest.ServiceAccount, []manifest.Policy, manifest.SubCa, error) {
+	var wimConfig manifest.WIMConfiguration
+	wimConfig.SubCaProviderName = cfg.SubCaProvider.Name
+
+	var serviceAccounts []manifest.ServiceAccount
+	for _, sa := range cfg.ServiceAccountIds {
+		resolvedSA, err := resolveSA(sa)
+		if err != nil {
+			return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("renderToManifests: while resolving ServiceAccount ID %q: %w", sa, err)
+		}
+		serviceAccounts = append(serviceAccounts, apiToManifestServiceAccount(resolvedSA))
+	}
+
+	var policies []manifest.Policy
+	for _, p := range cfg.Policies {
+		policies = append(policies, apiToManifestPolicyInformation(p))
+	}
+
+	wimConfig, err := apiToManifestWIMConfiguration(resolveSA, cfg)
+	if err != nil {
+		return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("renderToManifests: while converting WIMConfiguration: %w", err)
+	}
+
+	var subCa manifest.SubCa
+	subCa = apiToManifestSubCa(cfg.SubCaProvider)
+
+	return wimConfig, serviceAccounts, policies, subCa, nil
+}
+
+func renderToYAML(resolveSA func(openapi_types.UUID) (ServiceAccount, error), cfg Config) ([]byte, error) {
+	manifests := []manifest.Manifest{}
+
+	wimConfig, serviceAccounts, policies, subCa, err := renderToManifests(resolveSA, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("while rendering to manifests: %w", err)
+	}
+	manifests = append(manifests, manifest.Manifest{WIMConfiguration: &wimConfig})
+
+	for _, sa := range serviceAccounts {
+		manifests = append(manifests, manifest.Manifest{ServiceAccount: &sa})
+	}
+
+	for _, p := range policies {
+		manifests = append(manifests, manifest.Manifest{Policy: &p})
+	}
+
+	manifests = append(manifests, manifest.Manifest{SubCa: &subCa})
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+
 	for i, m := range manifests {
-		var converted any
+		var toEncode any
 		switch {
 		case m.WIMConfiguration != nil:
-			// WIMConfiguration conversion is handled directly in applyConfig
-			converted = *m.WIMConfiguration
+			toEncode = configurationManifest{
+				Kind:             kindConfiguration,
+				WIMConfiguration: *m.WIMConfiguration,
+			}
 		case m.ServiceAccount != nil:
-			converted = manifestToAPIServiceAccount(*m.ServiceAccount)
+			toEncode = serviceAccountManifest{
+				Kind:           kindServiceAccount,
+				ServiceAccount: *m.ServiceAccount,
+			}
 		case m.Policy != nil:
-			converted = manifestToAPIPolicy(*m.Policy)
+			toEncode = policyManifest{
+				Kind:   kindIssuerPolicy,
+				Policy: *m.Policy,
+			}
 		case m.SubCa != nil:
-			converted = manifestToAPISubCa(*m.SubCa)
+			toEncode = subCaProviderManifest{
+				Kind:  kindWIMSubCaProvider,
+				SubCa: *m.SubCa,
+			}
 		default:
 			return nil, fmt.Errorf("manifest #%d has no content", i+1)
 		}
-		result = append(result, converted)
-	}
-	if len(result) == 1 {
-		return result[0], nil
-	}
-	return result, nil
-}
 
-func renderManifests(cfg Config) ([]byte, error) {
-	// renderManifests is currently not fully implemented for the new API structure
-	// It needs to be updated to handle ServiceAccountIds instead of ServiceAccounts
-	// For now, return an error indicating this needs implementation
-	_ = cfg
-	return nil, fmt.Errorf("renderManifests is not yet fully implemented for the current API structure")
+		err := enc.Encode(toEncode)
+		if err != nil {
+			return nil, fmt.Errorf("while encoding manifest #%d to YAML: %w", i+1, err)
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
 type serviceAccountManifest struct {

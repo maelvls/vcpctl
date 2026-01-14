@@ -9,15 +9,204 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func namesFrom[T any](items []T, nameFunc func(T) string) []string {
+func resolve[T any, V any](items []T, nameFunc func(T) (V, error)) ([]V, error) {
 	if len(items) == 0 {
-		return nil
+		return nil, nil
 	}
-	result := make([]string, len(items))
+	result := make([]V, len(items))
 	for i, item := range items {
-		result[i] = nameFunc(item)
+		var err error
+		result[i], err = nameFunc(item)
+		if err != nil {
+			return nil, fmt.Errorf("namesFrom: while getting name for #%d: %w", i+1, err)
+		}
 	}
-	return result
+	return result, nil
+}
+
+// IMPORTANT: the 'policies', 'serviceAccounts' and 'subCaProvider' fields are
+// not entirely set. Do not expect them to be there. Only the IDs are set:
+//   - policyIds
+//   - serviceAccountIds
+//   - subCaProvider.Id
+func manifestToAPIExtendedConfigurationInformation(
+	resolvePolicy func(string) (Policy, error),
+	resolveSA func(string) (ServiceAccount, error),
+	resolveSubCaProvider func(string) (SubCa, error),
+	in manifest.WIMConfiguration,
+) (api.ExtendedConfigurationInformation, error) {
+	policyIDs, err := resolve(in.PolicyNames, func(name string) (openapi_types.UUID, error) {
+		policy, err := resolvePolicy(name)
+		if err != nil {
+			return openapi_types.UUID{}, err
+		}
+		return policy.Id, nil
+	})
+	if err != nil {
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while resolving PolicyNames to PolicyIds: %w", err)
+	}
+	serviceAccountIDs, err := resolve(in.ServiceAccountNames, func(name string) (openapi_types.UUID, error) {
+		sa, err := resolveSA(name)
+		if err != nil {
+			return openapi_types.UUID{}, err
+		}
+		return sa.Id, nil
+	})
+	if err != nil {
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while resolving ServiceAccountNames to ServiceAccountIds: %w", err)
+	}
+	subCaProvider, err := resolveSubCaProvider(in.SubCaProviderName)
+	if err != nil {
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while resolving SubCaProviderName to SubCaProviderInformation: %w", err)
+	}
+
+	clientAuthentication, err := manifestToAPIClientAuthentication(resolvePolicy, in.ClientAuthentication)
+	if err != nil {
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while converting ClientAuthentication: %w", err)
+	}
+
+	return api.ExtendedConfigurationInformation{
+		Name:                 in.Name,
+		ClientAuthentication: clientAuthentication,
+		ClientAuthorization:  manifestToAPIClientAuthorization(in.ClientAuthorization),
+		CloudProviders:       copyStringAnyMap(in.CloudProviders),
+		MinTlsVersion:        api.ExtendedConfigurationInformationMinTlsVersion(in.MinTLSVersion),
+		PolicyIds:            policyIDs,
+		ServiceAccountIds:    serviceAccountIDs,
+		SubCaProvider:        api.SubCaProviderInformation{Id: subCaProvider.Id},
+		AdvancedSettings:     manifestToAPIAdvancedSettings(in.AdvancedSettings),
+
+		Id:                         openapi_types.UUID{}, // Not set.
+		CompanyId:                  openapi_types.UUID{}, // Not set.
+		Policies:                   nil,                  // Not set.
+		PolicyDefinitions:          nil,                  // Not set.
+		ControllerAllowedPolicyIds: nil,                  // Not set.
+		UnixSocketAllowedPolicyIds: nil,                  // Not set.
+		CreationDate:               "",                   // Not set.
+		ModificationDate:           "",                   // Not set.
+		LongLivedCertCount:         0,                    // Not set.
+		ShortLivedCertCount:        0,
+		UltraShortLivedCertCount:   0, // Not set.
+	}, nil
+}
+
+func apiToAPIConfigurationCreateRequest(in api.ExtendedConfigurationInformation) api.ConfigurationCreateRequest {
+	return api.ConfigurationCreateRequest{
+		AdvancedSettings:     in.AdvancedSettings,
+		ClientAuthentication: in.ClientAuthentication,
+		ClientAuthorization:  in.ClientAuthorization,
+		CloudProviders:       in.CloudProviders,
+		MinTlsVersion:        api.ConfigurationCreateRequestMinTlsVersion(in.MinTlsVersion),
+		Name:                 in.Name,
+		PolicyIds:            in.PolicyIds,
+		ServiceAccountIds:    in.ServiceAccountIds,
+		SubCaProviderId:      in.SubCaProvider.Id,
+	}
+}
+
+func apiToAPISubCaProviderCreateRequest(in api.SubCaProviderInformation) api.SubCaProviderCreateRequest {
+	return api.SubCaProviderCreateRequest{
+		CaAccountId:        in.CaAccountId,
+		CaProductOptionId:  in.CaProductOptionId,
+		CaType:             api.SubCaProviderCreateRequestCaType(in.CaType),
+		CommonName:         in.CommonName,
+		Country:            in.Country,
+		KeyAlgorithm:       api.SubCaProviderCreateRequestKeyAlgorithm(in.KeyAlgorithm),
+		Locality:           in.Locality,
+		Name:               in.Name,
+		Organization:       in.Organization,
+		OrganizationalUnit: in.OrganizationalUnit,
+		Pkcs11:             in.Pkcs11,
+		StateOrProvince:    in.StateOrProvince,
+		ValidityPeriod:     in.ValidityPeriod,
+	}
+}
+
+func apiToManifestWIMConfiguration(resolveSA func(openapi_types.UUID) (ServiceAccount, error), cfg Config) (manifest.WIMConfiguration, error) {
+	clientAuthentication, err := apiToManifestClientAuthentication(cfg.ClientAuthentication)
+	if err != nil {
+		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while converting ClientAuthentication: %w", err)
+	}
+
+	serviceAccounts, err := resolve(cfg.ServiceAccountIds, resolveSA)
+	if err != nil {
+		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while resolving ServiceAccounts from ServiceAccountIds: %w", err)
+	}
+	serviceAccountNames, err := resolve(serviceAccounts, func(sa ServiceAccount) (string, error) {
+		return sa.Name, nil
+	})
+	if err != nil {
+		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while resolving names from ServiceAccounts: %w", err)
+	}
+
+	policyNames, err := resolve(cfg.Policies, func(p api.PolicyInformation) (string, error) {
+		return p.Name, nil
+	})
+	if err != nil {
+		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while getting policy names: %w", err)
+	}
+
+	return manifest.WIMConfiguration{
+		Name:                 cfg.Name,
+		ClientAuthentication: clientAuthentication,
+		ClientAuthorization:  apiToManifestClientAuthorization(cfg.ClientAuthorization),
+		CloudProviders:       cfg.CloudProviders,
+		MinTLSVersion:        string(cfg.MinTlsVersion),
+		PolicyNames:          policyNames,
+		SubCaProviderName:    cfg.SubCaProvider.Name,
+		AdvancedSettings:     apiToManifestAdvancedSettings(cfg.AdvancedSettings),
+		ServiceAccountNames:  serviceAccountNames,
+	}, nil
+}
+
+func apiToManifestClientAuthentication(in api.ClientAuthenticationInformation) (manifest.ClientAuthentication, error) {
+	v, err := in.ValueByDiscriminator()
+	if err != nil {
+		return manifest.ClientAuthentication{}, fmt.Errorf("apiToManifestClientAuthentication: %w", err)
+	}
+	switch val := v.(type) {
+	case api.JwtJwksAuthenticationInformation:
+		return manifest.ClientAuthentication{
+			Type: "JWT_JWKS",
+			URLs: val.Urls,
+		}, nil
+	case api.JwtStandardClaimsAuthenticationInformation:
+		clients, err := apiToManifestJwtClientInformation(val.Clients)
+		if err != nil {
+			return manifest.ClientAuthentication{}, fmt.Errorf("apiToManifestClientAuthentication: while converting clients for clientAuthentication type=JWT_STANDARD_CLAIMS: %w", err)
+		}
+		return manifest.ClientAuthentication{
+			Type:     "JWT_STANDARD_CLAIMS",
+			Audience: val.Audience,
+			Clients:  clients,
+		}, nil
+	case api.JwtOidcAuthenticationInformation:
+		return manifest.ClientAuthentication{
+			Type:     "JWT_OIDC",
+			BaseURL:  val.BaseUrl,
+			Audience: val.Audience,
+		}, nil
+	default:
+		return manifest.ClientAuthentication{}, fmt.Errorf("apiToManifestClientAuthentication: unknown ClientAuthentication type")
+	}
+}
+
+func apiToManifestJwtClientInformation(in []api.JwtClientInformation) ([]manifest.ClientAuthenticationClient, error) {
+	var result []manifest.ClientAuthenticationClient
+	for _, c := range in {
+		var allowedPolicyNames []string
+		for _, id := range c.AllowedPolicyIds {
+			allowedPolicyNames = append(allowedPolicyNames, id.String())
+		}
+		result = append(result, manifest.ClientAuthenticationClient{
+			Name:            c.Name,
+			Issuer:          c.Issuer,
+			JwksURI:         c.JwksUri,
+			Subjects:        c.Subjects,
+			AllowedPolicies: allowedPolicyNames,
+		})
+	}
+	return result, nil
 }
 
 // manifestToAPIClientAuthentication converts manifest ClientAuthentication to API union type.
@@ -129,7 +318,7 @@ func apiPoliciesToManifest(items []Policy) []manifest.Policy {
 	}
 	result := make([]manifest.Policy, len(items))
 	for i, item := range items {
-		result[i] = apiToManifestPolicy(item)
+		result[i] = apiToManifestExtendedPolicyInformation(item)
 	}
 	return result
 }
@@ -140,8 +329,8 @@ func manifestToAPIPolicy(in manifest.Policy) Policy {
 		ValidityPeriod:    in.ValidityPeriod,
 		Subject:           manifestToAPISubject(in.Subject),
 		Sans:              manifestToAPISANs(in.SANs),
-		KeyUsages:         manifestToAPIKeyUsages(in.KeyUsages),
-		ExtendedKeyUsages: manifestToAPIExtendedKeyUsages(in.ExtendedKeyUsages),
+		KeyUsages:         manifestToAPIExtendedPolicyInformationKeyUsages(in.KeyUsages),
+		ExtendedKeyUsages: manifestToAPIExtendedPolicyInformationExtendedKeyUsages(in.ExtendedKeyUsages),
 		KeyAlgorithm:      manifestToAPIKeyAlgorithm(in.KeyAlgorithm),
 	}
 }
@@ -158,22 +347,42 @@ func manifestToAPIPolicyCreateRequest(in manifest.Policy) api.PolicyCreateReques
 	}
 }
 
-func apiToManifestPolicy(in Policy) manifest.Policy {
+func apiToManifestPolicyInformation(in api.PolicyInformation) manifest.Policy {
 	return manifest.Policy{
 		Name:              in.Name,
 		ValidityPeriod:    in.ValidityPeriod,
 		Subject:           apiToManifestSubject(in.Subject),
 		SANs:              apiToManifestSANs(in.Sans),
-		KeyUsages:         apiToManifestKeyUsages(in.KeyUsages),
-		ExtendedKeyUsages: apiToManifestExtendedKeyUsages(in.ExtendedKeyUsages),
+		KeyUsages:         apiToManifestPolicyInformationKeyUsages(in.KeyUsages),
+		ExtendedKeyUsages: apiToManifestPolicyInformationExtendedKeyUsages(in.ExtendedKeyUsages),
 		KeyAlgorithm:      apiToManifestKeyAlgorithm(in.KeyAlgorithm),
 	}
 }
 
-func manifestToAPIKeyUsages(in []string) []api.ExtendedPolicyInformationKeyUsages {
+func apiToManifestExtendedPolicyInformation(in api.ExtendedPolicyInformation) manifest.Policy {
+	return manifest.Policy{
+		Name:              in.Name,
+		ValidityPeriod:    in.ValidityPeriod,
+		Subject:           apiToManifestSubject(in.Subject),
+		SANs:              apiToManifestSANs(in.Sans),
+		KeyUsages:         apiToManifestExtendedPolicyInformationKeyUsages(in.KeyUsages),
+		ExtendedKeyUsages: apiToManifestExtendedPolicyInformationExtendedKeyUsages(in.ExtendedKeyUsages),
+		KeyAlgorithm:      apiToManifestKeyAlgorithm(in.KeyAlgorithm),
+	}
+}
+
+func manifestToAPIExtendedPolicyInformationKeyUsages(in []string) []api.ExtendedPolicyInformationKeyUsages {
 	result := make([]api.ExtendedPolicyInformationKeyUsages, len(in))
 	for i, v := range in {
 		result[i] = api.ExtendedPolicyInformationKeyUsages(v)
+	}
+	return result
+}
+
+func manifestToAPIExtendedPolicyInformationExtendedKeyUsages(in []string) []api.ExtendedPolicyInformationExtendedKeyUsages {
+	result := make([]api.ExtendedPolicyInformationExtendedKeyUsages, len(in))
+	for i, v := range in {
+		result[i] = api.ExtendedPolicyInformationExtendedKeyUsages(v)
 	}
 	return result
 }
@@ -194,7 +403,7 @@ func manifestToAPIPolicyCreateRequestExtendedKeyUsages(in []string) []api.Policy
 	return result
 }
 
-func apiToManifestKeyUsages(in []api.ExtendedPolicyInformationKeyUsages) []string {
+func apiToManifestExtendedPolicyInformationKeyUsages(in []api.ExtendedPolicyInformationKeyUsages) []string {
 	result := make([]string, len(in))
 	for i, v := range in {
 		result[i] = string(v)
@@ -202,15 +411,23 @@ func apiToManifestKeyUsages(in []api.ExtendedPolicyInformationKeyUsages) []strin
 	return result
 }
 
-func manifestToAPIExtendedKeyUsages(in []string) []api.ExtendedPolicyInformationExtendedKeyUsages {
-	result := make([]api.ExtendedPolicyInformationExtendedKeyUsages, len(in))
+func apiToManifestPolicyInformationKeyUsages(in []api.PolicyInformationKeyUsages) []string {
+	result := make([]string, len(in))
 	for i, v := range in {
-		result[i] = api.ExtendedPolicyInformationExtendedKeyUsages(v)
+		result[i] = string(v)
 	}
 	return result
 }
 
-func apiToManifestExtendedKeyUsages(in []api.ExtendedPolicyInformationExtendedKeyUsages) []string {
+func apiToManifestPolicyInformationExtendedKeyUsages(in []api.PolicyInformationExtendedKeyUsages) []string {
+	result := make([]string, len(in))
+	for i, v := range in {
+		result[i] = string(v)
+	}
+	return result
+}
+
+func apiToManifestExtendedPolicyInformationExtendedKeyUsages(in []api.ExtendedPolicyInformationExtendedKeyUsages) []string {
 	result := make([]string, len(in))
 	for i, v := range in {
 		result[i] = string(v)
@@ -290,13 +507,17 @@ func manifestToAPICommonName(in manifest.CommonName) api.PropertyInformation {
 	}
 }
 
+func ptr[T any](v T) *T {
+	return &v
+}
+
 func apiToManifestCommonName(in api.PropertyInformation) manifest.CommonName {
 	return manifest.CommonName{
 		Type:           string(in.Type),
 		AllowedValues:  append([]string(nil), in.AllowedValues...),
 		DefaultValues:  append([]string(nil), in.DefaultValues...),
-		MinOccurrences: int(in.MinOccurrences),
-		MaxOccurrences: int(in.MaxOccurrences),
+		MinOccurrences: in.MinOccurrences,
+		MaxOccurrences: in.MaxOccurrences,
 	}
 }
 

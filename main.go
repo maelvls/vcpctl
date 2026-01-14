@@ -405,12 +405,16 @@ func saGenkeypairCmd() *cobra.Command {
 				return fmt.Errorf("sa gen keypair: while creating service account patch: %w", err)
 			}
 
-			updatedSA, err := patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
+			err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: while patching service account: %w", err)
 			}
 
 			if logutil.EnableDebug {
+				updatedSA, err := getServiceAccountByID(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String())
+				if err != nil {
+					return fmt.Errorf("sa gen keypair: while retrieving updated service account: %w", err)
+				}
 				d := ANSIDiff(existingSA, updatedSA)
 				logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
 			}
@@ -498,12 +502,16 @@ func saPutKeypairCmd() *cobra.Command {
 					return nil
 				}
 
-				updatedSA, err := patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
+				err = patchServiceAccount(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String(), patch)
 				if err != nil {
 					return fmt.Errorf("sa put keypair: while patching service account: %w", err)
 				}
 
 				if logutil.EnableDebug {
+					updatedSA, err := getServiceAccountByID(context.Background(), *apiClient, conf.APIURL, conf.APIKey, existingSA.Id.String())
+					if err != nil {
+						return fmt.Errorf("sa put keypair: while retrieving updated service account: %w", err)
+					}
 					d := ANSIDiff(existingSA, updatedSA)
 					logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
 				}
@@ -1713,7 +1721,7 @@ func getCmd() *cobra.Command {
 			populatePoliciesInConfig(&config, knownPolicies)
 			hideMisleadingFields(&config)
 
-			yamlData, err := renderManifests(config)
+			yamlData, err := renderToYAML(saResolver(knownSvcaccts), config)
 			if err != nil {
 				return err
 			}
@@ -1729,6 +1737,22 @@ func getCmd() *cobra.Command {
 
 			return nil
 		},
+	}
+}
+
+func saResolver(svcAccts []ServiceAccount) func(id openapi_types.UUID) (ServiceAccount, error) {
+	return func(id openapi_types.UUID) (ServiceAccount, error) {
+		found := ServiceAccount{}
+		for _, sa := range svcAccts {
+			if sa.Id == openapi_types.UUID(id) {
+				found = sa
+				break
+			}
+		}
+		if found.Id.String() == "" {
+			return ServiceAccount{}, fmt.Errorf("service account with ID %s not found", id.String())
+		}
+		return found, nil
 	}
 }
 
@@ -1757,15 +1781,15 @@ func hideMisleadingFields(c *Config) {
 
 // createConfig creates a new Workload Identity Manager configuration or updates an
 // existing one. Also deals with creating the subCA policies.
-func createConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, config ConfigPatch) (string, error) {
+func createConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, config api.ConfigurationCreateRequest) (api.ExtendedConfigurationInformation, error) {
 	body, err := json.Marshal(config)
 	if err != nil {
-		return "", fmt.Errorf("createConfig: while marshaling configuration: %w", err)
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while marshaling configuration: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/configurations", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("createConfig: while creating request: %w", err)
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while creating request: %w", err)
 	}
 
 	req.Header.Set("tppl-api-key", apiKey)
@@ -1773,7 +1797,7 @@ func createConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, con
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := cl.Client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("createConfig: while making request: %w", err)
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1781,33 +1805,31 @@ func createConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, con
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return "", HTTPErrorf(resp, "createConfig: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
-	}
-
-	var result struct {
-		ID string `json:"id"`
+		return api.ExtendedConfigurationInformation{}, HTTPErrorf(resp, "createConfig: got http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("createConfig: while reading response body: %w", err)
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while reading response body: %w", err)
 	}
+
+	var result api.ExtendedConfigurationInformation
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return "", fmt.Errorf("createConfig: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+		return api.ExtendedConfigurationInformation{}, fmt.Errorf("createConfig: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 
-	return result.ID, nil
+	return result, nil
 }
 
-func createFireflyPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, policy api.PolicyCreateRequest) (string, error) {
+func createPolicy(ctx context.Context, cl api.Client, apiURL, apiKey string, policy api.PolicyCreateRequest) (api.ExtendedPolicyInformation, error) {
 	body, err := json.Marshal(policy)
 	if err != nil {
-		return "", fmt.Errorf("createFireflyPolicy: while marshaling policy: %w", err)
+		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while marshaling policy: %w", err)
 	}
 	req, err := http.NewRequest("POST", apiURL+"/v1/distributedissuers/policies", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("createFireflyPolicy: while creating request: %w", err)
+		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while creating request: %w", err)
 	}
 
 	req.Header.Set("tppl-api-key", apiKey)
@@ -1815,7 +1837,7 @@ func createFireflyPolicy(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := cl.Client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("createFireflyPolicy: while making request: %w", err)
+		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1823,27 +1845,27 @@ func createFireflyPolicy(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return "", HTTPErrorf(resp, "createFireflyPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return api.ExtendedPolicyInformation{}, HTTPErrorf(resp, "createFireflyPolicy: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var result struct {
-		ID string `json:"id"`
-	}
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("createFireflyPolicy: while reading response body: %w", err)
+		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while reading response body: %w", err)
 	}
+
+	var result api.ExtendedPolicyInformation
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return "", fmt.Errorf("createFireflyPolicy: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+		return api.ExtendedPolicyInformation{}, fmt.Errorf("createFireflyPolicy: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
-	return result.ID, nil
+
+	return result, nil
 }
 
-func createSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey string, provider SubCaProviderCreateRequest) (string, error) {
+func createSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey string, provider SubCaProviderCreateRequest) (SubCa, error) {
 	resp, err := cl.SubcaprovidersCreate(ctx, provider)
 	if err != nil {
-		return "", fmt.Errorf("createSubCaProvider: while creating request: %w", err)
+		return SubCa{}, fmt.Errorf("createSubCaProvider: while creating request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1851,21 +1873,21 @@ func createSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return "", HTTPErrorf(resp, "createSubCaProvider: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return SubCa{}, HTTPErrorf(resp, "createSubCaProvider: returned status code %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	var result struct {
-		ID string `json:"id"`
-	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("createSubCaProvider: while reading response body: %w", err)
+		return SubCa{}, fmt.Errorf("createSubCaProvider: while reading response body: %w", err)
 	}
+
+	var result SubCa
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return "", fmt.Errorf("createSubCaProvider: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+		return SubCa{}, fmt.Errorf("createSubCaProvider: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
-	return result.ID, nil
+
+	return result, nil
 }
 
 func patchSubCaProvider(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch SubCaProviderUpdateRequest) (SubCa, error) {
@@ -2396,57 +2418,36 @@ func diffToPatchPropertyInformation(existing, desired api.PropertyInformation) (
 	changed := false
 
 	if desired.AllowedValues != nil && !slicesEqual(desired.AllowedValues, existing.AllowedValues) {
-		patch.AllowedValues = desired.AllowedValues
 		changed = true
 	}
 
 	if desired.DefaultValues != nil && !slicesEqual(desired.DefaultValues, existing.DefaultValues) {
-		patch.DefaultValues = desired.DefaultValues
 		changed = true
 	}
 
-	if desired.MaxOccurrences != 0 && desired.MaxOccurrences != existing.MaxOccurrences {
-		patch.MaxOccurrences = desired.MaxOccurrences
+	if desired.MaxOccurrences != existing.MaxOccurrences {
 		changed = true
 	}
 
-	if desired.MinOccurrences != 0 && desired.MinOccurrences != existing.MinOccurrences {
-		patch.MinOccurrences = desired.MinOccurrences
+	if desired.MinOccurrences != existing.MinOccurrences {
 		changed = true
 	}
 
 	if desired.Type != "" && desired.Type != existing.Type {
-		patch.Type = desired.Type
 		changed = true
 	}
 
-	// All fields are mandatory if a change needs to be made to one of the
-	// values. Thus, if a change is needed in one of the fields, the existing
-	// values are carried over so that the API doesn't fail.
 	if changed {
-		if desired.AllowedValues == nil {
-			patch.AllowedValues = existing.AllowedValues
-		}
-		if existing.AllowedValues == nil {
-			patch.AllowedValues = []string{}
-		}
-
-		if desired.DefaultValues == nil {
-			patch.DefaultValues = existing.DefaultValues
-		}
-		if existing.DefaultValues == nil {
-			patch.DefaultValues = []string{}
-		}
-
-		if desired.MaxOccurrences == 0 {
-			patch.MaxOccurrences = existing.MaxOccurrences
-		}
-		if desired.MinOccurrences == 0 {
-			patch.MinOccurrences = existing.MinOccurrences
-		}
-		if desired.Type == "" {
-			patch.Type = existing.Type
-		}
+		// All fields are mandatory if a change needs to be made to one of the
+		// values. Thus, if a change is needed in one of the fields, the
+		// existing values are carried over so that the API doesn't fail.
+		// Otherwise, we keep everything zeroed out so that this field isn't
+		// rendered to JSON.
+		patch.Type = desired.Type
+		patch.MinOccurrences = desired.MinOccurrences
+		patch.MaxOccurrences = desired.MaxOccurrences
+		patch.AllowedValues = desired.AllowedValues
+		patch.DefaultValues = desired.DefaultValues
 
 		err := validatePropertyInformation(patch)
 		if err != nil {
@@ -2458,6 +2459,16 @@ func diffToPatchPropertyInformation(existing, desired api.PropertyInformation) (
 }
 
 func validatePropertyInformation(pi api.PropertyInformation) error {
+	if pi.Type == "" &&
+		pi.MinOccurrences == 0 &&
+		pi.MaxOccurrences == 0 &&
+		len(pi.AllowedValues) == 0 &&
+		len(pi.DefaultValues) == 0 {
+		// The JSON object is omitted entirely if all fields are zeroed out.
+		// That's why it is allowed.
+		return nil
+	}
+
 	if pi.Type == "" {
 		return fmt.Errorf("property information 'type' field is required")
 	}
@@ -2879,7 +2890,7 @@ func editConfig(ctx context.Context, cl api.Client, apiURL, apiKey, name string)
 	populatePoliciesInConfig(&config, knownPolicies)
 	hideMisleadingFields(&config)
 
-	yamlData, err := renderManifests(config)
+	yamlData, err := renderToYAML(saResolver(knownSvcaccts), config)
 	if err != nil {
 		return err
 	}
@@ -3168,18 +3179,26 @@ func patchConfig(ctx context.Context, cl api.Client, apiURL, apiKey string, id o
 
 	switch resp.StatusCode {
 	case http.StatusOK:
-		// The patch was successful.
-		var updated Config
-		err := decodeJSON(resp.Body, &updated)
-		if err != nil {
-			return Config{}, fmt.Errorf("patchConfig: while decoding response: %w, body: %s", err, resp.Body)
-		}
-		return updated, nil
+		// The patch was successful, continue below.
 	case http.StatusNotFound:
 		return Config{}, fmt.Errorf("WIM configuration: %w", NotFound{NameOrID: id.String()})
 	default:
 		return Config{}, HTTPErrorf(resp, "patchConfig: unexpected http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
+
+	body := new(bytes.Buffer)
+	_, err = io.Copy(body, resp.Body)
+	if err != nil {
+		return Config{}, fmt.Errorf("while reading service accounts: %w", err)
+	}
+
+	var result api.ExtendedConfigurationInformation
+	err = json.Unmarshal(body.Bytes(), &result)
+	if err != nil {
+		return Config{}, fmt.Errorf("while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
+	}
+
+	return result, nil
 }
 
 func getServiceAccounts(ctx context.Context, cl api.Client, apiURL, apiKey string) ([]ServiceAccount, error) {
@@ -3428,15 +3447,15 @@ func createServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey str
 	return result, nil
 }
 
-func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch ServiceAccountPatch) (ServiceAccount, error) {
+func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey string, id string, patch ServiceAccountPatch) error {
 	// If no owner is specified, let's just use the first team we can find.
 	if patch.Owner == (openapi_types.UUID{}) {
 		teams, err := getTeams(ctx, cl, apiURL, apiKey)
 		if err != nil {
-			return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
+			return fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
 		}
 		if len(teams) == 0 {
-			return ServiceAccount{}, fmt.Errorf("patchServiceAccount: no teams found, please specify an owner")
+			return fmt.Errorf("patchServiceAccount: no teams found, please specify an owner")
 		}
 		ownerUUID := openapi_types.UUID{}
 		_ = ownerUUID.UnmarshalText([]byte(teams[0].ID))
@@ -3446,12 +3465,12 @@ func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey stri
 
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
-		return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while marshalling patch: %w", err)
+		return fmt.Errorf("patchServiceAccount: while marshalling patch: %w", err)
 	}
 
 	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/serviceaccounts/%s", apiURL, id), bytes.NewReader(patchJSON))
 	if err != nil {
-		return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while creating request: %w", err)
+		return fmt.Errorf("patchServiceAccount: while creating request: %w", err)
 	}
 	req.Header.Set("tppl-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -3459,7 +3478,7 @@ func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey stri
 
 	resp, err := cl.Client.Do(req)
 	if err != nil {
-		return ServiceAccount{}, fmt.Errorf("patchServiceAccount: while sending request: %w", err)
+		return fmt.Errorf("patchServiceAccount: while sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -3467,12 +3486,12 @@ func patchServiceAccount(ctx context.Context, cl api.Client, apiURL, apiKey stri
 	case http.StatusOK, http.StatusNoContent:
 		// The patch was successful.
 	case http.StatusNotFound:
-		return ServiceAccount{}, fmt.Errorf("service account: %w", NotFound{NameOrID: id})
+		return fmt.Errorf("service account: %w", NotFound{NameOrID: id})
 	default:
-		return ServiceAccount{}, HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
+		return HTTPErrorf(resp, "http %s: %w", resp.Status, parseJSONErrorOrDumpBody(resp))
 	}
 
-	return ServiceAccount{}, nil
+	return nil
 }
 
 // Without this, cmp.Diff would not be able to compare two

@@ -57,9 +57,6 @@ func applyManifests(cl *api.Client, apiURL, apiKey string, manifests []manifest.
 		}
 	}
 
-	// Print summary
-	printApplySummary(successCount, failureCount, len(manifests))
-
 	return nil
 }
 
@@ -114,16 +111,19 @@ func (ctx *manifestApplyContext) applyServiceAccount(idx int, in manifest.Servic
 			return fmt.Errorf("manifest #%d (ServiceAccount %q): while computing patch: %w", idx+1, desired.Name, err)
 		}
 		if !changed {
-			logutil.Infof("Service account '%s' (ID '%s') is up to date; no changes needed.", desired.Name, existing.Id.String())
+			logutil.Infof("ServiceAccount '%s' is up to date; no changes needed.", desired.Name)
 			break
 		}
 
-		logutil.Infof("Updating service account '%s' (ID '%s').", desired.Name, existing.Id.String())
-		updated, err := patchServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch)
+		logutil.Infof("Updating ServiceAccount '%s'.", desired.Name)
+		err = patchServiceAccount(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (ServiceAccount %q): while patching: %w", idx+1, desired.Name, err)
 		}
-		ctx.serviceAccounts[desired.Name] = updated
+		updated, err := ctx.refreshServiceAccount(desired.Name)
+		if err != nil {
+			return fmt.Errorf("manifest #%d (ServiceAccount %q): while refreshing state: %w", idx+1, desired.Name, err)
+		}
 
 		if logutil.EnableDebug {
 			d := ANSIDiff(existing, updated)
@@ -143,11 +143,12 @@ func (ctx *manifestApplyContext) applyPolicy(idx int, in manifest.Policy) error 
 	existing, err := getPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, desired.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
-		id, err := createFireflyPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, manifestToAPIPolicyCreateRequest(in))
+		created, err := createPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, manifestToAPIPolicyCreateRequest(in))
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while creating: %w", idx+1, desired.Name, err)
 		}
-		logutil.Infof("Creating policy '%s' with ID '%s'.", desired.Name, id)
+		logutil.Infof("Creating WIMIssuerPolicy '%s' with ID '%s'.", desired.Name, created.Id.String())
+		ctx.refreshPolicyWithExisting(created)
 	case err != nil:
 		return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while retrieving existing policy: %w", idx+1, desired.Name, err)
 	default:
@@ -156,27 +157,23 @@ func (ctx *manifestApplyContext) applyPolicy(idx int, in manifest.Policy) error 
 			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while computing patch: %w", idx+1, desired.Name, err)
 		}
 		if !changed {
-			logutil.Infof("Policy '%s' (ID '%s') is up to date; no changes needed.", desired.Name, existing.Id.String())
+			logutil.Infof("WIMIssuerPolicy '%s' is up to date; no changes needed.", desired.Name)
 			break
 		}
 
-		logutil.Infof("Updating policy '%s' (ID '%s').", desired.Name, existing.Id.String())
+		logutil.Infof("Updating WIMIssuerPolicy '%s'.", desired.Name)
 		updated, err := patchPolicy(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while patching: %w", idx+1, desired.Name, err)
 		}
+		ctx.refreshPolicyWithExisting(updated)
 
 		if logutil.EnableDebug {
 			d := ANSIDiff(existing, updated, transformClientAuthentication)
-			logutil.Debugf("Diff before/after of the WIM Issuer Policy '%s':\n%s", desired.Name, d)
+			logutil.Debugf("Diff before/after of the WIMIssuerPolicy '%s':\n%s", desired.Name, d)
 		}
 	}
 
-	fresh, err := ctx.refreshPolicy(desired.Name)
-	if err != nil {
-		return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while refreshing state: %w", idx+1, desired.Name, err)
-	}
-	ctx.policies[desired.Name] = fresh
 	return nil
 }
 
@@ -189,25 +186,12 @@ func (ctx *manifestApplyContext) applySubCa(idx int, in manifest.SubCa) error {
 	existing, err := getSubCa(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, desired.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
-		// Convert SubCa (SubCaProviderInformation) to SubCaProviderCreateRequest
-		createReq := SubCaProviderCreateRequest{
-			Name:              desired.Name,
-			CaType:            api.SubCaProviderCreateRequestCaType(desired.CaType),
-			CaAccountId:       desired.CaAccountId,
-			CaProductOptionId: desired.CaProductOptionId,
-			ValidityPeriod:    desired.ValidityPeriod,
-			CommonName:        desired.CommonName,
-			Organization:      desired.Organization,
-			Country:           desired.Country,
-			Locality:          desired.Locality,
-			KeyAlgorithm:      api.SubCaProviderCreateRequestKeyAlgorithm(desired.KeyAlgorithm),
-			Pkcs11:            desired.Pkcs11,
-		}
-		id, err := createSubCaProvider(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, createReq)
+		created, err := createSubCaProvider(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, apiToAPISubCaProviderCreateRequest(desired))
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while creating: %w", idx+1, desired.Name, err)
 		}
-		logutil.Infof("Creating WIMSubCAProvider '%s' with ID '%s'.", desired.Name, id)
+		logutil.Infof("Creating WIMSubCAProvider '%s' with ID '%s'.", desired.Name, created.Id.String())
+		ctx.refreshSubCaWithExisting(created)
 	case err != nil:
 		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while retrieving existing SubCA provider: %w", idx+1, desired.Name, err)
 	default:
@@ -216,15 +200,16 @@ func (ctx *manifestApplyContext) applySubCa(idx int, in manifest.SubCa) error {
 			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while computing patch: %w", idx+1, desired.Name, err)
 		}
 		if !changed {
-			logutil.Infof("WIMSubCAProvider '%s' (ID '%s') is up to date; no changes needed.", desired.Name, existing.Id.String())
+			logutil.Infof("WIMSubCAProvider '%s' is up to date; no changes needed.", desired.Name)
 			break
 		}
 
-		logutil.Infof("Updating WIMSubCAProvider '%s' (ID '%s').", desired.Name, existing.Id.String())
+		logutil.Infof("Updating WIMSubCAProvider '%s'.", desired.Name)
 		updated, err := patchSubCaProvider(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while patching: %w", idx+1, desired.Name, err)
 		}
+		ctx.refreshSubCaWithExisting(updated)
 
 		if logutil.EnableDebug {
 			d := ANSIDiff(existing, updated)
@@ -232,11 +217,6 @@ func (ctx *manifestApplyContext) applySubCa(idx int, in manifest.SubCa) error {
 		}
 	}
 
-	fresh, err := ctx.refreshSubCa(desired.Name)
-	if err != nil {
-		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while refreshing state: %w", idx+1, desired.Name, err)
-	}
-	ctx.subCaProviders[desired.Name] = fresh
 	return nil
 }
 
@@ -270,49 +250,19 @@ func (ctx *manifestApplyContext) applyConfig(idx int, in manifest.WIMConfigurati
 		policies = append(policies, policyInfo)
 	}
 
-	var subCaProvider SubCa
-	if in.SubCaProviderName != "" {
-		subca, err := ctx.resolveSubCa(in.SubCaProviderName)
-		if err != nil {
-			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while resolving subCA provider %q: %w", idx+1, in.Name, in.SubCaProviderName, err)
-		}
-		subCaProvider = SubCa{
-			Name: subca.Name,
-			Id:   subca.Id,
-		}
-	}
-
-	// Build ExtendedConfigurationInformation for comparison and patching.
-	clientAuthentication, err := manifestToAPIClientAuthentication(ctx.resolvePolicy, in.ClientAuthentication)
+	desired, err := manifestToAPIExtendedConfigurationInformation(ctx.resolvePolicy, ctx.resolveServiceAccount, ctx.resolveSubCa, in)
 	if err != nil {
-		return fmt.Errorf("manifest #%d (WIMConfiguration %q): while converting client authentication: %w", idx+1, in.Name, err)
-	}
-
-	desired := api.ExtendedConfigurationInformation{
-		Name:                 in.Name,
-		Policies:             policies,
-		PolicyIds:            policyIDs,
-		ServiceAccountIds:    serviceAccountIDs,
-		SubCaProvider:        subCaProvider,
-		CloudProviders:       in.CloudProviders,
-		AdvancedSettings:     manifestToAPIAdvancedSettings(in.AdvancedSettings),
-		ClientAuthentication: clientAuthentication,
-		ClientAuthorization:  manifestToAPIClientAuthorization(in.ClientAuthorization),
-	}
-
-	if in.MinTLSVersion != "" {
-		minTLS := api.ExtendedConfigurationInformationMinTlsVersion(in.MinTLSVersion)
-		desired.MinTlsVersion = minTLS
+		return fmt.Errorf("manifest #%d (WIMConfiguration %q): while converting to API request: %w", idx+1, in.Name, err)
 	}
 
 	existing, err := getConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, in.Name)
 	switch {
 	case errors.As(err, &NotFound{}):
-		_, err := createConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, fullToPatchConfig(desired))
+		_, err := createConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, apiToAPIConfigurationCreateRequest(desired))
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while creating: %w", idx+1, in.Name, err)
 		}
-		logutil.Infof("Creating WIM configuration '%s'.", in.Name)
+		logutil.Infof("Creating WIMConfiguration '%s'.", in.Name)
 	case err != nil:
 		return fmt.Errorf("manifest #%d (WIMConfiguration %q): while retrieving existing configuration: %w", idx+1, in.Name, err)
 	default:
@@ -321,11 +271,11 @@ func (ctx *manifestApplyContext) applyConfig(idx int, in manifest.WIMConfigurati
 			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while computing patch: %w", idx+1, in.Name, err)
 		}
 		if !changed {
-			logutil.Infof("WIM configuration '%s' is up to date; no changes needed.", in.Name)
+			logutil.Infof("WIMConfiguration '%s' is up to date; no changes needed.", in.Name)
 			break
 		}
 
-		logutil.Infof("Updating WIM configuration '%s' (ID '%s').", in.Name, existing.Id.String())
+		logutil.Infof("Updating WIMConfiguration '%s' (ID '%s').", in.Name, existing.Id.String())
 		updated, err := patchConfig(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, existing.Id, patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while patching: %w", idx+1, in.Name, err)
@@ -333,7 +283,7 @@ func (ctx *manifestApplyContext) applyConfig(idx int, in manifest.WIMConfigurati
 
 		if logutil.EnableDebug {
 			d := ANSIDiff(existing, updated, transformClientAuthentication)
-			logutil.Debugf("Diff before/after of the WIM Configuration '%s':\n%s", in.Name, d)
+			logutil.Debugf("Diff before/after of the WIMConfiguration '%s':\n%s", in.Name, d)
 		}
 	}
 
@@ -372,20 +322,43 @@ func (ctx *manifestApplyContext) refreshPolicy(name string) (Policy, error) {
 	return policy, nil
 }
 
+func (ctx *manifestApplyContext) refreshPolicyWithExisting(updated Policy) {
+	ctx.policies[updated.Name] = updated
+}
+
 func (ctx *manifestApplyContext) resolveSubCa(name string) (SubCa, error) {
 	if subca, ok := ctx.subCaProviders[name]; ok {
 		return subca, nil
 	}
-	return ctx.refreshSubCa(name)
-}
 
-func (ctx *manifestApplyContext) refreshSubCa(name string) (SubCa, error) {
-	subca, err := getSubCa(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
+	err := ctx.refreshSubCaWithName(name)
 	if err != nil {
 		return SubCa{}, err
 	}
+
+	return ctx.subCaProviders[name], nil
+}
+
+func (ctx *manifestApplyContext) refreshSubCaWithName(name string) error {
+	subca, err := getSubCa(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, name)
+	if err != nil {
+		return err
+	}
 	ctx.subCaProviders[name] = subca
-	return subca, nil
+	return nil
+}
+
+func (ctx *manifestApplyContext) refreshSubCaWithExisting(updated SubCa) {
+	ctx.subCaProviders[updated.Name] = updated
+}
+
+func (ctx *manifestApplyContext) refreshSubCaWithID(id string) error {
+	subca, err := getSubCaByID(context.Background(), ctx.client, ctx.apiURL, ctx.apiKey, id)
+	if err != nil {
+		return err
+	}
+	ctx.subCaProviders[subca.Name] = subca
+	return nil
 }
 
 func getManifestKind(m manifest.Manifest) string {
@@ -523,7 +496,7 @@ func applyManifestsDryRun(manifests []manifest.Manifest) error {
 }
 
 // printApplySummary prints a summary of the apply operation
-func printApplySummary(successCount, failureCount, totalCount int) {
+func printApplySummary(successCount, failureCount, skippedCount, totalCount int) {
 	if failureCount == 0 {
 		logutil.Infof("Successfully applied %d resource(s).", successCount)
 	} else {
