@@ -30,9 +30,10 @@ type FileConf struct {
 }
 
 type Auth struct {
-	URL    string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
-	APIURL string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
-	APIKey string `json:"apiKey"`
+	URL      string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	APIURL   string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	APIKey   string `json:"apiKey"`
+	TenantID string `json:"tenantID"` // The tenant ID (company ID)
 }
 
 // Styles for prompts
@@ -248,9 +249,10 @@ func loginCmd() *cobra.Command {
 				}
 
 				current := Auth{
-					APIURL: apiURL,
-					APIKey: apiKey,
-					URL:    tenantURL,
+					APIURL:   apiURL,
+					APIKey:   apiKey,
+					URL:      tenantURL,
+					TenantID: resp.Company.ID,
 				}
 
 				err = saveCurrentTenant(current)
@@ -320,10 +322,12 @@ func loginCmd() *cobra.Command {
 						if err != nil {
 							return fmt.Errorf("while creating API client: %w", err)
 						}
-						_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
+						resp, err := checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
 						if err != nil {
 							return err
 						}
+						current.TenantID = resp.Company.ID
+						return nil
 						return nil
 					})
 					if err != nil {
@@ -440,10 +444,11 @@ func loginCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				_, err = checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
+				resp, err := checkAPIKey(context.Background(), *apiClient, current.APIURL, input)
 				if err != nil {
 					return err
 				}
+				current.TenantID = resp.Company.ID
 
 				return nil
 			})
@@ -547,6 +552,45 @@ func authAPIURLCmd() *cobra.Command {
 	cmd := apiurlCmd()
 	cmd.Use = "api-url"
 	cmd.Deprecated = "use 'vcpctl apiurl' instead; 'vcpctl auth api-url' will be removed in a future release"
+	return cmd
+}
+
+func tenantidCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "tenantid",
+		Short:         "Prints the tenant ID for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envAPIURL := os.Getenv("VEN_API_URL")
+			envAPIKey := os.Getenv("VEN_API_KEY")
+			flagAPIURL, _ := cmd.Flags().GetString("api-url")
+			flagAPIKey, _ := cmd.Flags().GetString("api-key")
+			flagTenant, _ := cmd.Flags().GetString("tenant")
+
+			if envAPIKey != "" || flagAPIKey != "" || envAPIURL != "" || flagAPIURL != "" || flagTenant != "" {
+				logutil.Debugf("$VEN_API_URL, $VEN_API_KEY, --api-url, --api-key, or --tenant has been passed but will be ignored. This command only prints the tenant ID from the configuration file at %s", configPath)
+			}
+
+			conf, err := loadFileConf()
+			if err != nil {
+				return fmt.Errorf("loading configuration: %w", err)
+			}
+
+			auth, ok := currentFrom(conf)
+			if !ok {
+				return fmt.Errorf("not logged in. Log in with:\n    vcpctl login\n")
+			}
+
+			if auth.TenantID == "" {
+				logutil.Debugf("Tenant ID not found in config. This might be an older config file. Please re-login with 'vcpctl login'.")
+				return fmt.Errorf("tenant ID not available")
+			}
+
+			fmt.Println(auth.TenantID)
+			return nil
+		},
+	}
 	return cmd
 }
 
@@ -715,17 +759,65 @@ func toAPIURL(cl http.Client, tenantURL string) (string, error) {
 	return respJSON.APIBaseURL, nil
 }
 
+// resolveTenant resolves a tenant identifier (ID, domain, or URL) to an Auth entry
+// from the configuration. Returns the matching Auth and true if found.
+func resolveTenant(conf FileConf, tenantInput string) (Auth, bool) {
+	// Normalize the input
+	normalized := strings.TrimSpace(tenantInput)
+	normalized = strings.TrimSuffix(normalized, "/")
+
+	// First, try exact match by tenant ID
+	for _, auth := range conf.Auths {
+		if auth.TenantID == normalized {
+			return auth, true
+		}
+	}
+
+	// Try exact URL match
+	for _, auth := range conf.Auths {
+		if auth.URL == normalized {
+			return auth, true
+		}
+	}
+
+	// Try URL match with https:// prefix
+	if !strings.HasPrefix(normalized, "https://") {
+		normalized = "https://" + normalized
+	}
+	for _, auth := range conf.Auths {
+		if auth.URL == normalized {
+			return auth, true
+		}
+	}
+
+	// Try domain substring match (e.g., "ui-stack-dev210.qa.venafi.io" should match "https://ui-stack-dev210.qa.venafi.io")
+	for _, auth := range conf.Auths {
+		if strings.Contains(auth.URL, tenantInput) {
+			return auth, true
+		}
+	}
+
+	return Auth{}, false
+}
+
 // This must be used by all other commands to get the API key and API URL.
 func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	envAPIURL := os.Getenv("VEN_API_URL")
 	envAPIKey := os.Getenv("VEN_API_KEY")
 	flagAPIURL, _ := cmd.Flags().GetString("api-url")
 	flagAPIKey, _ := cmd.Flags().GetString("api-key")
+	flagTenant, _ := cmd.Flags().GetString("tenant")
 
 	// If any of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set, we don't use
 	// the configuration file.
 	if flagAPIKey != "" || envAPIKey != "" || flagAPIURL != "" || envAPIURL != "" {
 		logutil.Debugf("one of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
+
+		// --tenant flag is ignored when --api-key or --api-url is used
+		if flagTenant != "" {
+			logutil.Debugf("--tenant flag is ignored when --api-key or --api-url is provided")
+		}
+
 		// Priority: $APIURL > --api-url.
 		apiURL := envAPIURL
 		if apiURL == "" {
@@ -757,10 +849,22 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		return ToolConf{}, fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Find the current tenant.
-	current, ok := currentFrom(conf)
-	if !ok {
-		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl login")
+	var current Auth
+	var ok bool
+
+	// If --tenant flag is provided, use it to override the current tenant
+	if flagTenant != "" {
+		current, ok = resolveTenant(conf, flagTenant)
+		if !ok {
+			return ToolConf{}, fmt.Errorf("tenant '%s' not found in configuration. Available tenants can be listed with 'vcpctl switch'. Log in to a new tenant with 'vcpctl login'.", flagTenant)
+		}
+		logutil.Debugf("Using tenant '%s' (ID: %s) from --tenant flag", current.URL, current.TenantID)
+	} else {
+		// Find the current tenant from config
+		current, ok = currentFrom(conf)
+		if !ok {
+			return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl login")
+		}
 	}
 
 	// Let's make sure the URL never contains a trailing slash.
