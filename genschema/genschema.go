@@ -226,8 +226,8 @@ func main() {
 		panic(fmt.Errorf("merging PropertyInformation fix: %w", err))
 	}
 
-	// For some reason, the ClientAuthenticationInformationRequestOpenApi is a
-	// duplicate of ClientAuthenticationInformation. We just replace all
+	// For some reason, the 'ClientAuthenticationInformationRequestOpenApi' is a
+	// duplicate of 'ClientAuthenticationInformation'. We just replace all
 	// references to the former with references to the latter. See:
 	// https://venafi.atlassian.net/browse/VC-45818
 	err = changeRef(merged, "#/components/schemas/ClientAuthenticationRequestOpenApi", "#/components/schemas/ClientAuthenticationInformation")
@@ -240,85 +240,86 @@ func main() {
 	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtOidcAuthenticationOpenApi")
 	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtStandardClaimsAuthenticationOpenApi")
 
-	// Make sure that ExtendedConfigurationInformation is a allOf of
-	// ConfigurationInformation and some extra fields. Why? I can't remember. I
-	// think it's because it was creating a lot of unecessary different Go
-	// structs that were all the same.
-	err = changeRef(merged, "#/components/schemas/ExtendedConfigurationInformation", "#/components/schemas/ConfigurationInformationRespExtended")
-	if err != nil {
-		panic(fmt.Errorf("changing ref: %w", err))
+	// The objects 'ConfigurationUpdateRequest' and 'ConfigurationCreateRequest'
+	// are the same. Let's combine them into one single 'ConfigurationRequest'
+	// object.
+	merged["components"].(map[string]any)["schemas"].(map[string]any)["ConfigurationRequest"] =
+		merged["components"].(map[string]any)["schemas"].(map[string]any)["ConfigurationCreateRequest"]
+	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "ConfigurationCreateRequest")
+
+	// The object 'ConfigurationUpdateRequest' is the request you send in:
+	//  PATCH /v1/distributedissuers/intermediatecertificates/{id}
+	merged["components"].(map[string]any)["schemas"].(map[string]any)["ConfigurationUpdateRequest"] = map[string]any{
+		"$ref": "#/components/schemas/ConfigurationRequest",
 	}
-	err = changeRef(merged, "#/components/schemas/ConfigurationInformation", "#/components/schemas/ConfigurationInformationResp")
-	if err != nil {
-		panic(fmt.Errorf("changing ref: %w", err))
+
+	// The object 'ConfigurationCreateRequest' is the request you send in:
+	//  POST /v1/distributedissuers/intermediatecertificates
+	merged["components"].(map[string]any)["schemas"].(map[string]any)["ConfigurationCreateRequest"] = map[string]any{
+		"$ref": "#/components/schemas/ConfigurationRequest",
 	}
-	err = mergo.Merge(&merged, map[string]any{
-		"components": map[string]any{
-			"schemas": map[string]any{
-				"ConfigurationInformationBase": merged["components"].(map[string]any)["schemas"].(map[string]any)["ConfigurationCreateRequest"],
 
-				// Request you send in PATCH.
-				"ConfigurationUpdateRequest": map[string]any{
-					"$ref": "#/components/schemas/ConfigurationInformationBase",
-				},
-
-				// Request you send in POST.
-				"ConfigurationCreateRequest": map[string]any{
-					"$ref": "#/components/schemas/ConfigurationInformationBase",
-				},
-
-				// Response you get from GET /intermediatecertificates and
-				// /intermediatecertificates/{id}.
-				"ConfigurationInformationResp": map[string]any{
-					"allOf": []any{
-						map[string]any{
-							"$ref": "#/components/schemas/ConfigurationInformationBase",
-						},
-						map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"id": map[string]any{
-									"type":   "string",
-									"format": "uuid",
-								},
-							},
-						},
-					},
-				},
-
-				// Response you get from GET, POST, and PATCH /.
-				"ConfigurationInformationRespExtended": map[string]any{
-					"allOf": []any{
-						map[string]any{
-							"$ref": "#/components/schemas/ConfigurationInformationResp",
-						},
-						map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"policies": map[string]any{
-									"type": "array",
-									"items": map[string]any{
-										"$ref": "#/components/schemas/PolicyInformation",
-									},
-								},
-								"policyDefinitions": map[string]any{
-									"type": "array",
-									"items": map[string]any{
-										"$ref": "#/components/schemas/PolicyInformation",
-									},
-								},
-								"subCaProvider": map[string]any{
-									"$ref": "#/components/schemas/SubCaProviderInformation",
-								},
-							},
-						},
+	// The object 'ConfigurationInformation' repeats all of the fields from
+	// 'ConfigurationRequest'. Let's reference it instead and add the
+	// extra 'id' field. Response you get from:
+	//  GET /v1/distributedissuers/policies/<id>   ('configurations' field)
+	//  POST /v1/distributedissuers/policies       ('configurations' field)
+	//  PATCH /v1/distributedissuers/policies/<id> ('configurations' field)
+	merged["components"].(map[string]any)["schemas"].(map[string]any)["ConfigurationInformation"] = map[string]any{
+		"type": "object",
+		"allOf": []any{
+			map[string]any{
+				"$ref": "#/components/schemas/ConfigurationRequest",
+			},
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"id": map[string]any{
+						"type":   "string",
+						"format": "uuid",
 					},
 				},
 			},
 		},
-	}, mergo.WithOverride)
-	if err != nil {
-		panic(fmt.Errorf("merging ExtendedConfigurationInformation fix: %w", err))
+	}
+
+	// The object 'ExtendedConfigurationInformation' repeats all of the fields
+	// from both 'ConfigurationUpdateRequest' and 'ConfigurationCreateRequest',
+	// which I've combined into 'ConfigurationRequest' above.  Let's reference
+	// 'ConfigurationRequest' instead and add the extra fields ('policies',
+	// 'policyDefinitions', 'subCaProvider').
+	//
+	// ExtendedConfigurationInformation is the response you get from:
+	//  GET /v1/distributedissuers/intermediatecertificates/{id}
+	//  POST /v1/distributedissuers/intermediatecertificates
+	//  PATCH /v1/distributedissuers/intermediatecertificates/{id}
+	merged["components"].(map[string]any)["schemas"].(map[string]any)["ExtendedConfigurationInformation"] = map[string]any{
+		"type": "object",
+		"allOf": []any{
+			map[string]any{
+				"$ref": "#/components/schemas/ConfigurationInformation",
+			},
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"policies": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"$ref": "#/components/schemas/PolicyInformation",
+						},
+					},
+					"policyDefinitions": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"$ref": "#/components/schemas/PolicyInformation",
+						},
+					},
+					"subCaProvider": map[string]any{
+						"$ref": "#/components/schemas/SubCaProviderInformation",
+					},
+				},
+			},
+		},
 	}
 
 	raw, err := json.Marshal(merged, jsontext.Multiline(true), jsontext.WithIndent("  "))
@@ -522,6 +523,12 @@ func changeRef(node any, from, to string) error {
 		return fmt.Errorf("unexpected type %T in changeRef", n)
 	}
 	return nil
+}
+
+func mustChangeRef(node any, from, to string) {
+	if err := changeRef(node, from, to); err != nil {
+		panic(err)
+	}
 }
 
 // walks arbitrary JSON for $ref strings

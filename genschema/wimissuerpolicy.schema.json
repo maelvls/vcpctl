@@ -1,22 +1,53 @@
 {
-  "$defs": {
-    "SansInformation": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/wim-manifest.schema.json",
+  "title": "CyberArk Workload Identity Manager Manifests",
+  "description": "Schema describing the YAML manifests consumed by vcpctl.",
+  "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
+  "allOf": [
+    {
       "type": "object",
       "properties": {
-        "rfc822Names": {
+        "kind": {
+          "const": "WIMIssuerPolicy"
+        },
+        "apiVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ]
+    },
+    {
+      "$ref": "#/$defs/PolicyInformation"
+    }
+  ],
+  "$defs": {
+    "SubjectAttributesInformation": {
+      "type": "object",
+      "properties": {
+        "organizationalUnit": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "uniformResourceIdentifiers": {
+        "locality": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "dnsNames": {
+        "stateOrProvince": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "ipAddresses": {
+        "country": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "commonName": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organization": {
           "$ref": "#/$defs/PropertyInformation"
         }
       },
-      "description": "Subject alternative names"
+      "description": "Subject attributes"
     },
     "PropertyInformation": {
       "type": "object",
@@ -53,6 +84,24 @@
         }
       }
     },
+    "SansInformation": {
+      "description": "Subject alternative names",
+      "type": "object",
+      "properties": {
+        "dnsNames": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "ipAddresses": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "rfc822Names": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "uniformResourceIdentifiers": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      }
+    },
     "KeyAlgorithmInformation": {
       "description": "Key algorithm",
       "required": [
@@ -61,23 +110,6 @@
       ],
       "type": "object",
       "properties": {
-        "allowedValues": {
-          "items": {
-            "type": "string",
-            "enum": [
-              "RSA_2048",
-              "RSA_3072",
-              "RSA_4096",
-              "EC_P256",
-              "EC_P384",
-              "EC_P521",
-              "EC_ED25519"
-            ]
-          },
-          "minItems": 1,
-          "type": "array",
-          "description": "Key algorithm allowed values"
-        },
         "defaultValue": {
           "type": "string",
           "description": "Key algorithm default value",
@@ -91,66 +123,59 @@
             "EC_P521",
             "EC_ED25519"
           ]
+        },
+        "allowedValues": {
+          "type": "array",
+          "description": "Key algorithm allowed values",
+          "items": {
+            "type": "string",
+            "enum": [
+              "RSA_2048",
+              "RSA_3072",
+              "RSA_4096",
+              "EC_P256",
+              "EC_P384",
+              "EC_P521",
+              "EC_ED25519"
+            ]
+          },
+          "minItems": 1
         }
       }
-    },
-    "SubjectAttributesInformation": {
-      "type": "object",
-      "properties": {
-        "organization": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "organizationalUnit": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "locality": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "stateOrProvince": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "country": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "commonName": {
-          "$ref": "#/$defs/PropertyInformation"
-        }
-      },
-      "description": "Subject attributes"
     },
     "PolicyInformation": {
       "type": "object",
       "properties": {
-        "modificationDate": {
-          "type": "string",
-          "description": "When the policy was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
-        },
         "id": {
+          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee",
           "type": "string",
           "description": "UUID of the policy",
-          "format": "uuid",
-          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
+          "format": "uuid"
         },
         "companyId": {
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
           "type": "string",
-          "description": "UUID specific to your company"
+          "description": "UUID specific to your company",
+          "format": "uuid",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
         },
         "validityPeriod": {
-          "type": "string",
-          "description": "ISO8601 Period Format",
           "format": "PnYnMnDTnHnMnS",
-          "example": "P30D"
+          "example": "P30D",
+          "type": "string",
+          "description": "ISO8601 Period Format"
         },
         "subject": {
           "$ref": "#/$defs/SubjectAttributesInformation"
         },
-        "name": {
-          "example": "Some policy",
+        "creationDate": {
           "type": "string",
-          "description": "Name of the policy"
+          "description": "When the policy was initially created",
+          "example": "2022-10-10T14:50:41.710+00:00"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the policy",
+          "example": "Some policy"
         },
         "sans": {
           "$ref": "#/$defs/SansInformation"
@@ -163,6 +188,7 @@
             "digitalSignature"
           ],
           "items": {
+            "type": "string",
             "enum": [
               "digitalSignature",
               "nonRepudiation",
@@ -173,8 +199,7 @@
               "cRLSign",
               "encipherOnly",
               "decipherOnly"
-            ],
-            "type": "string"
+            ]
           }
         },
         "extendedKeyUsages": {
@@ -215,37 +240,12 @@
         "keyAlgorithm": {
           "$ref": "#/$defs/KeyAlgorithmInformation"
         },
-        "creationDate": {
+        "modificationDate": {
+          "example": "2023-12-12T20:00:10.500+00:00",
           "type": "string",
-          "description": "When the policy was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00"
+          "description": "When the policy was last modified"
         }
       }
     }
-  },
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/wim-manifest.schema.json",
-  "title": "CyberArk Workload Identity Manager Manifests",
-  "description": "Schema describing the YAML manifests consumed by vcpctl.",
-  "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
-  "allOf": [
-    {
-      "type": "object",
-      "properties": {
-        "apiVersion": {
-          "type": "string"
-        },
-        "kind": {
-          "const": "WIMIssuerPolicy"
-        }
-      },
-      "required": [
-        "kind",
-        "name"
-      ]
-    },
-    {
-      "$ref": "#/$defs/PolicyInformation"
-    }
-  ]
+  }
 }
