@@ -125,6 +125,7 @@ func main() {
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.AddCommand(
 		authCmd(),
+		apiCmd(),
 		lsCmd(),
 		editCmd(),
 		attachSaCmd(),
