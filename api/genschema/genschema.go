@@ -202,6 +202,39 @@ func main() {
 	err = mergo.MergeWithOverwrite(&merged, map[string]any{
 		"components": map[string]any{
 			"schemas": map[string]any{
+				// ServiceAccounts.
+				"Details": map[string]any{
+					"properties": map[string]any{
+						"enabled": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+					},
+				},
+
+				// WIMSubCAProvider.
+				"SubCaProviderPkcs11ConfigurationInformation": map[string]any{
+					"properties": map[string]any{
+						"signingEnabled": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+					},
+				},
+
+				// WIMConfigurations.
+				"AdvancedSettingsInformation": map[string]any{
+					"properties": map[string]any{
+						"enableIssuanceAuditLog": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+						"includeRawCertDataInAuditLog": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+						"requireFIPSCompliantBuild": map[string]any{
+							"x-go-type-skip-optional-pointer": false,
+						},
+					},
+				},
+				// WIMIssuerPolicies.
 				"PropertyInformation": map[string]any{
 					"properties": map[string]any{
 						"minOccurrences": map[string]any{

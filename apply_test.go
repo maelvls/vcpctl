@@ -15,9 +15,13 @@ import (
 func Test_applyManifests(t *testing.T) {
 	t.Run("WIMConfiguration patching", func(t *testing.T) {
 		existingConf := with(sampleConfig,
-			"advancedSettings.enableIssuanceAuditLog", false, // <- EXISTING
 			"clientAuthentication.type", "JWT_JWKS", // <- EXISTING
 			"clientAuthentication.urls", []string{"http://original/jwks.json"}, // <- EXISTING
+
+			// Make sure that when patching WIMConfiguration, you can switch
+			// advancedSettings.enableIssuanceAuditLog from true to false (it used to not
+			// be possible due to 'omitzero').
+			"advancedSettings.enableIssuanceAuditLog", true, // <- EXISTING
 		)
 		givenManifests := undent.Undent(`
 			kind: WIMConfiguration
@@ -35,10 +39,10 @@ func Test_applyManifests(t *testing.T) {
 			cloudProviders: {}
 			minTlsVersion: TLS13
 			advancedSettings:
-			  enableIssuanceAuditLog: true                   # <- CHANGED
+			  enableIssuanceAuditLog: false                  # <- CHANGED
 		`)
 		expectPatch := `{
-			"advancedSettings":{"enableIssuanceAuditLog":true},
+			"advancedSettings":{"enableIssuanceAuditLog":false},
 			"clientAuthentication":{
 				"type":"JWT_STANDARD_CLAIMS",
 				"clients":[{
@@ -175,6 +179,7 @@ func Test_applyManifests(t *testing.T) {
 		}
 		run(t, givenManifests, mock)
 	})
+
 }
 
 func run(t *testing.T, givenManifests string, mock []mocksrv.Interaction) {

@@ -320,5 +320,5 @@ func isZeroPKCS11(p SubCaProviderPkcs11ConfigurationInformation) bool {
 		p.PartitionLabel == "" &&
 		p.PartitionSerialNumber == "" &&
 		p.Pin == "" &&
-		!p.SigningEnabled
+		p.SigningEnabled == nil
 }

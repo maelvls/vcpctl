@@ -107,20 +107,24 @@ type PKCS11 struct {
 	PartitionLabel         string   `yaml:"partitionLabel"`
 	PartitionSerialNumber  string   `yaml:"partitionSerialNumber"`
 	PIN                    string   `yaml:"pin"`
-	SigningEnabled         bool     `yaml:"signingEnabled"`
+	SigningEnabled         *bool    `yaml:"signingEnabled"`
 }
 
+// Since "false" is a valid value and there needs to be a way to tell between
+// "false" and "not set" in order to update the API object, we use pointers.
+// Otherwise, it would be impossible to disable these settings once they have
+// been enabled.
 type AdvancedSettings struct {
-	EnableIssuanceAuditLog       bool `yaml:"enableIssuanceAuditLog"`
-	IncludeRawCertDataInAuditLog bool `yaml:"includeRawCertDataInAuditLog"`
-	RequireFIPSCompliantBuild    bool `yaml:"requireFIPSCompliantBuild"`
+	EnableIssuanceAuditLog       *bool `yaml:"enableIssuanceAuditLog"`
+	IncludeRawCertDataInAuditLog *bool `yaml:"includeRawCertDataInAuditLog"`
+	RequireFIPSCompliantBuild    *bool `yaml:"requireFIPSCompliantBuild"`
 }
 
 type ServiceAccount struct {
 	Name               string   `yaml:"name,omitempty"`
 	AuthenticationType string   `yaml:"authenticationType,omitempty"`
 	CredentialLifetime int      `yaml:"credentialLifetime,omitempty"`
-	Enabled            bool     `yaml:"enabled,omitempty"`
+	Enabled            *bool    `yaml:"enabled,omitempty"`
 	Owner              string   `yaml:"owner,omitempty"`
 	Scopes             []string `yaml:"scopes,omitempty"`
 	Applications       []string `yaml:"applications,omitempty"`

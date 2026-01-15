@@ -698,13 +698,13 @@ type ActivityLogFilterOperator string
 // AdvancedSettingsInformation defines model for AdvancedSettingsInformation.
 type AdvancedSettingsInformation struct {
 	// EnableIssuanceAuditLog Whether audit log entries must be generated for each issued certificate
-	EnableIssuanceAuditLog bool `json:"enableIssuanceAuditLog,omitempty,omitzero"`
+	EnableIssuanceAuditLog *bool `json:"enableIssuanceAuditLog,omitempty"`
 
 	// IncludeRawCertDataInAuditLog Whether the raw certificate data must be included in the audit log entry
-	IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog,omitempty,omitzero"`
+	IncludeRawCertDataInAuditLog *bool `json:"includeRawCertDataInAuditLog,omitempty"`
 
 	// RequireFIPSCompliantBuild Whether FIPS-compliant build is required
-	RequireFIPSCompliantBuild bool `json:"requireFIPSCompliantBuild,omitempty,omitzero"`
+	RequireFIPSCompliantBuild *bool `json:"requireFIPSCompliantBuild,omitempty"`
 }
 
 // AnyValue Can be any value - string, number, boolean, array or object.
@@ -1187,7 +1187,7 @@ type Details struct {
 	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn,omitempty,omitzero"`
 
 	// Enabled Indicates if the given service account must be enabled or disabled where disable means that the credentials cannot be used for
-	Enabled bool `json:"enabled,omitempty,omitzero"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// Id The ID for this service account
 	Id uuid.UUID `json:"id,omitempty,omitzero"`
@@ -1900,7 +1900,7 @@ type ServiceAccountDetails struct {
 	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn,omitempty,omitzero"`
 
 	// Enabled Indicates if the given service account must be enabled or disabled where disable means that the credentials cannot be used for
-	Enabled bool `json:"enabled,omitempty,omitzero"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// Id The ID for this service account
 	Id uuid.UUID `json:"id,omitempty,omitzero"`
@@ -1957,7 +1957,7 @@ type ServiceAccountDetailsNoKey struct {
 	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn,omitempty,omitzero"`
 
 	// Enabled Indicates if the given service account must be enabled or disabled where disable means that the credentials cannot be used for
-	Enabled bool `json:"enabled,omitempty,omitzero"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// Id The ID for this service account
 	Id uuid.UUID `json:"id,omitempty,omitzero"`
@@ -2151,7 +2151,7 @@ type SubCaProviderPkcs11ConfigurationInformation struct {
 	Pin string `json:"pin,omitempty,omitzero"`
 
 	// SigningEnabled Indicates whether HSM signing is enabled or not
-	SigningEnabled bool `json:"signingEnabled,omitempty,omitzero"`
+	SigningEnabled *bool `json:"signingEnabled,omitempty"`
 }
 
 // SubCaProviderResponse defines model for SubCaProviderResponse.
