@@ -770,6 +770,12 @@ func resolveTenant(conf FileConf, tenantInput string) (Auth, bool) {
 	return Auth{}, false
 }
 
+// For now we aren't yet using ~/.config/vcpctl.yml.
+type ToolConf struct {
+	APIURL string `json:"apiURL"`
+	APIKey string `json:"apiKey"`
+}
+
 // This must be used by all other commands to get the API key and API URL.
 func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	envAPIURL := os.Getenv("VEN_API_URL")

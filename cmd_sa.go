@@ -49,6 +49,71 @@ func saCmd() *cobra.Command {
 	return cmd
 }
 
+func saLsCmd() *cobra.Command {
+	var outputFormat string
+	cmd := &cobra.Command{
+		Use:   "ls [-o json|id]",
+		Short: "List Service Accounts",
+		Long: undent.Undent(`
+			List service accounts. Service accounts authenticate applications that
+			use WIM (Workload Identity Manager) configurations.
+
+			You can use -oid to only display the Service Account client IDs.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa ls
+			vcpctl sa ls -ojson
+			vcpctl sa ls -oid
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("sa ls: %w", err)
+			}
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("while creating API client: %w", err)
+			}
+			svcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
+			if err != nil {
+				return fmt.Errorf("sa ls: while listing service accounts: %w", err)
+			}
+
+			switch outputFormat {
+			case "json":
+				b, err := marshalIndent(svcaccts, "", "  ")
+				if err != nil {
+					return fmt.Errorf("sa ls: while marshaling service accounts to JSON: %w", err)
+				}
+				fmt.Println(string(b))
+				return nil
+			case "table":
+				var rows [][]string
+				for _, sa := range svcaccts {
+					rows = append(rows, []string{
+						sa.Id.String(),
+						uniqueColor(sa.AuthenticationType),
+						sa.Name,
+					})
+				}
+				printTable([]string{"Client ID", "Auth Type", "Service Account Name"}, rows)
+				return nil
+			case "id":
+				for _, sa := range svcaccts {
+					fmt.Println(sa.Id.String())
+				}
+				return nil
+			default:
+				return errutil.Fixable(fmt.Errorf("sa ls: invalid output format: %s", outputFormat))
+			}
+		},
+	}
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, table, id)")
+	return cmd
+}
+
 func saGenCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gen",
