@@ -61,6 +61,8 @@ Use -f/--raw-field to always send values as strings without conversion.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPI(cmd, opts, args[0])
 		},
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	cmd.Flags().StringVarP(&opts.method, "method", "X", "GET", "HTTP method")
@@ -85,10 +87,9 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		return fmt.Errorf("getting config: %w", err)
 	}
 
-	// Build request parameters
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 
-	// Process raw fields (strings only)
+	// Process raw fields (strings only).
 	for _, f := range opts.rawFields {
 		key, value, err := parseField(f)
 		if err != nil {
@@ -97,7 +98,7 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		params[key] = value
 	}
 
-	// Process magic fields (with type conversion)
+	// Process magic fields (with type conversion).
 	for _, f := range opts.magicFields {
 		key, strValue, err := parseField(f)
 		if err != nil {
@@ -110,7 +111,7 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		params[key] = value
 	}
 
-	// Auto-detect method if not explicitly set
+	// Auto-detect method if not explicitly set.
 	method := opts.method
 	if len(params) > 0 && !opts.methodPassed {
 		method = "POST"
@@ -174,7 +175,7 @@ func parseField(f string) (string, string, error) {
 // - Numeric strings become integers
 // - "true", "false", "null" become boolean or nil
 // - Everything else remains a string
-func magicFieldValue(v string) (interface{}, error) {
+func magicFieldValue(v string) (any, error) {
 	// File reading: @filename or @- for stdin
 	if strings.HasPrefix(v, "@") {
 		filename := v[1:]
@@ -212,14 +213,12 @@ func magicFieldValue(v string) (interface{}, error) {
 	return v, nil
 }
 
-// makeAPIRequest constructs and executes an HTTP request to the API.
-func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, params map[string]interface{}, headers []string) (*http.Response, error) {
-	// Normalize path: ensure it starts with /v1/.
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	if !strings.HasPrefix(path, "/v1/") {
-		// If path starts with / but not /v1/, insert v1.
+func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, params map[string]any, headers []string) (*http.Response, error) {
+	// The 'Server' field of the api.Client always has a trailing slash. Which
+	// means we need to remove any leading slash from 'path'. Also, since we
+	// allow the user to skip the leading '/v1/' part, we add it if missing.
+	path = strings.TrimPrefix(path, "/")
+	if !strings.HasPrefix(path, "v1/") {
 		if strings.HasPrefix(path, "/") {
 			path = "/v1" + path
 		}
@@ -244,8 +243,17 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, pa
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
+	// Since we aren't using the generated client's methods, we need to apply
+	// the request editors manually (for the tppl-api-key and user-agent
+	// headers, among others).
+	for i, edit := range cl.RequestEditors {
+		if err := edit(ctx, req); err != nil {
+			return nil, fmt.Errorf("applying request edit %d: %w", i, err)
+		}
+	}
+
 	if bodyIsJSON {
-		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+		req.Header.Set("Content-Type", "application/json")
 	}
 
 	for _, h := range headers {

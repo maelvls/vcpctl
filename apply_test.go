@@ -19,8 +19,9 @@ func Test_applyManifests(t *testing.T) {
 			"clientAuthentication.urls", []string{"http://original/jwks.json"}, // <- EXISTING
 
 			// Make sure that when patching WIMConfiguration, you can switch
-			// advancedSettings.enableIssuanceAuditLog from true to false (it used to not
-			// be possible due to 'omitzero').
+			// advancedSettings.enableIssuanceAuditLog from true to false (it used to
+			// not be possible due to 'omitzero'). Note that for slices and maps, this
+			// is not an issue thanks to Go's nil vs. empty slice/map distinction.
 			"advancedSettings.enableIssuanceAuditLog", true, // <- EXISTING
 		)
 		givenManifests := undent.Undent(`
@@ -69,10 +70,14 @@ func Test_applyManifests(t *testing.T) {
 		run(t, givenManifests, mock)
 	})
 
+	// (1) In these tests, we verify that booleans can be switched from true to
+	// false, and more generally, any value for which the zero value is a valid
+	// value, we need to make sure the patch "detects" it.
 	t.Run("WIMSubCA patching", func(t *testing.T) {
 		existingSubCA := with(sampleSubCA,
 			"subCAProvider.organizationalUnit", "FooBar", // <- EXISTING
 			"organizationalUnit", "Engineering", // <- EXISTING
+			"pkcs11.signingEnabled", true, // <- EXISTING, see (1)
 		)
 		givenManifests := undent.Undent(`
 			kind: WIMSubCAProvider
@@ -91,11 +96,12 @@ func Test_applyManifests(t *testing.T) {
 			  partitionLabel: ""
 			  partitionSerialNumber: ""
 			  pin: ""
-			  signingEnabled: false
+			  signingEnabled: false         # <- CHANGED, see (1)
 		`)
 		expectPatch := `{
 			"organizationalUnit":"Changed1",
-      "stateOrProvince":"Changed2"
+      "stateOrProvince":"Changed2",
+      "pkcs11":{"signingEnabled":false}
 		}`
 		mock := []mocksrv.Interaction{
 			{Expect: "GET /v1/certificateissuingtemplates", MockCode: 200, MockBody: `{"certificateIssuingTemplates": [` + sampleIssuingTemplate + `]}`},
@@ -152,14 +158,14 @@ func Test_applyManifests(t *testing.T) {
 
 	t.Run("ServiceAccount patching", func(t *testing.T) {
 		existingSA := with(sampleSA,
-			"enabled", false,
+			"enabled", true, // <- EXISTING
 		)
 		givenManifests := undent.Undent(`
       kind: ServiceAccount
       name: mael
       authenticationType: rsaKey
       credentialLifetime: 365
-      enabled: true              # <- CHANGED, DOES NOT WORK ❌
+      enabled: true              # <- CHANGED
       scopes:
         - distributed-issuance
     `)

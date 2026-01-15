@@ -264,7 +264,17 @@ func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (Conf
 	var smthChanged, fieldChanged bool
 	var err error
 
-	if desired.AdvancedSettings.EnableIssuanceAuditLog != existing.AdvancedSettings.EnableIssuanceAuditLog {
+	if existing.AdvancedSettings.EnableIssuanceAuditLog == nil {
+		return ConfigurationUpdateRequest{}, false, fmt.Errorf("diffToPatchConfig: somehow, the API didn't return the 'enableIssuanceAuditLog' field in the existing configuration, which is unexpected")
+	}
+	if existing.AdvancedSettings.IncludeRawCertDataInAuditLog == nil {
+		return ConfigurationUpdateRequest{}, false, fmt.Errorf("diffToPatchConfig: somehow, the API didn't return the 'includeRawCertDataInAuditLog' field in the existing configuration, which is unexpected")
+	}
+	if existing.AdvancedSettings.RequireFIPSCompliantBuild == nil {
+		return ConfigurationUpdateRequest{}, false, fmt.Errorf("diffToPatchConfig: somehow, the API didn't return the 'requireFIPSCompliantBuild' field in the existing configuration, which is unexpected")
+	}
+
+	if desired.AdvancedSettings.EnableIssuanceAuditLog != nil && *desired.AdvancedSettings.EnableIssuanceAuditLog != *existing.AdvancedSettings.EnableIssuanceAuditLog {
 		patch.AdvancedSettings.EnableIssuanceAuditLog = desired.AdvancedSettings.EnableIssuanceAuditLog
 		smthChanged = true
 	}
