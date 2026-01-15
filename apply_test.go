@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/maelvls/undent"
-	api "github.com/maelvls/vcpctl/internal/api"
+	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/mocksrv"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/sjson"

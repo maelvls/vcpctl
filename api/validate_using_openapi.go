@@ -1,16 +1,19 @@
-package main
+package api
 
 import (
 	"bytes"
-	_ "embed"
 	json "encoding/json/v2"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/goccy/go-yaml"
+	"github.com/maelvls/vcpctl/errutil"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	_ "embed"
 )
 
 //go:embed "genschema/schema.json"
@@ -22,7 +25,7 @@ var (
 	manifestSchemaErr  error
 )
 
-func validateManifestDocument(index int, kind string, manifestYAML []byte) error {
+func ValidateYAML(index int, kind string, manifestYAML []byte) error {
 	schema, err := compileManifestSchema()
 	if err != nil {
 		return fmt.Errorf("programmer mistake: %w", err)
@@ -78,7 +81,7 @@ func compileManifestSchema() (*jsonschema.Schema, error) {
 func formatManifestValidationError(index int, kind string, err error) error {
 	var validationErr *jsonschema.ValidationError
 	if !errors.As(err, &validationErr) {
-		return Fixable(fmt.Errorf("manifest #%d (%s): validating manifest with schema: %w", index, nonEmptyKind(kind), err))
+		return errutil.Fixable(fmt.Errorf("manifest #%d (%s): validating manifest with schema: %w", index, nonEmptyKind(kind), err))
 	}
 
 	var messages []string
@@ -88,11 +91,11 @@ func formatManifestValidationError(index int, kind string, err error) error {
 
 	switch len(messages) {
 	case 0:
-		return Fixable(fmt.Errorf("manifest #%d (%s): %s", index, nonEmptyKind(kind), validationErr.Error()))
+		return errutil.Fixable(fmt.Errorf("manifest #%d (%s): %s", index, nonEmptyKind(kind), validationErr.Error()))
 	case 1:
-		return Fixable(fmt.Errorf("manifest #%d (%s): %s", index, nonEmptyKind(kind), messages[0]))
+		return errutil.Fixable(fmt.Errorf("manifest #%d (%s): %s", index, nonEmptyKind(kind), messages[0]))
 	default:
-		return Fixable(fmt.Errorf("manifest #%d (%s):\n* %s", index, nonEmptyKind(kind), strings.Join(messages, "\n *")))
+		return errutil.Fixable(fmt.Errorf("manifest #%d (%s):\n* %s", index, nonEmptyKind(kind), strings.Join(messages, "\n *")))
 	}
 }
 
@@ -101,4 +104,19 @@ func nonEmptyKind(kind string) string {
 		return "unknown kind"
 	}
 	return kind
+}
+
+// The temp schema.json file needs to be removed manually when no longer needed.
+func SaveSchemaToWellKnownPath() (string, error) {
+	// Open the file /tmp/vcpctl.schema.json.
+	tmpSchemaFile, err := os.Create("/tmp/vcpctl.schema.json")
+	if err != nil {
+		return "", fmt.Errorf("while creating /tmp/vcpctl.schema.json so that it can be referenced from the YAML manifest and help you get squiggles in your editor: %w", err)
+	}
+	defer tmpSchemaFile.Close()
+
+	if _, err := tmpSchemaFile.Write(schemaJSON); err != nil {
+		return "", fmt.Errorf("while writing to /tmp/vcpctl.schema.json: %w", err)
+	}
+	return tmpSchemaFile.Name(), nil
 }

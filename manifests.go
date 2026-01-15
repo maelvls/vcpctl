@@ -7,9 +7,10 @@ import (
 	"io"
 
 	"github.com/goccy/go-yaml"
-	_ "github.com/maelvls/vcpctl/internal/api"
-	api "github.com/maelvls/vcpctl/internal/api"
-	manifest "github.com/maelvls/vcpctl/internal/manifest"
+	_ "github.com/maelvls/vcpctl/api"
+	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/errutil"
+	manifest "github.com/maelvls/vcpctl/manifest"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -52,7 +53,7 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 			if len(raw) == 0 {
 				continue
 			}
-			return nil, Fixable(fmt.Errorf("manifest #%d is missing the required 'kind' field", i+1))
+			return nil, errutil.Fixable(fmt.Errorf("manifest #%d is missing the required 'kind' field", i+1))
 		}
 
 		switch header.Kind {
@@ -86,15 +87,15 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 			}
 			manifests = append(manifests, manifest.Manifest{WIMConfiguration: &parsed.WIMConfiguration})
 		default:
-			return nil, Fixable(fmt.Errorf("manifest #%d has unsupported kind %q", i+1, header.Kind))
+			return nil, errutil.Fixable(fmt.Errorf("manifest #%d has unsupported kind %q", i+1, header.Kind))
 		}
 	}
 }
 
 func renderToManifests(
-	resolveSA func(openapi_types.UUID) (ServiceAccount, error),
+	resolveSA func(openapi_types.UUID) (api.ServiceAccountDetails, error),
 	resolveIssuingTemplates func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
-	cfg Config,
+	cfg api.ExtendedConfigurationInformation,
 ) (manifest.WIMConfiguration, []manifest.ServiceAccount, []manifest.Policy, manifest.SubCa, error) {
 	var wimConfig manifest.WIMConfiguration
 	wimConfig.SubCaProviderName = cfg.SubCaProvider.Name
@@ -128,9 +129,9 @@ func renderToManifests(
 }
 
 func renderToYAML(
-	resolveSA func(openapi_types.UUID) (ServiceAccount, error),
+	resolveSA func(openapi_types.UUID) (api.ServiceAccountDetails, error),
 	resolveIssuingTemplates func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
-	cfg Config,
+	cfg api.ExtendedConfigurationInformation,
 ) ([]byte, error) {
 	manifests := []manifest.Manifest{}
 

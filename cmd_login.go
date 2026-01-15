@@ -3,10 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
-	json "encoding/json/v2"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
@@ -15,7 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
-	api "github.com/maelvls/vcpctl/internal/api"
+	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -211,7 +210,7 @@ func loginCmd() *cobra.Command {
 					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
 				}
 				if apiKey == "" {
-					return Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
+					return errutil.Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
 				}
 
 				// Normalize the API URL.
@@ -224,7 +223,7 @@ func loginCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				resp, err := selfCheck(context.Background(), cl)
+				resp, err := api.SelfCheck(context.Background(), cl)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
 				}
@@ -260,7 +259,8 @@ func loginCmd() *cobra.Command {
 				return nil
 			}
 
-			// If the user provided a positional URL argument, use it instead of prompting
+			// If the user provided a positional URL argument, use it instead of
+			// prompting.
 			if len(args) > 0 {
 				tenantURL := args[0]
 
@@ -272,11 +272,11 @@ func loginCmd() *cobra.Command {
 
 				// Convert tenant URL to API URL.
 				httpCl := http.Client{Transport: api.LogTransport}
-				apiURLFromTenant, err := toAPIURL(httpCl, tenantURL)
+				apiURLFromTenant, err := api.GetAPIURLFromTenantURL(httpCl, tenantURL)
 				switch {
 				case err == nil:
 					// Success, continue below.
-				case errors.As(err, &NotFound{}):
+				case errors.As(err, &errutil.NotFound{}):
 					return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
 				default:
 					return fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
@@ -296,7 +296,7 @@ func loginCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("while creating API client: %w", err)
 					}
-					_, err = selfCheck(context.Background(), cl)
+					_, err = api.SelfCheck(context.Background(), cl)
 					if err != nil {
 						return fmt.Errorf("while checking the API key's validity: %w", err)
 					}
@@ -323,7 +323,7 @@ func loginCmd() *cobra.Command {
 							return fmt.Errorf("while creating API client: %w", err)
 						}
 
-						resp, err := selfCheck(context.Background(), cl)
+						resp, err := api.SelfCheck(context.Background(), cl)
 						if err != nil {
 							return err
 						}
@@ -359,7 +359,7 @@ func loginCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				_, err = selfCheck(context.Background(), cl)
+				_, err = api.SelfCheck(context.Background(), cl)
 				if err == nil {
 					fmt.Printf("\n%s\n\n", successStyle.Render("✓ You are already logged in to "+current.URL))
 
@@ -408,13 +408,13 @@ func loginCmd() *cobra.Command {
 					}
 
 					httpCl := http.Client{Transport: api.LogTransport}
-					apiURL, err := toAPIURL(httpCl, input)
+					apiURL, err := api.GetAPIURLFromTenantURL(httpCl, input)
 					switch {
 					case err == nil:
 						current.URL = input
 						current.APIURL = apiURL
 						return nil
-					case errors.As(err, &NotFound{}):
+					case errors.As(err, &errutil.NotFound{}):
 						return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", input)
 					default:
 						return fmt.Errorf("while getting API URL for tenant '%s': %w", input, err)
@@ -449,7 +449,7 @@ func loginCmd() *cobra.Command {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
 
-				resp, err := selfCheck(context.Background(), cl)
+				resp, err := api.SelfCheck(context.Background(), cl)
 				if err != nil {
 					return err
 				}
@@ -605,7 +605,7 @@ func switchCmd() *cobra.Command {
 		Short: "Switch to a different CyberArk Certificate Manager, SaaS tenant.",
 		Long: undent.Undent(`
 			Switch to a different CyberArk Certificate Manager, SaaS tenant. If the tenant is not specified,
-				you will be prompted to select one.
+			you will be prompted to select one.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -626,7 +626,7 @@ func switchCmd() *cobra.Command {
 						return saveCurrentTenant(auth)
 					}
 				}
-				return Fixable(fmt.Errorf("tenant '%s' not found in configuration. Please run `vcpctl login` to add it.", tenantURL))
+				return errutil.Fixable(fmt.Errorf("tenant '%s' not found in configuration. Please run `vcpctl login` to add it.", tenantURL))
 			}
 
 			// If no tenant URL is provided, we prompt the user to select one.
@@ -726,42 +726,7 @@ func toTenantID(cl http.Client, tenantName string) (apiURL, tenantID string, _ e
 		return apiURL, respJSON.CompanyID, nil
 	}
 
-	return "", "", NotFound{NameOrID: tenantName}
-}
-
-// Get the API URL for the given tenant URL.
-func toAPIURL(cl http.Client, tenantURL string) (string, error) {
-	url := fmt.Sprintf("%s/single-spa-root-config/baseEnvironment.json", tenantURL)
-	resp, err := cl.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		// Continue below.
-	case http.StatusNotFound:
-		return "", NotFound{NameOrID: tenantURL}
-	default:
-		return "", fmt.Errorf("unexpected status code %d while getting API URL for tenant '%s': %w", resp.StatusCode, tenantURL, parseJSONErrorOrDumpBody(resp))
-	}
-
-	var respJSON struct {
-		APIBaseURL string `json:"apiBaseUrl"`
-		UIHost     string `json:"uiHost"`
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("reading response body: %w", err)
-	}
-
-	if err := json.Unmarshal(body, &respJSON); err != nil {
-		return "", fmt.Errorf("while unmarshalling response body: %w", err)
-	}
-
-	return respJSON.APIBaseURL, nil
+	return "", "", errutil.NotFound{NameOrID: tenantName}
 }
 
 // resolveTenant resolves a tenant identifier (ID, domain, or URL) to an Auth entry

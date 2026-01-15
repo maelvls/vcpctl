@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/maelvls/vcpctl/internal/api"
+	api "github.com/maelvls/vcpctl/api"
 	"github.com/spf13/cobra"
 )
 

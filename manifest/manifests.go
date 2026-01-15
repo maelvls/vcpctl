@@ -1,6 +1,6 @@
 package manifest
 
-import "github.com/maelvls/vcpctl/internal/api"
+import "github.com/maelvls/vcpctl/api"
 
 type Manifest struct {
 	*WIMConfiguration

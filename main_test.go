@@ -8,8 +8,9 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
-	api "github.com/maelvls/vcpctl/internal/api"
-	"github.com/maelvls/vcpctl/internal/manifest"
+	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/errutil"
+	"github.com/maelvls/vcpctl/manifest"
 	"github.com/maelvls/vcpctl/mocksrv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -221,7 +222,7 @@ name: late
 
 func TestPatchConfig_OK(t *testing.T) {
 	id := "882e9e60-1937-45bb-b209-92d2b30928a6"
-	patch := ConfigPatch{
+	patch := api.ConfigurationUpdateRequest{
 		Name:          "demo",
 		MinTlsVersion: api.ConfigurationUpdateRequestMinTlsVersionTLS13,
 	}
@@ -237,7 +238,7 @@ func TestPatchConfig_OK(t *testing.T) {
 				Assert: func(t *testing.T, r *http.Request, body string) {
 					assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 					assert.Equal(t, "api-key", r.Header.Get("tppl-api-key"))
-					assert.Equal(t, userAgent, r.Header.Get("User-Agent"))
+					assert.Equal(t, "vcpctl/v0.0.1", r.Header.Get("User-Agent"))
 
 					var gotBody map[string]any
 					err := json.Unmarshal([]byte(body), &gotBody)
@@ -251,7 +252,7 @@ func TestPatchConfig_OK(t *testing.T) {
 		}, nil)
 
 		cl, _ := api.NewAPIKeyClient(server.URL, "api-key", api.WithHTTPClient(server.Client()))
-		_, err := patchConfig(context.Background(), cl, id, patch)
+		_, err := api.PatchConfig(context.Background(), cl, id, patch)
 		require.NoError(t, err)
 	})
 }
@@ -269,9 +270,9 @@ func TestPatchConfig_NotFound(t *testing.T) {
 		Server: server.URL,
 		Client: server.Client(),
 	}
-	_, err := patchConfig(context.Background(), cl, id, ConfigPatch{Name: "demo"})
+	_, err := api.PatchConfig(context.Background(), cl, id, api.ConfigurationUpdateRequest{Name: "demo"})
 	require.Error(t, err)
-	var notFound NotFound
+	var notFound errutil.NotFound
 	require.ErrorAs(t, err, &notFound)
 	require.Equal(t, id, notFound.NameOrID)
 	assert.Contains(t, err.Error(), "WIM configuration")
@@ -291,9 +292,9 @@ func TestPatchConfig_HTTPError(t *testing.T) {
 		Server: server.URL,
 		Client: server.Client(),
 	}
-	_, err := patchConfig(context.Background(), cl, id, ConfigPatch{Name: "demo"})
+	_, err := api.PatchConfig(context.Background(), cl, id, api.ConfigurationUpdateRequest{Name: "demo"})
 	require.Error(t, err)
-	var httpErr HTTPError
+	var httpErr api.HTTPError
 	require.ErrorAs(t, err, &httpErr)
 	require.Equal(t, http.StatusInternalServerError, httpErr.StatusCode)
 	assert.Contains(t, err.Error(), "patchConfig:")
@@ -315,7 +316,7 @@ policyNames: []
 `
 	_, err := parseManifests([]byte(single))
 	require.Error(t, err)
-	var fix FixableError
+	var fix errutil.FixableError
 	require.ErrorAs(t, err, &fix)
 	assert.Contains(t, err.Error(), "kind")
 }
