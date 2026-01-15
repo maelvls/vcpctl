@@ -188,12 +188,7 @@ func RemoveSubCaProvider(ctx context.Context, cl *Client, nameOrID string) error
 }
 
 func RemoveSubCaProviderByID(ctx context.Context, cl *Client, id string) error {
-	req, err := http.NewRequestWithContext(ctx, "DELETE", cl.Server+"/v1/distributedissuers/subcaproviders/"+id, nil)
-	if err != nil {
-		return fmt.Errorf("removeSubCaProvider: while creating request: %w", err)
-	}
-	// API key and user agent should be set by the client's request editors
-	resp, err := cl.Client.Do(req)
+	resp, err := cl.SubcaprovidersDelete(ctx, id)
 	if err != nil {
 		return fmt.Errorf("removeSubCaProvider: while making request: %w", err)
 	}

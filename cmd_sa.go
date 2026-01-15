@@ -552,7 +552,7 @@ func saGetCmd() *cobra.Command {
 			}
 			sa, err := api.GetServiceAccount(context.Background(), apiClient, saName)
 			if err != nil {
-				if errors.As(err, &errutil.NotFound{}) {
+				if errutil.ErrIsNotFound(err) {
 					return fmt.Errorf("sa get: service account '%s' not found", saName)
 				}
 				return fmt.Errorf("sa get: while getting service account by name: %w", err)

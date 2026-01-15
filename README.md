@@ -37,6 +37,14 @@ You can create (and update) a Workload Identity Manager configuration with:
 vcpctl apply -f test.yaml
 ```
 
+You can delete the resources declared in a manifest with:
+
+```bash
+vcpctl delete -f test.yaml
+```
+
+Use `--ignore-not-found` to skip missing resources without failing the command.
+
 > [!NOTE]
 >
 > The `apply` and `edit` commands expect a kubectl-style multi-document manifest. Declare

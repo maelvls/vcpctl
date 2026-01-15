@@ -1,0 +1,143 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/errutil"
+	"github.com/maelvls/vcpctl/logutil"
+	manifest "github.com/maelvls/vcpctl/manifest"
+)
+
+// deleteManifests walks through the provided manifests in reverse order and deletes each
+// resource from CyberArk Certificate Manager, SaaS. Note that the manifests order
+// matters.
+func deleteManifests(cl *api.Client, manifests []manifest.Manifest, ignoreNotFound bool) error {
+	if err := validateManifests(manifests); err != nil {
+		return fmt.Errorf("pre-flight validation failed: %w", err)
+	}
+
+	deleteCtx := newManifestDeleteContext(context.Background(), cl, ignoreNotFound)
+
+	for i := len(manifests) - 1; i >= 0; i-- {
+		item := manifests[i]
+		var err error
+		switch {
+		case item.ServiceAccount != nil:
+			err = deleteCtx.deleteServiceAccount(*item.ServiceAccount)
+		case item.Policy != nil:
+			err = deleteCtx.deletePolicy(*item.Policy)
+		case item.SubCa != nil:
+			err = deleteCtx.deleteSubCa(*item.SubCa)
+		case item.WIMConfiguration != nil:
+			err = deleteCtx.deleteConfig(*item.WIMConfiguration)
+		default:
+			err = fmt.Errorf("manifest #%d: empty or unknown manifest", i+1)
+		}
+
+		if err != nil {
+			logutil.Errorf("manifest #%d: %v", i+1, err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+type manifestDeleteContext struct {
+	client         *api.Client
+	ignoreNotFound bool
+}
+
+func newManifestDeleteContext(ctx context.Context, cl *api.Client, ignoreNotFound bool) *manifestDeleteContext {
+	return &manifestDeleteContext{
+		client:         cl,
+		ignoreNotFound: ignoreNotFound,
+	}
+}
+
+func (ctx *manifestDeleteContext) deleteServiceAccount(in manifest.ServiceAccount) error {
+	if in.Name == "" {
+		return fmt.Errorf("ServiceAccount: name must be set")
+	}
+
+	err := api.RemoveServiceAccount(context.Background(), ctx.client, in.Name)
+	switch {
+	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+		return nil
+	case errutil.ErrIsNotFound(err):
+		return fmt.Errorf("ServiceAccount %q not found", in.Name)
+	case err != nil:
+		return fmt.Errorf("ServiceAccount %q: %w", in.Name, err)
+	}
+
+	logutil.Infof("Deleted ServiceAccount '%s'.", in.Name)
+	return nil
+}
+
+func (ctx *manifestDeleteContext) deletePolicy(in manifest.Policy) error {
+	if in.Name == "" {
+		return fmt.Errorf("WIMIssuerPolicy: name must be set")
+	}
+
+	err := api.RemovePolicy(context.Background(), ctx.client, in.Name)
+	switch {
+	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+		return nil
+	case errutil.ErrIsNotFound(err):
+		return fmt.Errorf("WIMIssuerPolicy %q not found", in.Name)
+	case err != nil:
+		return fmt.Errorf("WIMIssuerPolicy %q: %w", in.Name, err)
+	}
+
+	logutil.Infof("Deleted WIMIssuerPolicy '%s'.", in.Name)
+	return nil
+}
+
+func (ctx *manifestDeleteContext) deleteSubCa(in manifest.SubCa) error {
+	if in.Name == "" {
+		return fmt.Errorf("WIMSubCAProvider: name must be set")
+	}
+
+	err := api.RemoveSubCaProvider(context.Background(), ctx.client, in.Name)
+	switch {
+	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+		return nil
+	case errutil.ErrIsNotFound(err):
+		return fmt.Errorf("WIMSubCAProvider %q not found", in.Name)
+	case err != nil:
+		return fmt.Errorf("WIMSubCAProvider %q: %w", in.Name, err)
+	}
+
+	logutil.Infof("Deleted WIMSubCAProvider '%s'.", in.Name)
+	return nil
+}
+
+func (ctx *manifestDeleteContext) deleteConfig(in manifest.WIMConfiguration) error {
+	if in.Name == "" {
+		return fmt.Errorf("WIMConfiguration: name must be set")
+	}
+
+	err := api.RemoveConfig(context.Background(), ctx.client, in.Name)
+	switch {
+	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+		return nil
+	case errutil.ErrIsNotFound(err):
+		return fmt.Errorf("WIMConfiguration %q not found", in.Name)
+	case err != nil:
+		return fmt.Errorf("WIMConfiguration %q: %w", in.Name, err)
+	}
+
+	logutil.Infof("Deleted WIMConfiguration '%s'.", in.Name)
+	return nil
+}
+
+func (ctx *manifestDeleteContext) shouldIgnoreNotFound(err error) bool {
+	if !ctx.ignoreNotFound {
+		return false
+	}
+	var notFound errutil.NotFound
+	return errors.As(err, &notFound)
+}

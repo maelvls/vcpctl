@@ -35,6 +35,7 @@ func main() {
 		Example: undent.Undent(`
 			vcpctl ls
 			vcpctl apply -f config.yaml
+			vcpctl delete -f config.yaml
 			vcpctl edit <config-name>
 			vcpctl get <config-name> > config.yaml
 			vcpctl attach-sa <config-name> --sa <sa-name>
@@ -69,6 +70,7 @@ func main() {
 		editCmd(),
 		attachSaCmd(),
 		applyCmd(),
+		deleteCmd(),
 		deprecatedPutCmd(),
 		confRmCmd(),
 		confGetCmd(),

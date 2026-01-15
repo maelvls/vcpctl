@@ -1,6 +1,13 @@
 package errutil
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+func ErrIsNotFound(err error) bool {
+	return errors.As(err, &NotFound{})
+}
 
 type NotFound struct {
 	NameOrID string `json:"id"`

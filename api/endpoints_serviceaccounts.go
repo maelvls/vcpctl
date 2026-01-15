@@ -150,11 +150,8 @@ func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccoun
 			return CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
 		}
 		ownerUUID := teams[0].Id
-		if err != nil {
-			return CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: while parsing the first team's ID '%s' as UUID: %w", teams[0].Id, err)
-		}
 
-		logutil.Infof("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].Id)
+		logutil.Infof("ServiceAccount: no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].Id)
 		desired.Owner = ownerUUID
 	}
 
