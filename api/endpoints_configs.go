@@ -264,25 +264,30 @@ func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (Conf
 	var smthChanged, fieldChanged bool
 	var err error
 
+	// The 'AdvancedSettingsInformation' struct is used for both GET and PATCH.
+	// However, for GET, a missing value should be interpreted as 'false' for
+	// boolean fields, whereas for PATCH, a missing value means 'do not change
+	// this field'. And since the 'existing' comes from GET, a nil value means
+	// 'false'.
 	if existing.AdvancedSettings.EnableIssuanceAuditLog == nil {
-		return ConfigurationUpdateRequest{}, false, fmt.Errorf("diffToPatchConfig: somehow, the API didn't return the 'enableIssuanceAuditLog' field in the existing configuration, which is unexpected")
+		existing.AdvancedSettings.EnableIssuanceAuditLog = ptr(false)
 	}
 	if existing.AdvancedSettings.IncludeRawCertDataInAuditLog == nil {
-		return ConfigurationUpdateRequest{}, false, fmt.Errorf("diffToPatchConfig: somehow, the API didn't return the 'includeRawCertDataInAuditLog' field in the existing configuration, which is unexpected")
+		existing.AdvancedSettings.IncludeRawCertDataInAuditLog = ptr(false)
 	}
 	if existing.AdvancedSettings.RequireFIPSCompliantBuild == nil {
-		return ConfigurationUpdateRequest{}, false, fmt.Errorf("diffToPatchConfig: somehow, the API didn't return the 'requireFIPSCompliantBuild' field in the existing configuration, which is unexpected")
+		existing.AdvancedSettings.RequireFIPSCompliantBuild = ptr(false)
 	}
 
 	if desired.AdvancedSettings.EnableIssuanceAuditLog != nil && *desired.AdvancedSettings.EnableIssuanceAuditLog != *existing.AdvancedSettings.EnableIssuanceAuditLog {
 		patch.AdvancedSettings.EnableIssuanceAuditLog = desired.AdvancedSettings.EnableIssuanceAuditLog
 		smthChanged = true
 	}
-	if desired.AdvancedSettings.IncludeRawCertDataInAuditLog != existing.AdvancedSettings.IncludeRawCertDataInAuditLog {
+	if desired.AdvancedSettings.IncludeRawCertDataInAuditLog != nil && *desired.AdvancedSettings.IncludeRawCertDataInAuditLog != *existing.AdvancedSettings.IncludeRawCertDataInAuditLog {
 		patch.AdvancedSettings.IncludeRawCertDataInAuditLog = desired.AdvancedSettings.IncludeRawCertDataInAuditLog
 		smthChanged = true
 	}
-	if desired.AdvancedSettings.RequireFIPSCompliantBuild != existing.AdvancedSettings.RequireFIPSCompliantBuild {
+	if desired.AdvancedSettings.RequireFIPSCompliantBuild != nil && *desired.AdvancedSettings.RequireFIPSCompliantBuild != *existing.AdvancedSettings.RequireFIPSCompliantBuild {
 		patch.AdvancedSettings.RequireFIPSCompliantBuild = desired.AdvancedSettings.RequireFIPSCompliantBuild
 		smthChanged = true
 	}
@@ -365,6 +370,10 @@ func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (Conf
 	}
 
 	return patch, smthChanged, nil
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
 
 func DiffToPatchCloudProviders(existing, desired CloudProvidersInformation) (CloudProvidersInformation, bool) {
