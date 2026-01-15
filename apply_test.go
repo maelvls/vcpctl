@@ -2,48 +2,46 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
-	"github.com/maelvls/undent"
+	"github.com/goccy/go-yaml"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/mocksrv"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/sjson"
 )
 
-func Test_applyManifests(t *testing.T) {
-	t.Run("WIMConfiguration patching", func(t *testing.T) {
-		existingConf := with(sampleConfig,
-			"clientAuthentication.type", "JWT_JWKS", // <- EXISTING
-			"clientAuthentication.urls", []string{"http://original/jwks.json"}, // <- EXISTING
+// Among other things, these unit tests aim to make sure that booleans can be
+// swithched from true to false, such as WIMConfiguration's
+// advancedSettings.enableIssuanceAuditLog. It used to not be possible due to
+// 'omitzero', and was fixed by making the API objects nilable. Note that for
+// slices and maps, this is not an issue thanks to Go's nil vs. empty slice/map
+// distinction.
+func Test_applyManifests_WIMConfiguration(t *testing.T) {
+	t.Run("no changes", testPatchWIMConfiguration(testPatch_tc{
+		existing:    sampleConfig,
+		desired:     sampleWIMConfiguration,
+		expectPatch: `{}`,
+	}))
 
-			// Make sure that when patching WIMConfiguration, you can switch
-			// advancedSettings.enableIssuanceAuditLog from true to false (it used to
-			// not be possible due to 'omitzero'). Note that for slices and maps, this
-			// is not an issue thanks to Go's nil vs. empty slice/map distinction.
-			"advancedSettings.enableIssuanceAuditLog", true, // <- EXISTING
-		)
-		givenManifests := undent.Undent(`
-			kind: WIMConfiguration
-			name: mael
-			subCaProviderName: mael
-			clientAuthentication:
-			  type: JWT_STANDARD_CLAIMS                      # <- CHANGED
-			  clients:                                       # <- CHANGED
-			    - name: client1                              # <- CHANGED
-			      issuer: https://issuer.example.com         # <- CHANGED
-			      jwksURI: http://changed/jwks.json          # <- CHANGED
-			      subjects: [test]                           # <- CHANGED
-			      allowedPolicies:                           # <- CHANGED
-			        - ce32c0b7-b3f4-4718-a825-1e6f5b1bf681   # <- CHANGED
-			cloudProviders: {}
-			minTlsVersion: TLS13
-			advancedSettings:
-			  enableIssuanceAuditLog: false                  # <- CHANGED
-		`)
-		expectPatch := `{
-			"advancedSettings":{"enableIssuanceAuditLog":false},
+	t.Run("can set clientAuthentication", testPatchWIMConfiguration(testPatch_tc{
+		existing: withJSON(sampleConfig,
+			"clientAuthentication.type", "JWT_JWKS",
+			"clientAuthentication.urls", []string{"http://localhost:8000/.well-known/jwks.json"},
+		),
+		desired: withYAML(sampleWIMConfiguration,
+			"clientAuthentication.type", "JWT_STANDARD_CLAIMS",
+			"clientAuthentication.clients", []map[string]any{{
+				"name":            "client1",
+				"issuer":          "https://issuer.example.com",
+				"jwksURI":         "http://changed/jwks.json",
+				"subjects":        []string{"test"},
+				"allowedPolicies": []string{"d7a09670-9de6-11f0-b18d-1b1c0845fa26"},
+			}},
+		),
+		expectPatch: `{
 			"clientAuthentication":{
 				"type":"JWT_STANDARD_CLAIMS",
 				"clients":[{
@@ -52,146 +50,130 @@ func Test_applyManifests(t *testing.T) {
 				  "jwksUri":"http://changed/jwks.json",
 				  "subjects":["test"],
 				  "allowedPolicyIds":["d7a09670-9de6-11f0-b18d-1b1c0845fa26"]
-				}]
+        }]
 			}
-		}`
-		mock := []mocksrv.Interaction{
-			{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + sampleSubCA + `]}`},
-			{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + sampleSubCA + `]}`},
-			{Expect: "GET /v1/distributedissuers/policies/ce32c0b7-b3f4-4718-a825-1e6f5b1bf681", MockCode: 200, MockBody: samplePolicy},
-			{Expect: "GET /v1/distributedissuers/configurations", MockCode: 200, MockBody: `{"configurations": [` + existingConf + `]}`},
-			{Expect: "PATCH /v1/distributedissuers/configurations/d867b700-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200,
-				MockBody: `{"configurations": [` + existingConf + `]}`,
-				Assert: func(t *testing.T, r *http.Request, gotBody string) {
-					require.JSONEq(t, expectPatch, gotBody)
-				},
-			},
-		}
-		run(t, givenManifests, mock)
-	})
+		}`}))
 
-	// (1) In these tests, we verify that booleans can be switched from true to
-	// false, and more generally, any value for which the zero value is a valid
-	// value, we need to make sure the patch "detects" it.
-	t.Run("WIMSubCA patching", func(t *testing.T) {
-		existingSubCA := with(sampleSubCA,
-			"subCAProvider.organizationalUnit", "FooBar", // <- EXISTING
-			"organizationalUnit", "Engineering", // <- EXISTING
-			"pkcs11.signingEnabled", true, // <- EXISTING, see (1)
-		)
-		givenManifests := undent.Undent(`
-			kind: WIMSubCAProvider
-			name: mael
-			issuingTemplateName: Default
-			validityPeriod: P90D
-			commonName: mael
-			organization: foo
-			country: France
-			locality: Toulouse
-			organizationalUnit: Changed1		# <- CHANGED
-			stateOrProvince: Changed2		    # <- CHANGED
-			keyAlgorithm: EC_P256
-			pkcs11:
-			  allowedClientLibraries: []
-			  partitionLabel: ""
-			  partitionSerialNumber: ""
-			  pin: ""
-			  signingEnabled: false         # <- CHANGED, see (1)
-		`)
-		expectPatch := `{
-			"organizationalUnit":"Changed1",
-      "stateOrProvince":"Changed2",
-      "pkcs11":{"signingEnabled":false}
-		}`
-		mock := []mocksrv.Interaction{
-			{Expect: "GET /v1/certificateissuingtemplates", MockCode: 200, MockBody: `{"certificateIssuingTemplates": [` + sampleIssuingTemplate + `]}`},
-			{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + existingSubCA + `]}`},
-			{Expect: "PATCH /v1/distributedissuers/subcaproviders/d7f211d0-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200,
-				MockBody: `{"subCaProviders": [` + existingSubCA + `]}`,
-				Assert: func(t *testing.T, r *http.Request, gotBody string) {
-					require.JSONEq(t, expectPatch, gotBody)
-				},
-			},
-		}
-		run(t, givenManifests, mock)
-	})
+	t.Run("can switch from true to false", testPatchWIMConfiguration(testPatch_tc{
+		existing:    withJSON(sampleConfig, "advancedSettings.enableIssuanceAuditLog", true),
+		desired:     withYAML(sampleWIMConfiguration, "advancedSettings.enableIssuanceAuditLog", false),
+		expectPatch: `{"advancedSettings": {"enableIssuanceAuditLog": false}}`,
+	}))
 
-	t.Run("WIMIssuerPolicy patching", func(t *testing.T) {
-		existingPolicy := with(samplePolicy,
-			"subject.commonName.type", "REQUIRED", // <- EXISTING
-			"subject.commonName.minOccurrences", 1, // <- EXISTING
-			"subject.commonName.maxOccurrences", 5, // <- EXISTING
-		)
-		givenManifests := undent.Undent(`
-      kind: WIMIssuerPolicy
-      name: mael
-      validityPeriod: P90D
-      subject:
-        commonName: { type: OPTIONAL, minOccurrences: 0, maxOccurrences: 5 }        # <- CHANGED
-      keyUsages:
-        - digitalSignature
-      extendedKeyUsages:
-        - ANY
-      keyAlgorithm:
-        allowedValues:
-          - EC_P256
-        defaultValue: EC_P256
-    `)
-		expectPatch := `{"subject":{"commonName":{"allowedValues":null,"defaultValues":null,"maxOccurrences":5,"minOccurrences":0,"type":"OPTIONAL"}}}`
-
-		// Note that the logic for checking these fields ('type', 'maxOccurrences',
-		// etc) does not show any explanation whenever an error is found. The only
-		// way to know what the problem is is to look at the backend code...
-		// See: https://gitlab.com/venafi/vaas/applications/tls-protect/outage/-/blob/master/vcamanagement-service/src/main/java/com/venafi/condor/vcamanagement/web/v1/resource/VenafiCaIssuerPoliciesResourceV1.java#L545
-
-		mock := []mocksrv.Interaction{
-			{Expect: "GET /v1/distributedissuers/policies", MockCode: 200, MockBody: `{"policies": [` + existingPolicy + `]}`},
-			{Expect: "PATCH /v1/distributedissuers/policies/d7a09670-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200,
-				MockBody: `{"policies": [` + existingPolicy + `]}`,
-				Assert: func(t *testing.T, r *http.Request, gotBody string) {
-					require.Equal(t, expectPatch, gotBody)
-				},
-			},
-		}
-		run(t, givenManifests, mock)
-	})
-
-	t.Run("ServiceAccount patching", func(t *testing.T) {
-		existingSA := with(sampleSA,
-			"enabled", true, // <- EXISTING
-		)
-		givenManifests := undent.Undent(`
-      kind: ServiceAccount
-      name: mael
-      authenticationType: rsaKey
-      credentialLifetime: 365
-      enabled: true              # <- CHANGED
-      scopes:
-        - distributed-issuance
-    `)
-		expectPatch := `{
-      "owner": "d2508300-3705-11ee-a17b-69a77fb429d7", "scopes": ["distributed-issuance"]
-    }`
-		mock := []mocksrv.Interaction{
-			{Expect: "GET /v1/serviceaccounts", MockCode: 200, MockBody: `[` + existingSA + `]`},
-			{Expect: "GET /v1/teams", MockCode: 200, MockBody: `{"teams": [` + sampleTeam + `]}`},
-			{Expect: "PATCH /v1/serviceaccounts/d46f1f0d-299f-11ef-a8ac-2ea42f30fe31", MockCode: 200,
-				MockBody: existingSA,
-				Assert: func(t *testing.T, r *http.Request, gotBody string) {
-					require.JSONEq(t, expectPatch, gotBody)
-				},
-			},
-			{Expect: "GET /v1/serviceaccounts", MockCode: 200, MockBody: `[` + existingSA + `]`},
-		}
-		run(t, givenManifests, mock)
-	})
+	t.Run("can switch from false to true", testPatchWIMConfiguration(testPatch_tc{
+		existing:    withJSON(sampleConfig, "advancedSettings.enableIssuanceAuditLog", false),
+		desired:     withYAML(sampleWIMConfiguration, "advancedSettings.enableIssuanceAuditLog", true),
+		expectPatch: `{"advancedSettings": {"enableIssuanceAuditLog": true}}`,
+	}))
 
 }
+
+var testPatchWIMConfiguration = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+	return []mocksrv.Interaction{
+		{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + sampleAPISubCA + `]}`},
+		{Expect: "GET /v1/distributedissuers/policies/d7a09670-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200, MockBody: sampleAPIPolicy},
+		{Expect: "GET /v1/distributedissuers/configurations", MockCode: 200, MockBody: `{"configurations": [` + existing + `]}`},
+		{Expect: "PATCH /v1/distributedissuers/configurations/d867b700-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200, MockBody: existing, Assert: func(t *testing.T, r *http.Request, gotBody string) {
+			require.JSONEq(t, expectedPatch, gotBody)
+		}},
+	}
+})
+
+func Test_applyManifests_WIMSubCA(t *testing.T) {
+	t.Run("no changes", testPatchSubCA(testPatch_tc{
+		existing:    sampleAPISubCA,
+		desired:     sampleManifestSubCA,
+		expectPatch: `{}`,
+	}))
+
+	t.Run("pkcs11.signingEnabled can be switched from true to false", testPatchSubCA(testPatch_tc{
+		existing:    withJSON(sampleAPISubCA, "pkcs11.signingEnabled", true),
+		desired:     withYAML(sampleManifestSubCA, "pkcs11.signingEnabled", false),
+		expectPatch: `{"pkcs11":{"signingEnabled":false}}`,
+	}))
+}
+
+var testPatchSubCA = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+	return []mocksrv.Interaction{
+		{Expect: "GET /v1/certificateissuingtemplates", MockCode: 200, MockBody: `{"certificateIssuingTemplates": [` + sampleIssuingTemplate + `]}`},
+		{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + existing + `]}`},
+		{Expect: "PATCH /v1/distributedissuers/subcaproviders/d7f211d0-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200,
+			MockBody: `{"subCaProviders": [` + existing + `]}`,
+			Assert: func(t *testing.T, r *http.Request, gotBody string) {
+				require.JSONEq(t, expectedPatch, gotBody)
+			},
+		},
+	}
+})
+
+func Test_applyManifests_WIMIssuerPolicy(t *testing.T) {
+	t.Run("no changes", testPatchWIMIssuerPolicy(testPatch_tc{
+		existing: sampleAPIPolicy,
+		desired:  sampleManifestPolicy,
+		// TODO: the patch doesn't match ⚠️⚠️
+		expectPatch: `{}`,
+	}))
+
+	t.Run("can change minOccurrences", testPatchWIMIssuerPolicy(testPatch_tc{
+		existing: withJSON(sampleAPIPolicy,
+			"subject.commonName.type", "REQUIRED",
+			"subject.commonName.minOccurrences", 1,
+			"subject.commonName.maxOccurrences", 5,
+		),
+		desired: withYAML(sampleManifestPolicy,
+			"subject.commonName.type", "OPTIONAL",
+			"subject.commonName.minOccurrences", 0,
+		),
+		expectPatch: `{"subject":{"commonName":{"allowedValues":null,"defaultValues":null,"maxOccurrences":10,"minOccurrences":0,"type":"OPTIONAL"}}}`,
+		// TODO: desired doesn't say any maxOccurrences change, but the patch says maxOccurrences=10 ⚠️⚠️
+	}))
+}
+
+var testPatchWIMIssuerPolicy = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+	return []mocksrv.Interaction{
+		{Expect: "GET /v1/distributedissuers/policies", MockCode: 200, MockBody: `{"policies": [` + existing + `]}`},
+		{Expect: "PATCH /v1/distributedissuers/policies/d7a09670-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200,
+			MockBody: `{"policies": [` + existing + `]}`,
+			Assert: func(t *testing.T, r *http.Request, gotBody string) {
+				require.Equal(t, expectedPatch, gotBody)
+			},
+		},
+	}
+})
+
+func Test_applyManifests_ServiceAccount(t *testing.T) {
+	t.Run("no changes", testPatchServiceAccount(testPatch_tc{
+		existing: sampleSA,
+		desired:  sampleManifestSA,
+		// TODO: the patch doesn't match ⚠️⚠️
+		expectPatch: `{"owner":"d2508300-3705-11ee-a17b-69a77fb429d7", "scopes":["distributed-issuance"]}`,
+	}))
+
+	t.Run("can change enabled from false to true", testPatchServiceAccount(testPatch_tc{
+		existing: withJSON(sampleSA, "enabled", true),
+		desired:  withYAML(sampleManifestSA, "enabled", false),
+		// TODO: the patch doesn't match ⚠️⚠️
+		expectPatch: `{"owner":"d2508300-3705-11ee-a17b-69a77fb429d7", "scopes":["distributed-issuance"]}`,
+	}))
+}
+
+var testPatchServiceAccount = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+	return []mocksrv.Interaction{
+		{Expect: "GET /v1/serviceaccounts", MockCode: 200, MockBody: `[` + existing + `]`},
+		{Expect: "GET /v1/teams", MockCode: 200, MockBody: `{"teams": [` + sampleTeam + `]}`},
+		{Expect: "PATCH /v1/serviceaccounts/d46f1f0d-299f-11ef-a8ac-2ea42f30fe31", MockCode: 200,
+			MockBody: existing,
+			Assert: func(t *testing.T, r *http.Request, gotBody string) {
+				require.JSONEq(t, expectedPatch, gotBody)
+			},
+		},
+	}
+})
 
 func run(t *testing.T, givenManifests string, mock []mocksrv.Interaction) {
 	_, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
-	srv := mocksrv.Mock(t, mock, cancel)
+	srv := mocksrv.UncheckedMock(t, mock, cancel)
 
 	manifests, err := parseManifests([]byte(givenManifests))
 	require.NoError(t, err)
@@ -323,7 +305,7 @@ var sampleConfig = `
 }
 `
 
-var sampleSubCA = `
+var sampleAPISubCA = `
 {
   "id": "d7f211d0-9de6-11f0-b18d-1b1c0845fa26",
   "companyId": "19e21c57-8250-449a-a792-04d2007c7fa5",
@@ -350,7 +332,7 @@ var sampleSubCA = `
 }
 `
 
-var samplePolicy = `
+var sampleAPIPolicy = `
 {
   "id": "d7a09670-9de6-11f0-b18d-1b1c0845fa26",
   "companyId": "04a2be00-8d4e-4b64-81a0-f5083f92dda0",
@@ -411,27 +393,6 @@ var samplePolicy = `
   ]
 }
 `
-
-// You can have multiple modifications in a single with() call by passing a
-// slice of [path, value] pairs. Example:
-//
-//	modified := with(originalJSON,
-//	  "foo.bar", 42,
-//	  "baz.qux", "hello",
-//	)
-func with(jsonStr string, pathAndValue ...any) string {
-	if len(pathAndValue)%2 != 0 {
-		panic("with: pathAndValue must have even length")
-	}
-	for i := 0; i < len(pathAndValue); i += 2 {
-		var err error
-		jsonStr, err = sjson.Set(jsonStr, pathAndValue[i].(string), pathAndValue[i+1])
-		if err != nil {
-			panic(err)
-		}
-	}
-	return jsonStr
-}
 
 var sampleSA = `
 {
@@ -506,3 +467,115 @@ var sampleIssuingTemplate = `
   "locationId": "c0f2c691-ab9b-11ed-bfed-b3b2b59a7f20"
 }
 `
+
+var sampleWIMConfiguration = `
+kind: WIMConfiguration
+name: mael
+subCaProviderName: mael
+clientAuthentication:
+  type: JWT_JWKS
+  urls:
+    - http://localhost:8000/.well-known/jwks.json
+cloudProviders: {}
+minTlsVersion: TLS13
+advancedSettings:
+  enableIssuanceAuditLog: true
+`
+
+var sampleManifestSA = `
+kind: ServiceAccount
+name: mael
+authenticationType: rsaKey
+credentialLifetime: 365
+enabled: true
+scopes:
+  - distributed-issuance
+`
+var sampleManifestSubCA = `
+kind: WIMSubCAProvider
+name: mael
+issuingTemplateName: Default
+validityPeriod: P90D
+commonName: mael
+organization: foo
+country: France
+locality: Toulouse
+organizationalUnit: Engineering
+stateOrProvince: Occitanie
+keyAlgorithm: EC_P256
+pkcs11:
+  allowedClientLibraries: []
+  partitionLabel: ""
+  partitionSerialNumber: ""
+  pin: ""
+  signingEnabled: true
+`
+
+var sampleManifestPolicy = `
+kind: WIMIssuerPolicy
+name: mael
+validityPeriod: P90D
+subject:
+  commonName: { type: OPTIONAL, minOccurrences: 0, maxOccurrences: 10 }
+keyUsages:
+  - digitalSignature
+extendedKeyUsages:
+  - ANY
+keyAlgorithm:
+  allowedValues:
+    - EC_P256
+  defaultValue: EC_P256
+`
+
+// You can have multiple modifications in a single withYAML() call by passing a
+// slice of [path, value] pairs. Example:
+//
+//	modified := withYAML(yamlStr,
+//	  "foo.bar", 42,
+//	  "baz.qux", "hello",
+//	)
+func withYAML(yamlOrJSONStr string, changes ...any) string {
+	jsonBytes, err := yaml.YAMLToJSON([]byte(yamlOrJSONStr))
+	if err != nil {
+		panic(fmt.Sprintf("yaml to json: %v", err))
+	}
+	jsonStr := withJSON(string(jsonBytes), changes...)
+	yamlOutput, err := yaml.JSONToYAML([]byte(jsonStr))
+	if err != nil {
+		panic(fmt.Sprintf("json to yaml: %v", err))
+	}
+	return string(yamlOutput)
+}
+
+func withJSON(jsonStr string, changes ...any) string {
+	if len(changes)%2 != 0 {
+		panic("with(): changes must be in pairs of [path, value]")
+	}
+	jsonBytes := []byte(jsonStr)
+
+	var err error
+	for i := 0; i < len(changes); i += 2 {
+		jsonBytes, err = sjson.SetBytes(jsonBytes, changes[i].(string), changes[i+1])
+		if err != nil {
+			panic(fmt.Sprintf("sjson set: %v", err))
+		}
+	}
+
+	return string(jsonBytes)
+}
+
+func testPatchFn(mock func(existing, expectedPatch string) []mocksrv.Interaction) func(tc testPatch_tc) func(t *testing.T) {
+	return func(tc testPatch_tc) func(t *testing.T) {
+		return func(t *testing.T) {
+			mock := mock(tc.existing, tc.expectPatch)
+			run(t, tc.desired, mock)
+		}
+	}
+}
+
+type testPatch_tc struct {
+	name        string
+	existing    string
+	desired     string
+	expectPatch string
+}

@@ -234,7 +234,7 @@ func TestPatchConfig_OK(t *testing.T) {
 			{
 				Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id),
 				MockCode: http.StatusOK,
-				MockBody: with(sampleConfig, "id", id),
+				MockBody: withJSON(sampleConfig, "id", id),
 				Assert: func(t *testing.T, r *http.Request, body string) {
 					assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 					assert.Equal(t, "api-key", r.Header.Get("tppl-api-key"))

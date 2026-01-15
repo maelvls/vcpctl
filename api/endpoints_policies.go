@@ -483,8 +483,10 @@ func DiffToPatchPropertyInformation(existing, desired PropertyInformation) (Prop
 	return patch, changed, nil
 }
 
-// The backend message isn't informative enough, so let's have a quick
-// validation here to avoid these confusing error messages.
+// Note that the logic for checking these fields ('type', 'maxOccurrences', etc)
+// does not show any explanation whenever an error is found. The only way to
+// know what the problem is is to look at the backend code... See:
+// https://gitlab.com/venafi/vaas/applications/tls-protect/outage/-/blob/master/vcamanagement-service/src/main/java/com/venafi/condor/vcamanagement/web/v1/resource/VenafiCaIssuerPoliciesResourceV1.java#L545
 func validatePropertyInformation(pi PropertyInformation) error {
 	if pi.Type == "" &&
 		pi.MinOccurrences == 0 &&

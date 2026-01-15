@@ -18,6 +18,7 @@ func deleteManifests(cl *api.Client, manifests []manifest.Manifest, ignoreNotFou
 	if err := validateManifests(manifests); err != nil {
 		return fmt.Errorf("pre-flight validation failed: %w", err)
 	}
+	lastErr := error(nil)
 
 	deleteCtx := newManifestDeleteContext(context.Background(), cl, ignoreNotFound)
 
@@ -39,11 +40,15 @@ func deleteManifests(cl *api.Client, manifests []manifest.Manifest, ignoreNotFou
 
 		if err != nil {
 			logutil.Errorf("manifest #%d: %v", i+1, err)
+			lastErr = err
 			continue
 		}
 	}
 
-	return nil
+	if lastErr != nil {
+		return fmt.Errorf("one or more manifests failed to delete")
+	}
+	return lastErr
 }
 
 type manifestDeleteContext struct {

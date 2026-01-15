@@ -86,7 +86,7 @@ func Mock(t *testing.T, mock []Interaction, cancel func(error)) *httptest.Server
 	return server
 }
 
-func UnorderedMock(t *testing.T, mock []Interaction, cancel func(error)) *httptest.Server {
+func UncheckedMock(t *testing.T, mock []Interaction, cancel func(error)) *httptest.Server {
 	t.Helper()
 
 	handler := func(w http.ResponseWriter, r *http.Request) {

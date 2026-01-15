@@ -49,7 +49,7 @@ func GetConfig(ctx context.Context, cl *Client, nameOrID string) (ExtendedConfig
 
 	confs, err := GetConfigs(ctx, cl)
 	if err != nil {
-		return ExtendedConfigurationInformation{}, fmt.Errorf("getConfigByName:urations: %w", err)
+		return ExtendedConfigurationInformation{}, fmt.Errorf("getConfigByName: while fetching all configurations: %w", err)
 	}
 
 	// We need to error out if duplicate names are found.
