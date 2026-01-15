@@ -36,21 +36,20 @@ type Auth struct {
 	TenantID string `json:"tenantID"` // The tenant ID (company ID)
 }
 
-// Styles for prompts
+// Styles for prompts.
 var (
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
 	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
-// promptYesNo prompts for a yes/no answer
 func promptYesNo(question string) (bool, error) {
 	fmt.Printf("%s %s: ", question, subtleStyle.Render("(y/n)"))
 
-	// Try to set raw mode for immediate single-character input
+	// Try to set raw mode for immediate single-character input.
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
-		// Fallback to line-based input if raw mode not available
+		// Fallback to line-based input if raw mode not available.
 		reader := bufio.NewReader(os.Stdin)
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -67,7 +66,7 @@ func promptYesNo(question string) (bool, error) {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	// Read single character without waiting for Enter
+	// Read single character without waiting for Enter.
 	for {
 		var buf [1]byte
 		_, err = os.Stdin.Read(buf[:])
@@ -85,11 +84,11 @@ func promptYesNo(question string) (bool, error) {
 			fmt.Println("n")
 			return false, nil
 		}
-		// Invalid input - continue reading without error message for better UX
+		// Invalid input; let's continue reading without showing an error
+		// message for better UX.
 	}
 }
 
-// promptString prompts for a string with optional validation
 func promptString(prompt string, validate func(string) error) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -109,7 +108,6 @@ func promptString(prompt string, validate func(string) error) (string, error) {
 	}
 }
 
-// promptSelect displays a numbered list and prompts for selection
 func promptSelect(title string, items []string) (int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println(title)
@@ -194,8 +192,6 @@ func loginCmd() *cobra.Command {
 			vcpctl login --api-url https://api.venafi.cloud --api-key <key>
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
-
 			// Check for conflicts between positional URL argument and --api-url flag or env vars
 			if len(args) > 0 {
 				if apiURL != "" {
@@ -224,12 +220,7 @@ func loginCmd() *cobra.Command {
 					apiURL = "https://" + apiURL
 				}
 
-				cl, err := api.NewClient(
-					apiURL,
-					api.WithHTTPClient(&cl),
-					api.WithTpplAPIKey(apiKey),
-					api.WithUserAgent(),
-				)
+				cl, err := api.NewAPIKeyClient(apiURL, apiKey)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
@@ -273,17 +264,18 @@ func loginCmd() *cobra.Command {
 			if len(args) > 0 {
 				tenantURL := args[0]
 
-				// Normalize tenant URL
+				// Normalize tenant URL.
 				tenantURL = strings.TrimRight(tenantURL, "/")
 				if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
 					tenantURL = "https://" + tenantURL
 				}
 
-				// Convert tenant URL to API URL
-				apiURLFromTenant, err := toAPIURL(cl, tenantURL)
+				// Convert tenant URL to API URL.
+				httpCl := http.Client{Transport: api.LogTransport}
+				apiURLFromTenant, err := toAPIURL(httpCl, tenantURL)
 				switch {
 				case err == nil:
-					// Success
+					// Success, continue below.
 				case errors.As(err, &NotFound{}):
 					return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
 				default:
@@ -295,17 +287,12 @@ func loginCmd() *cobra.Command {
 					APIURL: apiURLFromTenant,
 				}
 
-				// If --api-key was provided, use it; otherwise prompt for it
+				// If --api-key was provided, use it; otherwise prompt for it.
 				if apiKey != "" {
 					current.APIKey = apiKey
 
-					// Validate the API key
-					cl, err := api.NewClient(
-						current.APIURL,
-						api.WithHTTPClient(&cl),
-						api.WithTpplAPIKey(current.APIKey),
-						api.WithUserAgent(),
-					)
+					// Validate the API key.
+					cl, err := api.NewAPIKeyClient(current.APIURL, current.APIKey)
 					if err != nil {
 						return fmt.Errorf("while creating API client: %w", err)
 					}
@@ -314,7 +301,7 @@ func loginCmd() *cobra.Command {
 						return fmt.Errorf("while checking the API key's validity: %w", err)
 					}
 				} else {
-					// Prompt for API key
+					// Prompt for API key.
 					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.URL + "/platform-settings/user-preferences?key=api-keys"))
 					fmt.Println()
 
@@ -322,19 +309,16 @@ func loginCmd() *cobra.Command {
 						if input == "" {
 							return fmt.Errorf("API key cannot be empty")
 						}
-						if strings.TrimSpace(input) != input {
-							return fmt.Errorf("API key cannot contain leading or trailing spaces")
-						}
+
+						// Remove extraneous spaces before and after the user's
+						// input for convenience.
+						input = strings.TrimSpace(input)
+
 						if len(input) != 36 {
 							return fmt.Errorf("API key must be 36 characters long")
 						}
 
-						cl, err := api.NewClient(
-							current.APIURL,
-							api.WithHTTPClient(&cl),
-							api.WithTpplAPIKey(current.APIKey),
-							api.WithUserAgent(),
-						)
+						cl, err := api.NewAPIKeyClient(current.APIURL, input)
 						if err != nil {
 							return fmt.Errorf("while creating API client: %w", err)
 						}
@@ -371,12 +355,7 @@ func loginCmd() *cobra.Command {
 			// Let the user know if they are already authenticated.
 			skipTenantPrompt := false
 			if current.URL != "" {
-				cl, err := api.NewClient(
-					current.APIURL,
-					api.WithHTTPClient(&cl),
-					api.WithTpplAPIKey(current.APIKey),
-					api.WithUserAgent(),
-				)
+				cl, err := api.NewAPIKeyClient(current.APIURL, current.APIKey)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
@@ -428,7 +407,8 @@ func loginCmd() *cobra.Command {
 						input = "https://" + input
 					}
 
-					apiURL, err := toAPIURL(cl, input)
+					httpCl := http.Client{Transport: api.LogTransport}
+					apiURL, err := toAPIURL(httpCl, input)
 					switch {
 					case err == nil:
 						current.URL = input
@@ -447,7 +427,7 @@ func loginCmd() *cobra.Command {
 				fmt.Println()
 			}
 
-			// Prompt for API Key
+			// Prompt for API Key.
 			fmt.Println(subtleStyle.Render("To get the API key, open: " + current.URL + "/platform-settings/user-preferences?key=api-keys"))
 			fmt.Println()
 
@@ -455,21 +435,20 @@ func loginCmd() *cobra.Command {
 				if input == "" {
 					return fmt.Errorf("API key cannot be empty")
 				}
-				if strings.TrimSpace(input) != input {
-					return fmt.Errorf("API key cannot contain leading or trailing spaces")
-				}
+
+				// Remove extraneous spaces before and after the user's
+				// input for convenience.
+				input = strings.TrimSpace(input)
+
 				if len(input) != 36 {
 					return fmt.Errorf("API key must be 36 characters long")
 				}
-				cl, err := api.NewClient(
-					current.APIURL,
-					api.WithHTTPClient(&cl),
-					api.WithTpplAPIKey(input),
-					api.WithUserAgent(),
-				)
+
+				cl, err := api.NewAPIKeyClient(current.APIURL, input)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
+
 				resp, err := selfCheck(context.Background(), cl)
 				if err != nil {
 					return err

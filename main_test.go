@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
-	"github.com/google/uuid"
 	api "github.com/maelvls/vcpctl/internal/api"
 	"github.com/maelvls/vcpctl/internal/manifest"
 	"github.com/maelvls/vcpctl/mocksrv"
@@ -118,7 +117,7 @@ keyAlgorithm:
 ---
 kind: WIMSubCAProvider
 name: demo
-caType: BUILTIN
+issuingTemplateName: demo-template
 validityPeriod: P90D
 commonName: demo
 organization: DemoOrg
@@ -183,7 +182,7 @@ func TestParseFireflyConfigManifests_MultiDocument(t *testing.T) {
 func TestParseFireflyConfigManifests_AllowsAnyOrder(t *testing.T) {
 	input := `kind: WIMSubCAProvider
 name: x
-caType: BUILTIN
+issuingTemplateName: foo
 validityPeriod: P1D
 commonName: x
 organization: X
@@ -221,7 +220,7 @@ name: late
 }
 
 func TestPatchConfig_OK(t *testing.T) {
-	id := uuid.New()
+	id := "882e9e60-1937-45bb-b209-92d2b30928a6"
 	patch := ConfigPatch{
 		Name:          "demo",
 		MinTlsVersion: api.ConfigurationUpdateRequestMinTlsVersionTLS13,
@@ -229,74 +228,70 @@ func TestPatchConfig_OK(t *testing.T) {
 	wantBody, err := json.Marshal(patch)
 	require.NoError(t, err, "unexpected error marshaling patch")
 
-	for _, status := range []int{http.StatusOK, http.StatusNoContent} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
-			server := mocksrv.Mock(t, []mocksrv.Interaction{
-				{
-					Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id.String()),
-					MockCode: status,
-					Assert: func(t *testing.T, r *http.Request, body string) {
-						assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-						assert.Equal(t, "api-key", r.Header.Get("tppl-api-key"))
-						assert.Equal(t, userAgent, r.Header.Get("User-Agent"))
+	t.Run("PATCH 200 OK", func(t *testing.T) {
+		server := mocksrv.Mock(t, []mocksrv.Interaction{
+			{
+				Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id),
+				MockCode: http.StatusOK,
+				MockBody: with(sampleConfig, "id", id),
+				Assert: func(t *testing.T, r *http.Request, body string) {
+					assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+					assert.Equal(t, "api-key", r.Header.Get("tppl-api-key"))
+					assert.Equal(t, userAgent, r.Header.Get("User-Agent"))
 
-						var gotBody map[string]any
-						err := json.Unmarshal([]byte(body), &gotBody)
-						require.NoError(t, err, "unexpected error decoding request body")
-						var wantBodyMap map[string]any
-						err = json.Unmarshal(wantBody, &wantBodyMap)
-						require.NoError(t, err, "unexpected error decoding expected body")
-						assert.Equal(t, wantBodyMap, gotBody)
-					},
+					var gotBody map[string]any
+					err := json.Unmarshal([]byte(body), &gotBody)
+					require.NoError(t, err, "unexpected error decoding request body")
+					var wantBodyMap map[string]any
+					err = json.Unmarshal(wantBody, &wantBodyMap)
+					require.NoError(t, err, "unexpected error decoding expected body")
+					assert.Equal(t, wantBodyMap, gotBody)
 				},
-			}, nil)
+			},
+		}, nil)
 
-			cl := api.Client{
-				Server: server.URL,
-				Client: server.Client(),
-			}
-			_, err := patchConfig(context.Background(), cl, server.URL, "api-key", id, patch)
-			require.NoError(t, err)
-		})
-	}
+		cl, _ := api.NewAPIKeyClient(server.URL, "api-key", api.WithHTTPClient(server.Client()))
+		_, err := patchConfig(context.Background(), cl, id, patch)
+		require.NoError(t, err)
+	})
 }
 
 func TestPatchConfig_NotFound(t *testing.T) {
-	id := uuid.New()
+	id := "882e9e60-1937-45bb-b209-92d2b30928a6"
 	server := mocksrv.Mock(t, []mocksrv.Interaction{
 		{
-			Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id.String()),
+			Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id),
 			MockCode: http.StatusNotFound,
 		},
 	}, nil)
 
-	cl := api.Client{
+	cl := &api.Client{
 		Server: server.URL,
 		Client: server.Client(),
 	}
-	_, err := patchConfig(context.Background(), cl, server.URL, "api-key", id, ConfigPatch{Name: "demo"})
+	_, err := patchConfig(context.Background(), cl, id, ConfigPatch{Name: "demo"})
 	require.Error(t, err)
 	var notFound NotFound
 	require.ErrorAs(t, err, &notFound)
-	require.Equal(t, id.String(), notFound.NameOrID)
+	require.Equal(t, id, notFound.NameOrID)
 	assert.Contains(t, err.Error(), "WIM configuration")
 }
 
 func TestPatchConfig_HTTPError(t *testing.T) {
-	id := uuid.New()
+	id := "882e9e60-1937-45bb-b209-92d2b30928a6"
 	server := mocksrv.Mock(t, []mocksrv.Interaction{
 		{
-			Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id.String()),
+			Expect:   fmt.Sprintf("PATCH /v1/distributedissuers/configurations/%s", id),
 			MockCode: http.StatusInternalServerError,
 			MockBody: `{"error":"boom"}`,
 		},
 	}, nil)
 
-	cl := api.Client{
+	cl := &api.Client{
 		Server: server.URL,
 		Client: server.Client(),
 	}
-	_, err := patchConfig(context.Background(), cl, server.URL, "api-key", id, ConfigPatch{Name: "demo"})
+	_, err := patchConfig(context.Background(), cl, id, ConfigPatch{Name: "demo"})
 	require.Error(t, err)
 	var httpErr HTTPError
 	require.ErrorAs(t, err, &httpErr)

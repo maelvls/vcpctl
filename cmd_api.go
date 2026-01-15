@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	api "github.com/maelvls/vcpctl/internal/api"
 	"github.com/spf13/cobra"
 )
 
@@ -115,14 +116,17 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		method = "POST"
 	}
 
-	// Make the request
-	resp, err := makeAPIRequest(cmd.Context(), method, path, params, opts.headers, conf.APIURL, conf.APIKey)
+	cl, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+	if err != nil {
+		return fmt.Errorf("creating API client: %w", err)
+	}
+	resp, err := makeAPIRequest(cmd.Context(), cl, method, path, params, opts.headers)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	// Show response headers if requested
+	// Show response headers if requested.
 	if opts.showResponseHeaders {
 		fmt.Fprintf(os.Stderr, "%s %s\r\n", resp.Proto, resp.Status)
 		for name, vals := range resp.Header {
@@ -133,7 +137,7 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		fmt.Fprintf(os.Stderr, "\r\n")
 	}
 
-	// Output response body (skip for 204 No Content)
+	// Output response body (skip for 204 No Content).
 	if resp.StatusCode != http.StatusNoContent {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -142,13 +146,13 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 
 		os.Stdout.Write(body)
 
-		// Add a newline if the output doesn't end with one
+		// Add a newline if the output doesn't end with one.
 		if len(body) > 0 && body[len(body)-1] != '\n' {
 			fmt.Println()
 		}
 	}
 
-	// Exit with error for non-2xx status codes
+	// Exit with error for non-2xx status codes.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
@@ -209,22 +213,20 @@ func magicFieldValue(v string) (interface{}, error) {
 }
 
 // makeAPIRequest constructs and executes an HTTP request to the API.
-func makeAPIRequest(ctx context.Context, method, path string, params map[string]interface{}, headers []string, apiURL, apiKey string) (*http.Response, error) {
-	// Normalize path: ensure it starts with /v1/
+func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, params map[string]interface{}, headers []string) (*http.Response, error) {
+	// Normalize path: ensure it starts with /v1/.
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
 	if !strings.HasPrefix(path, "/v1/") {
-		// If path starts with / but not /v1/, insert v1
+		// If path starts with / but not /v1/, insert v1.
 		if strings.HasPrefix(path, "/") {
 			path = "/v1" + path
 		}
 	}
 
-	// Construct full URL
-	url := apiURL + path
+	url := cl.Server + path
 
-	// Build request body
 	var body io.Reader
 	var bodyIsJSON bool
 
@@ -237,24 +239,15 @@ func makeAPIRequest(ctx context.Context, method, path string, params map[string]
 		bodyIsJSON = true
 	}
 
-	// Create request
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	// Set content type for JSON body
 	if bodyIsJSON {
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
 
-	// Add authentication header
-	req.Header.Set("tppl-api-key", apiKey)
-
-	// Add user agent
-	req.Header.Set("User-Agent", "vcpctl")
-
-	// Parse and add custom headers
 	for _, h := range headers {
 		idx := strings.IndexRune(h, ':')
 		if idx == -1 {
@@ -265,11 +258,5 @@ func makeAPIRequest(ctx context.Context, method, path string, params map[string]
 		req.Header.Set(key, value)
 	}
 
-	// Create HTTP client with tracing
-	client := &http.Client{
-		Transport: LogTransport,
-	}
-
-	// Execute request
-	return client.Do(req)
+	return cl.Client.Do(req)
 }

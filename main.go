@@ -201,12 +201,11 @@ func saLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa ls: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -357,7 +356,6 @@ func saGenkeypairCmd() *cobra.Command {
 				return fmt.Errorf("expects a single argument (the service account name), got: %s", args)
 			}
 
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa gen keypair: %w", err)
@@ -365,7 +363,7 @@ func saGenkeypairCmd() *cobra.Command {
 
 			saName := args[0]
 
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -442,6 +440,13 @@ func saPutKeypairCmd() *cobra.Command {
 			Creates or updates the given 'Private Key JWT' authentication
 			(also known as 'Key Pair Authentication') Service Account in
 			CyberArk Certificate Manager, SaaS. Returns the Service Account's client ID.
+
+			To know the scopes you can assign to a Service Account, use:
+
+			  vcpctl sa scopes
+
+			Note that you can only use the scopes that are compatible with
+			the authentication type 'rsaKey' (aka Key Pair Authentication).
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
@@ -450,7 +455,6 @@ func saPutKeypairCmd() *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa put keypair: %w", err)
@@ -459,7 +463,7 @@ func saPutKeypairCmd() *cobra.Command {
 			saName := args[0]
 
 			// Does it already exist?
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -533,7 +537,16 @@ func saPutWifCmd() *cobra.Command {
 		Long: undent.Undent(`
 			Creates or updates the given 'Workload Identity Federation'
 			(also known as 'RSA Key Federated') Service Account in
-			CyberArk Certificate Manager, SaaS. Returns the Service Account's client ID.
+			CyberArk Certificate Manager, SaaS. Returns the Service Account's
+			client ID.
+
+			To know the scopes you can assign to a Service Account, use:
+
+			  vcpctl sa scopes
+
+			Note that you can only use the scopes that are compatible with
+			the authentication type 'rsaKeyFederated' (aka Workload Identity
+			Federation).
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put wif my-sa \
@@ -548,7 +561,6 @@ func saPutWifCmd() *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa put wif: %w", err)
@@ -571,7 +583,7 @@ func saPutWifCmd() *cobra.Command {
 			}
 
 			// Create API client
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -691,7 +703,6 @@ func saGetCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa get: %w", err)
@@ -703,7 +714,7 @@ func saGetCmd() *cobra.Command {
 
 			saName := args[0]
 
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -763,12 +774,11 @@ func saScopesCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("sa scopes: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -826,7 +836,6 @@ func saRmCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			if interactive {
 				if len(args) > 0 {
 					return fmt.Errorf("sa rm -i: expected no arguments when using --interactive, got %s", args)
@@ -837,7 +846,7 @@ func saRmCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("sa rm -i: %w", err)
 				}
-				apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+				apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
@@ -868,7 +877,7 @@ func saRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -897,13 +906,12 @@ func lsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("ls: %w", err)
 			}
 
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -1019,12 +1027,11 @@ func subcaLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("subca ls: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -1066,12 +1073,11 @@ func subcaRmCmd() *cobra.Command {
 			}
 			providerNameOrID := args[0]
 
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -1123,12 +1129,11 @@ func policyLsCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("policy ls: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -1175,12 +1180,11 @@ func policyRmCmd() *cobra.Command {
 			}
 			policyNameOrID := args[0]
 
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -1330,12 +1334,11 @@ func attachSaCmd() *cobra.Command {
 			}
 			confName := args[0]
 
-			cl := http.Client{Transport: LogTransport}
 			conf, err := getToolConfig(cmd)
 			if err != nil {
 				return fmt.Errorf("attach-sa: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -1442,12 +1445,7 @@ func editCmd() *cobra.Command {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			client, err := api.NewClient(
-				conf.APIURL,
-				api.WithHTTPClient(&http.Client{Transport: LogTransport}),
-				api.WithTpplAPIKey(conf.APIKey),
-				api.WithUserAgent(),
-			)
+			client, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
@@ -1524,7 +1522,6 @@ func runApply(cmd *cobra.Command, filePath string, args []string, dryRun bool) e
 		return fmt.Errorf("%s: expected no arguments. The configuration name is read from the 'name' field in the provided YAML manifest.", cmdName)
 	}
 
-	cl := http.Client{Transport: LogTransport}
 	conf, err := getToolConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("%s: %w", cmdName, err)
@@ -1540,7 +1537,7 @@ func runApply(cmd *cobra.Command, filePath string, args []string, dryRun bool) e
 		return fmt.Errorf("%s: while decoding WIM manifests from '%s': %w", cmdName, filePath, err)
 	}
 
-	apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&cl), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+	apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 	if err != nil {
 		return fmt.Errorf("%s: while creating API client: %w", cmdName, err)
 	}
@@ -1577,7 +1574,7 @@ func rmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: LogTransport}), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("rm: while creating API client: %w", err)
 			}
@@ -1861,7 +1858,7 @@ func getCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get: %w", err)
 			}
-			apiClient, err := api.NewClient(conf.APIURL, api.WithHTTPClient(&http.Client{Transport: LogTransport}), api.WithTpplAPIKey(conf.APIKey), api.WithUserAgent())
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
 				return fmt.Errorf("get: while creating API client: %w", err)
 			}
@@ -4008,12 +4005,4 @@ func withoutANSI(s string) string {
 
 func countANSIChars(s string) int {
 	return len(s) - len(withoutANSI(s))
-}
-
-func ptrString(s string) *string {
-	return &s
-}
-
-func ptrInt(v int) *int {
-	return &v
 }

@@ -61,9 +61,14 @@ func applyManifests(cl *api.Client, manifests []manifest.Manifest, dryRun bool) 
 }
 
 type manifestApplyContext struct {
-	client          *api.Client
-	apiURL          string
-	apiKey          string
+	client *api.Client
+
+	// Let's cache these resourcesto avoid having to fetch all service accounts,
+	// sub CA providers, and policies every time we need to resolve a name to an
+	// ID.
+	//
+	// Ideally, we should put a mutex... but not needed for now as nothing is
+	// run currently for now.
 	serviceAccounts map[string]ServiceAccount
 	policies        map[string]Policy
 	subCaProviders  map[string]SubCa
@@ -91,6 +96,7 @@ func (ctx *manifestApplyContext) applyServiceAccount(idx int, in manifest.Servic
 		if err != nil {
 			return fmt.Errorf("manifest #%d (ServiceAccount %q): while creating: %w", idx+1, desired.Name, err)
 		}
+
 		// We ignore the fields 'publicKey' and 'privateKey' as we have provided
 		// them in the request. These are only set when 'publicKey' isn't
 		// provided in the creation request.
