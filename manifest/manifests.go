@@ -64,13 +64,18 @@ type KeyAlgorithm struct {
 }
 
 type SANs struct {
-	DNSNames                   CommonName `yaml:"dnsNames,flow"`
-	IPAddresses                CommonName `yaml:"ipAddresses,flow"`
-	RFC822Names                CommonName `yaml:"rfc822Names,flow"`
-	UniformResourceIdentifiers CommonName `yaml:"uniformResourceIdentifiers,flow"`
+	DNSNames                   Property `yaml:"dnsNames,flow"`
+	IPAddresses                Property `yaml:"ipAddresses,flow"`
+	RFC822Names                Property `yaml:"rfc822Names,flow"`
+	UniformResourceIdentifiers Property `yaml:"uniformResourceIdentifiers,flow"`
 }
 
-type CommonName struct {
+// Since the zero value for the `PropertyInformation` struct in the generated
+// code is not a valid value (`type` must be set), we can keep `minOccurrences`
+// and `maxOccurrences` marked as omitzero since they are optional. When
+// missing, they are treated as 0 by the API as far I could tell (POST and PATCH
+// equally).
+type Property struct {
 	Type           string   `yaml:"type"`
 	AllowedValues  []string `yaml:"allowedValues"`
 	DefaultValues  []string `yaml:"defaultValues"`
@@ -79,12 +84,12 @@ type CommonName struct {
 }
 
 type Subject struct {
-	CommonName         CommonName `yaml:"commonName,flow"`
-	Country            CommonName `yaml:"country,flow"`
-	Locality           CommonName `yaml:"locality,flow"`
-	Organization       CommonName `yaml:"organization,flow"`
-	OrganizationalUnit CommonName `yaml:"organizationalUnit,flow"`
-	StateOrProvince    CommonName `yaml:"stateOrProvince,flow"`
+	CommonName         Property `yaml:"commonName,flow"`
+	Country            Property `yaml:"country,flow"`
+	Locality           Property `yaml:"locality,flow"`
+	Organization       Property `yaml:"organization,flow"`
+	OrganizationalUnit Property `yaml:"organizationalUnit,flow"`
+	StateOrProvince    Property `yaml:"stateOrProvince,flow"`
 }
 
 type SubCa struct {
@@ -107,30 +112,54 @@ type PKCS11 struct {
 	PartitionLabel         string   `yaml:"partitionLabel"`
 	PartitionSerialNumber  string   `yaml:"partitionSerialNumber"`
 	PIN                    string   `yaml:"pin"`
-	SigningEnabled         *bool    `yaml:"signingEnabled"`
+
+	// No need for a pointer here, see the AdvancedSettings explanation.
+	SigningEnabled bool `yaml:"signingEnabled"`
 }
 
-// Since "false" is a valid value and there needs to be a way to tell between
-// "false" and "not set" in order to update the API object, we use pointers.
-// Otherwise, it would be impossible to disable these settings once they have
-// been enabled.
+// For PATCH operations, these booleans must not be omitted when explicitly
+// setting them to false, and the only way to do that is to use a pointer.
+// Otherwise, it would be impossible to change them from true to false.
+//
+// In the following diagram, "API object" refers to the generated Go struct
+// `PropertyInformation`:
+//
+//	                   conversion
+//	Read YAML Manifest  -------->   API object (desired)
+//	Read API            -------->   API object (existing)
+//	                                    |
+//	                                    | diffToPatch
+//	                                    v
+//	                                API object
+//	                                 (patch)
+//
+// These three API objects use the same Go struct; the only one of them that
+// needs to contain the pointer is the patch one... but since one of them needs
+// the pointer, we are forced to have that pointer for the "desired" and
+// "existing" objects as well.
+//
+// You can see that the YAML manifest doesn't actually need the pointer since
+// "desired" doesn't need to know whether the value was omitted or explicitly
+// set to false; the intention of the user is guessed in diffToPatch.
 type AdvancedSettings struct {
-	EnableIssuanceAuditLog       *bool `yaml:"enableIssuanceAuditLog"`
-	IncludeRawCertDataInAuditLog *bool `yaml:"includeRawCertDataInAuditLog"`
-	RequireFIPSCompliantBuild    *bool `yaml:"requireFIPSCompliantBuild"`
+	EnableIssuanceAuditLog       bool `yaml:"enableIssuanceAuditLog"`
+	IncludeRawCertDataInAuditLog bool `yaml:"includeRawCertDataInAuditLog"`
+	RequireFIPSCompliantBuild    bool `yaml:"requireFIPSCompliantBuild"`
 }
 
 type ServiceAccount struct {
-	Name               string   `yaml:"name,omitempty"`
-	AuthenticationType string   `yaml:"authenticationType,omitempty"`
-	CredentialLifetime int      `yaml:"credentialLifetime,omitempty"`
-	Enabled            *bool    `yaml:"enabled,omitempty"`
-	Owner              string   `yaml:"owner,omitempty"`
-	Scopes             []string `yaml:"scopes,omitempty"`
-	Applications       []string `yaml:"applications,omitempty"`
-	Audience           string   `yaml:"audience,omitempty"`
-	IssuerURL          string   `yaml:"issuerURL,omitempty"`
-	JwksURI            string   `yaml:"jwksURI,omitempty"`
-	Subject            string   `yaml:"subject,omitempty"`
-	PublicKey          string   `yaml:"publicKey,omitempty"`
+	Name               string `yaml:"name,omitempty"`
+	AuthenticationType string `yaml:"authenticationType,omitempty"`
+	CredentialLifetime int    `yaml:"credentialLifetime,omitempty"`
+
+	// No need for a pointer here, see the AdvancedSettings explanation.
+	Enabled      bool     `yaml:"enabled,omitempty"`
+	Owner        string   `yaml:"owner,omitempty"`
+	Scopes       []string `yaml:"scopes,omitempty"`
+	Applications []string `yaml:"applications,omitempty"`
+	Audience     string   `yaml:"audience,omitempty"`
+	IssuerURL    string   `yaml:"issuerURL,omitempty"`
+	JwksURI      string   `yaml:"jwksURI,omitempty"`
+	Subject      string   `yaml:"subject,omitempty"`
+	PublicKey    string   `yaml:"publicKey,omitempty"`
 }

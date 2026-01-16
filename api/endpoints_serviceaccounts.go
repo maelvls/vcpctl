@@ -179,19 +179,6 @@ func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccoun
 }
 
 func PatchServiceAccount(ctx context.Context, cl *Client, id string, patch PatchServiceAccountByClientIDRequestBody) error {
-	// If no owner is specified, let's just use the first team we can find.
-	if patch.Owner == (openapi_types.UUID{}) {
-		teams, err := GetTeams(ctx, cl)
-		if err != nil {
-			return fmt.Errorf("patchServiceAccount: while getting teams: %w", err)
-		}
-		if len(teams) == 0 {
-			return fmt.Errorf("patchServiceAccount: no teams found, please specify an owner")
-		}
-		patch.Owner = teams[0].Id
-		logutil.Debugf("no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].Id)
-	}
-
 	uuidID, err := uuid.Parse(id)
 	if err != nil {
 		return fmt.Errorf("patchServiceAccount: while parsing service account ID '%s' as UUID: %w", id, err)

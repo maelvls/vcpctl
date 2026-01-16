@@ -282,8 +282,8 @@ func DiffToPatchSubCAProvider(existing, desired SubCaProviderInformation) (SubCa
 	return patch, smthChanged, nil
 }
 
-func DiffToPatchSubCaProviderPkcs11ConfigurationInformation(existing, desired SubCaProviderPkcs11ConfigurationInformation) SubCaProviderPkcs11ConfigurationInformation {
-	patch := SubCaProviderPkcs11ConfigurationInformation{}
+func DiffToPatchSubCaProviderPkcs11ConfigurationInformation(existing, desired SubCaProviderPkcs11ConfigurationInformation) PatchSubCaProviderPkcs11ConfigurationInformation {
+	patch := PatchSubCaProviderPkcs11ConfigurationInformation{}
 
 	if desired.AllowedClientLibraries != nil && !slicesEqual(desired.AllowedClientLibraries, existing.AllowedClientLibraries) {
 		patch.AllowedClientLibraries = desired.AllowedClientLibraries
@@ -302,7 +302,7 @@ func DiffToPatchSubCaProviderPkcs11ConfigurationInformation(existing, desired Su
 	}
 
 	if desired.SigningEnabled != existing.SigningEnabled {
-		patch.SigningEnabled = desired.SigningEnabled
+		patch.SigningEnabled.Set(desired.SigningEnabled)
 	}
 
 	return patch
@@ -320,5 +320,5 @@ func isZeroPKCS11(p SubCaProviderPkcs11ConfigurationInformation) bool {
 		p.PartitionLabel == "" &&
 		p.PartitionSerialNumber == "" &&
 		p.Pin == "" &&
-		p.SigningEnabled == nil
+		!p.SigningEnabled
 }

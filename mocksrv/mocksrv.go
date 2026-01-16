@@ -89,6 +89,9 @@ func Mock(t *testing.T, mock []Interaction, cancel func(error)) *httptest.Server
 func UncheckedMock(t *testing.T, mock []Interaction, cancel func(error)) *httptest.Server {
 	t.Helper()
 
+	assertWasCalled := atomic.Int32{}
+	assertWasCalled.Store(-1)
+
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		// Search for the interaction that matches the request.
 		var n int
@@ -117,6 +120,7 @@ func UncheckedMock(t *testing.T, mock []Interaction, cancel func(error)) *httpte
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 		if interaction.Assert != nil {
+			assertWasCalled.Store(int32(n))
 			interaction.Assert(t, r, string(body))
 		}
 

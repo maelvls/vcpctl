@@ -196,68 +196,23 @@ func main() {
 		panic(fmt.Errorf("merging discriminator fix: %w", err))
 	}
 
-	// The 'type', 'minOccurrences', 'maxOccurrences', 'defaultValues', and
-	// 'allowedValues' fields in PropertyInformation are mandatory, so we can't
-	// just omitzero them.
-	err = mergo.MergeWithOverwrite(&merged, map[string]any{
-		"components": map[string]any{
-			"schemas": map[string]any{
-				// ServiceAccounts.
-				"Details": map[string]any{
-					"properties": map[string]any{
-						"enabled": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-					},
-				},
+	// Some fields' zero values are meaningful; when PATCHing, we want to be
+	// able to set them to the zero value without it being omitted.
+	setNullableOnProperty(merged, "PatchServiceAccountByClientIDRequestBody", "enabled")
 
-				// WIMSubCAProvider.
-				"SubCaProviderPkcs11ConfigurationInformation": map[string]any{
-					"properties": map[string]any{
-						"signingEnabled": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-					},
-				},
+	// GET and PATCH share the same AdvancedSettingsInformation schema...
+	// 'nullable' should realistically only be applied to the PATCH schema, but
+	// since both use the same schema, we apply it to both.
+	copySchema(merged, "AdvancedSettingsInformation", "PatchAdvancedSettingsInformation")
+	set(merged, "components.schemas.ConfigurationUpdateRequest.properties.advancedSettings.$ref", "#/components/schemas/PatchAdvancedSettingsInformation")
+	setNullableOnProperty(merged, "PatchAdvancedSettingsInformation", "enableIssuanceAuditLog")
+	setNullableOnProperty(merged, "PatchAdvancedSettingsInformation", "includeRawCertDataInAuditLog")
+	setNullableOnProperty(merged, "PatchAdvancedSettingsInformation", "requireFIPSCompliantBuild")
 
-				// WIMConfigurations.
-				"AdvancedSettingsInformation": map[string]any{
-					"properties": map[string]any{
-						"enableIssuanceAuditLog": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-						"includeRawCertDataInAuditLog": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-						"requireFIPSCompliantBuild": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-					},
-				},
-				// WIMIssuerPolicies.
-				"PropertyInformation": map[string]any{
-					"properties": map[string]any{
-						"minOccurrences": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-						"maxOccurrences": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-						"defaultValues": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-						"allowedValues": map[string]any{
-							"x-go-type-skip-optional-pointer": false,
-						},
-					},
-					"required": []any{"type", "minOccurrences", "maxOccurrences", "defaultValues", "allowedValues"},
-				},
-			},
-		},
-	})
-	if err != nil {
-		panic(fmt.Errorf("merging PropertyInformation fix: %w", err))
-	}
+	// Same story for SubCaProviderPkcs11ConfigurationInformation.
+	copySchema(merged, "SubCaProviderPkcs11ConfigurationInformation", "PatchSubCaProviderPkcs11ConfigurationInformation")
+	set(merged, "components.schemas.SubCaProviderUpdateRequest.properties.pkcs11.$ref", "#/components/schemas/PatchSubCaProviderPkcs11ConfigurationInformation")
+	setNullableOnProperty(merged, "PatchSubCaProviderPkcs11ConfigurationInformation", "signingEnabled")
 
 	// For some reason, the 'ClientAuthenticationInformationRequestOpenApi' is a
 	// duplicate of 'ClientAuthenticationInformation'. We just replace all
@@ -521,6 +476,220 @@ func removeFromRequired(schema any, fieldToRemove string) {
 		// Recursively process array elements
 		for _, item := range v {
 			removeFromRequired(item, fieldToRemove)
+		}
+	}
+}
+
+// For example, if I have the following object (this is the JSON representation,
+// but what the func accepts is a map[string]any):
+//
+//  {
+//   "components": {
+//     "schemas": {
+//       "YourSuperObject": {
+//          "allOf": [
+//            {"$ref": "#/components/schemas/BaseObject"},
+//            {
+//              "properties": {
+//                "enabled": {
+//                  "type": "boolean",
+//                  "nullable": true                       <----- adds this
+//                }
+//              },
+//              "type": "object"
+//            }
+//          ],
+//       }
+//     }
+//   }
+//
+// And if I give:
+//
+//  setNullableOnProperty("YourSuperObject", "enabled")
+//
+// Then the property "enabled" should now have "nullable": true.
+//
+// This func should also work for "allOf" as well as properties directly under
+// the schema, for example:
+//
+//  {
+//   "components": {
+//     "schemas": {
+//       "YourSuperObject": {
+//         "properties": {
+//           "enabled": {
+//             "type": "boolean",
+//             "nullable": true                            <----- adds this
+//           }
+//         },
+//         "type": "object"
+//       }
+//     }
+//   }
+
+// setNullableOnProperty finds the schema `schemaName` under components.schemas
+// and sets nullable: true on the property `propName`.
+//
+// It works both when the property is directly under "properties" and when it is
+// nested inside an "allOf" item of that schema.
+func setNullableOnProperty(doc map[string]any, schemaName, propName string) error {
+	componentsRaw, ok := doc["components"]
+	if !ok {
+		return fmt.Errorf(`no "components" key in document`)
+	}
+	components, ok := componentsRaw.(map[string]any)
+	if !ok {
+		return fmt.Errorf(`"components" is not an object`)
+	}
+
+	schemasRaw, ok := components["schemas"]
+	if !ok {
+		return fmt.Errorf(`no "schemas" under "components"`)
+	}
+	schemas, ok := schemasRaw.(map[string]any)
+	if !ok {
+		return fmt.Errorf(`"components.schemas" is not an object`)
+	}
+
+	schemaRaw, ok := schemas[schemaName]
+	if !ok {
+		return fmt.Errorf(`schema %q not found under components.schemas`, schemaName)
+	}
+	schema, ok := schemaRaw.(map[string]any)
+	if !ok {
+		return fmt.Errorf(`schema %q is not an object`, schemaName)
+	}
+
+	if !setNullableOnPropertyInSchema(schema, propName) {
+		return fmt.Errorf(`property %q not found (directly or in allOf) in schema %q`, propName, schemaName)
+	}
+
+	return nil
+}
+
+// setNullableOnPropertyInSchema mutates the given schema map in place and
+// returns true if it found and updated the property.
+//
+// It looks for:
+//   - schema.properties[propName]
+//   - any item in schema.allOf that is an object and has that property
+func setNullableOnPropertyInSchema(schema map[string]any, propName string) bool {
+	// 1. Look for the property directly under "properties"
+	if propsRaw, ok := schema["properties"]; ok {
+		if props, ok := propsRaw.(map[string]any); ok {
+			if propRaw, ok := props[propName]; ok {
+				if propSchema, ok := propRaw.(map[string]any); ok {
+					propSchema["nullable"] = true
+					// map mutation is in-place, but assigning back is harmless
+					props[propName] = propSchema
+					schema["properties"] = props
+					return true
+				}
+			}
+		}
+	}
+
+	// 2. Look into "allOf" items
+	if allOfRaw, ok := schema["allOf"]; ok {
+		if allOfSlice, ok := allOfRaw.([]any); ok {
+			changed := false
+			for i, item := range allOfSlice {
+				itemSchema, ok := item.(map[string]any)
+				if !ok {
+					// could be {"$ref": ...} or something else; skip
+					continue
+				}
+				if setNullableOnPropertyInSchema(itemSchema, propName) {
+					// store back the modified item
+					allOfSlice[i] = itemSchema
+					changed = true
+				}
+			}
+			if changed {
+				schema["allOf"] = allOfSlice
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// It should deep-copy. Otherwise, if I edit one schema, it would affect the
+// other one as well.
+func copySchema(schema map[string]any, existing string, to string) {
+	defs, ok := schema["components"].(map[string]any)["schemas"].(map[string]any)
+	if !ok {
+		panic("no components.schemas in schema")
+	}
+	source, ok := defs[existing]
+	if !ok {
+		panic(fmt.Sprintf("no such schema %q in components.schemas", existing))
+	}
+
+	// Deep copy the map.
+	data, err := json.Marshal(source)
+	if err != nil {
+		panic(fmt.Sprintf("marshalling schema %q: %v", existing, err))
+	}
+	var dest any
+	if err := json.Unmarshal(data, &dest); err != nil {
+		panic(fmt.Sprintf("unmarshalling schema %q: %v", existing, err))
+	}
+
+	defs[to] = dest
+}
+
+// Sets a value in a nested map given a dot-separated path. Example:
+//
+//	set(schema, "components.schemas.MySuperObject.properties.type", "string")
+// func set(schema map[string]any, path string, value any) {
+// 	parts := strings.Split(path, ".")
+// 	current := schema
+// 	for i, part := range parts {
+// 		if i == len(parts)-1 {
+// 			// last part
+// 			current[part] = value
+// 			return
+// 		}
+// 		nextRaw, ok := current[part]
+// 		if !ok {
+// 			next := make(map[string]any)
+// 			current[part] = next
+// 			current = next
+// 		}
+// 		if nextRaw == nil {
+// 			panic(fmt.Sprintf("segment '%v' in path %v doesn't exist in the given schema", part, path))
+// 		}
+// 		next, ok := nextRaw.(map[string]any)
+// 		if !ok {
+// 			panic(fmt.Sprintf("cannot set path %v: %v is not an object; it's a %T", path, part, nextRaw))
+// 		}
+// 		current = next
+// 	}
+// }
+
+func set(schema map[string]any, path string, value any) {
+	parts := strings.Split(path, ".")
+	current := schema
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			// last part
+			logutil.Infof("setting %v to %v in %+v", path, value, current)
+			current[part] = value
+			return
+		}
+		nextRaw, ok := current[part]
+		if !ok {
+			next := make(map[string]any)
+			current[part] = next
+			current = next
+		} else {
+			next, ok := nextRaw.(map[string]any)
+			if !ok {
+				panic(fmt.Sprintf("cannot set path %v: %v is not an object; it's a %T", path, part, nextRaw))
+			}
+			current = next
 		}
 	}
 }

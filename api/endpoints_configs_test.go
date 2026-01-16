@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,9 +24,9 @@ func TestDiffToPatchConfig_AllowedFieldChanges(t *testing.T) {
 	existing := baseConfig(t)
 	desired := existing
 
-	desired.AdvancedSettings.EnableIssuanceAuditLog = boolPtr(true)
-	desired.AdvancedSettings.IncludeRawCertDataInAuditLog = boolPtr(true)
-	desired.AdvancedSettings.RequireFIPSCompliantBuild = boolPtr(true)
+	desired.AdvancedSettings.EnableIssuanceAuditLog = true
+	desired.AdvancedSettings.IncludeRawCertDataInAuditLog = true
+	desired.AdvancedSettings.RequireFIPSCompliantBuild = true
 
 	desired.ClientAuthentication = clientAuthJwks(t, []string{"https://jwks.changed.example.com"})
 	desired.ClientAuthorization = ClientAuthorizationInformation{
@@ -51,9 +52,9 @@ func TestDiffToPatchConfig_AllowedFieldChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, changed)
 
-	assert.Equal(t, boolPtr(true), patch.AdvancedSettings.EnableIssuanceAuditLog)
-	assert.Equal(t, boolPtr(true), patch.AdvancedSettings.IncludeRawCertDataInAuditLog)
-	assert.Equal(t, boolPtr(true), patch.AdvancedSettings.RequireFIPSCompliantBuild)
+	assertEqual(t, true, patch.AdvancedSettings.EnableIssuanceAuditLog)
+	assertEqual(t, true, patch.AdvancedSettings.IncludeRawCertDataInAuditLog)
+	assertEqual(t, true, patch.AdvancedSettings.RequireFIPSCompliantBuild)
 
 	patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
 	require.NoError(t, err)
@@ -71,6 +72,14 @@ func TestDiffToPatchConfig_AllowedFieldChanges(t *testing.T) {
 	assert.Equal(t, ConfigurationUpdateRequestMinTlsVersionTLS13, patch.MinTlsVersion)
 	assert.Equal(t, "new-name", patch.Name)
 	assert.Equal(t, []openapi_types.UUID{mustUUID(t, "11111111-1111-1111-1111-111111111111")}, patch.PolicyIds)
+}
+
+func assertEqual[V any](t *testing.T, expected V, actual nullable.Nullable[V]) {
+	t.Helper()
+
+	val, err := actual.Get()
+	require.NoError(t, err)
+	assert.Equal(t, expected, val)
 }
 
 func TestDiffToPatchConfig_ImmutableFieldErrors(t *testing.T) {
@@ -191,9 +200,9 @@ func baseConfig(t *testing.T) ExtendedConfigurationInformation {
 
 	return ExtendedConfigurationInformation{
 		AdvancedSettings: AdvancedSettingsInformation{
-			EnableIssuanceAuditLog:       boolPtr(false),
-			IncludeRawCertDataInAuditLog: boolPtr(false),
-			RequireFIPSCompliantBuild:    boolPtr(false),
+			EnableIssuanceAuditLog:       false,
+			IncludeRawCertDataInAuditLog: false,
+			RequireFIPSCompliantBuild:    false,
 		},
 		ClientAuthentication: clientAuthJwks(t, []string{"https://jwks.example.com"}),
 		ClientAuthorization: ClientAuthorizationInformation{
@@ -218,10 +227,6 @@ func clientAuthJwks(t *testing.T, urls []string) ClientAuthenticationInformation
 	err := info.FromJwtJwksAuthenticationInformation(JwtJwksAuthenticationInformation{Urls: urls})
 	require.NoError(t, err)
 	return info
-}
-
-func boolPtr(v bool) *bool {
-	return &v
 }
 
 func mustUUID(t *testing.T, s string) openapi_types.UUID {

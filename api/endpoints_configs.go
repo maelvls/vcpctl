@@ -269,26 +269,16 @@ func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (Conf
 	// boolean fields, whereas for PATCH, a missing value means 'do not change
 	// this field'. And since the 'existing' comes from GET, a nil value means
 	// 'false'.
-	if existing.AdvancedSettings.EnableIssuanceAuditLog == nil {
-		existing.AdvancedSettings.EnableIssuanceAuditLog = ptr(false)
-	}
-	if existing.AdvancedSettings.IncludeRawCertDataInAuditLog == nil {
-		existing.AdvancedSettings.IncludeRawCertDataInAuditLog = ptr(false)
-	}
-	if existing.AdvancedSettings.RequireFIPSCompliantBuild == nil {
-		existing.AdvancedSettings.RequireFIPSCompliantBuild = ptr(false)
-	}
-
-	if desired.AdvancedSettings.EnableIssuanceAuditLog != nil && *desired.AdvancedSettings.EnableIssuanceAuditLog != *existing.AdvancedSettings.EnableIssuanceAuditLog {
-		patch.AdvancedSettings.EnableIssuanceAuditLog = desired.AdvancedSettings.EnableIssuanceAuditLog
+	if desired.AdvancedSettings.EnableIssuanceAuditLog != existing.AdvancedSettings.EnableIssuanceAuditLog {
+		patch.AdvancedSettings.EnableIssuanceAuditLog.Set(desired.AdvancedSettings.EnableIssuanceAuditLog)
 		smthChanged = true
 	}
-	if desired.AdvancedSettings.IncludeRawCertDataInAuditLog != nil && *desired.AdvancedSettings.IncludeRawCertDataInAuditLog != *existing.AdvancedSettings.IncludeRawCertDataInAuditLog {
-		patch.AdvancedSettings.IncludeRawCertDataInAuditLog = desired.AdvancedSettings.IncludeRawCertDataInAuditLog
+	if desired.AdvancedSettings.IncludeRawCertDataInAuditLog != existing.AdvancedSettings.IncludeRawCertDataInAuditLog {
+		patch.AdvancedSettings.IncludeRawCertDataInAuditLog.Set(desired.AdvancedSettings.IncludeRawCertDataInAuditLog)
 		smthChanged = true
 	}
-	if desired.AdvancedSettings.RequireFIPSCompliantBuild != nil && *desired.AdvancedSettings.RequireFIPSCompliantBuild != *existing.AdvancedSettings.RequireFIPSCompliantBuild {
-		patch.AdvancedSettings.RequireFIPSCompliantBuild = desired.AdvancedSettings.RequireFIPSCompliantBuild
+	if desired.AdvancedSettings.RequireFIPSCompliantBuild != existing.AdvancedSettings.RequireFIPSCompliantBuild {
+		patch.AdvancedSettings.RequireFIPSCompliantBuild.Set(desired.AdvancedSettings.RequireFIPSCompliantBuild)
 		smthChanged = true
 	}
 

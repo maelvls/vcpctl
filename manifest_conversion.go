@@ -465,7 +465,7 @@ func apiToManifestKeyAlgorithm(in api.KeyAlgorithmInformation) manifest.KeyAlgor
 	}
 }
 
-func manifestToAPICommonName(in manifest.CommonName) api.PropertyInformation {
+func manifestToAPICommonName(in manifest.Property) api.PropertyInformation {
 	return api.PropertyInformation{
 		Type:           api.PropertyInformationType(in.Type),
 		AllowedValues:  append([]string(nil), in.AllowedValues...),
@@ -474,13 +474,8 @@ func manifestToAPICommonName(in manifest.CommonName) api.PropertyInformation {
 		MaxOccurrences: int32(in.MaxOccurrences),
 	}
 }
-
-func ptr[T any](v T) *T {
-	return &v
-}
-
-func apiToManifestCommonName(in api.PropertyInformation) manifest.CommonName {
-	return manifest.CommonName{
+func apiToManifestCommonName(in api.PropertyInformation) manifest.Property {
+	return manifest.Property{
 		Type:           string(in.Type),
 		AllowedValues:  append([]string(nil), in.AllowedValues...),
 		DefaultValues:  append([]string(nil), in.DefaultValues...),
@@ -536,6 +531,17 @@ func manifestToAPIServiceAccount(in manifest.ServiceAccount) api.ServiceAccountD
 		Subject:            in.Subject,
 		PublicKey:          in.PublicKey,
 	}
+}
+
+func ptr[T any](v T) *T {
+	return &v
+}
+
+func derefOrDefault[T any](ptr *T, defaultValue T) T {
+	if ptr != nil {
+		return *ptr
+	}
+	return defaultValue
 }
 
 func apiToManifestServiceAccount(in api.ServiceAccountDetails) manifest.ServiceAccount {

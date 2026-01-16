@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/maelvls/undent"
 	"github.com/maelvls/vcpctl/errutil"
 )
@@ -189,9 +190,30 @@ func DiffToPatchServiceAccount(existing, desired ServiceAccountDetails) (PatchSe
 		smthChanged = true
 	}
 
+	if desired.AuthenticationType != "" && desired.AuthenticationType != existing.AuthenticationType {
+		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change the 'authenticationType' field on an existing service account")
+	}
+
+	if desired.CompanyId != (uuid.UUID{}) && desired.CompanyId != existing.CompanyId {
+		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change the 'companyId' field on an existing service account")
+	}
+
+	if desired.Enabled != existing.Enabled {
+		patch.Enabled.Set(desired.Enabled)
+		smthChanged = true
+	}
+
+	// The assumption is that a zero 'credentialLifetime' isn't valid, which
+	// means the zero value means "I don't want to change this field".
 	if desired.CredentialLifetime != 0 && desired.CredentialLifetime != existing.CredentialLifetime {
 		patch.CredentialLifetime = desired.CredentialLifetime
 		smthChanged = true
+	}
+
+	// The assumption is that an empty 'credentialsExpiringOn' isn't valid,
+	// which means the zero value means "I don't want to change this field".
+	if !desired.CredentialsExpiringOn.IsZero() && !desired.CredentialsExpiringOn.Equal(existing.CredentialsExpiringOn) {
+		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change the 'credentialsExpiringOn' field on an existing service account")
 	}
 
 	if desired.IssuerURL != "" && desired.IssuerURL != existing.IssuerURL {
@@ -204,13 +226,17 @@ func DiffToPatchServiceAccount(existing, desired ServiceAccountDetails) (PatchSe
 		smthChanged = true
 	}
 
+	if !desired.LastUsedOn.IsZero() && desired.LastUsedOn != existing.LastUsedOn {
+		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change the 'lastUsedOn' field on an existing service account")
+	}
+
 	if desired.Name != "" && desired.Name != existing.Name {
 		patch.Name = desired.Name
 		smthChanged = true
 	}
 
-	if desired.Owner.ID() != 0 && desired.Owner != existing.Owner {
-		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change Owner of existing service account")
+	if desired.Owner != (uuid.UUID{}) && desired.Owner != existing.Owner {
+		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change the 'owner' field on an existing service account")
 	}
 
 	if desired.PublicKey != "" && desired.PublicKey != existing.PublicKey {
@@ -226,6 +252,14 @@ func DiffToPatchServiceAccount(existing, desired ServiceAccountDetails) (PatchSe
 	if desired.Subject != "" && desired.Subject != existing.Subject {
 		patch.Subject = desired.Subject
 		smthChanged = true
+	}
+
+	if desired.UpdatedBy != (uuid.UUID{}) && desired.UpdatedBy != existing.UpdatedBy {
+		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change the 'updatedBy' field on an existing service account")
+	}
+
+	if !desired.UpdatedOn.IsZero() && !desired.UpdatedOn.Equal(existing.UpdatedOn) {
+		return PatchServiceAccountByClientIDRequestBody{}, false, fmt.Errorf("cannot change the 'updatedOn' field on an existing service account")
 	}
 
 	return patch, smthChanged, nil

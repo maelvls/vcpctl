@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -698,13 +699,13 @@ type ActivityLogFilterOperator string
 // AdvancedSettingsInformation defines model for AdvancedSettingsInformation.
 type AdvancedSettingsInformation struct {
 	// EnableIssuanceAuditLog Whether audit log entries must be generated for each issued certificate
-	EnableIssuanceAuditLog *bool `json:"enableIssuanceAuditLog,omitempty"`
+	EnableIssuanceAuditLog bool `json:"enableIssuanceAuditLog,omitempty,omitzero"`
 
 	// IncludeRawCertDataInAuditLog Whether the raw certificate data must be included in the audit log entry
-	IncludeRawCertDataInAuditLog *bool `json:"includeRawCertDataInAuditLog,omitempty"`
+	IncludeRawCertDataInAuditLog bool `json:"includeRawCertDataInAuditLog,omitempty,omitzero"`
 
 	// RequireFIPSCompliantBuild Whether FIPS-compliant build is required
-	RequireFIPSCompliantBuild *bool `json:"requireFIPSCompliantBuild,omitempty"`
+	RequireFIPSCompliantBuild bool `json:"requireFIPSCompliantBuild,omitempty,omitzero"`
 }
 
 // AnyValue Can be any value - string, number, boolean, array or object.
@@ -1083,10 +1084,10 @@ type ConfigurationResponse struct {
 
 // ConfigurationUpdateRequest defines model for ConfigurationUpdateRequest.
 type ConfigurationUpdateRequest struct {
-	AdvancedSettings     AdvancedSettingsInformation     `json:"advancedSettings,omitempty,omitzero"`
-	ClientAuthentication ClientAuthenticationInformation `json:"clientAuthentication,omitempty,omitzero"`
-	ClientAuthorization  ClientAuthorizationInformation  `json:"clientAuthorization,omitempty,omitzero"`
-	CloudProviders       CloudProvidersInformation       `json:"cloudProviders,omitempty,omitzero"`
+	AdvancedSettings     PatchAdvancedSettingsInformation `json:"advancedSettings,omitempty,omitzero"`
+	ClientAuthentication ClientAuthenticationInformation  `json:"clientAuthentication,omitempty,omitzero"`
+	ClientAuthorization  ClientAuthorizationInformation   `json:"clientAuthorization,omitempty,omitzero"`
+	CloudProviders       CloudProvidersInformation        `json:"cloudProviders,omitempty,omitzero"`
 
 	// MinTlsVersion Minimum required TLS protocol version
 	MinTlsVersion ConfigurationUpdateRequestMinTlsVersion `json:"minTlsVersion,omitempty,omitzero"`
@@ -1187,7 +1188,7 @@ type Details struct {
 	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn,omitempty,omitzero"`
 
 	// Enabled Indicates if the given service account must be enabled or disabled where disable means that the credentials cannot be used for
-	Enabled *bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty,omitzero"`
 
 	// Id The ID for this service account
 	Id uuid.UUID `json:"id,omitempty,omitzero"`
@@ -1481,6 +1482,18 @@ type NaryOperator string
 // Operator defines model for Operator.
 type Operator string
 
+// PatchAdvancedSettingsInformation defines model for PatchAdvancedSettingsInformation.
+type PatchAdvancedSettingsInformation struct {
+	// EnableIssuanceAuditLog Whether audit log entries must be generated for each issued certificate
+	EnableIssuanceAuditLog nullable.Nullable[bool] `json:"enableIssuanceAuditLog,omitempty,omitzero"`
+
+	// IncludeRawCertDataInAuditLog Whether the raw certificate data must be included in the audit log entry
+	IncludeRawCertDataInAuditLog nullable.Nullable[bool] `json:"includeRawCertDataInAuditLog,omitempty,omitzero"`
+
+	// RequireFIPSCompliantBuild Whether FIPS-compliant build is required
+	RequireFIPSCompliantBuild nullable.Nullable[bool] `json:"requireFIPSCompliantBuild,omitempty,omitzero"`
+}
+
 // PatchServiceAccountByClientIDRequestBody defines model for PatchServiceAccountByClientIDRequestBody.
 type PatchServiceAccountByClientIDRequestBody struct {
 	// Applications The list of applications for which the account is authorized
@@ -1493,7 +1506,7 @@ type PatchServiceAccountByClientIDRequestBody struct {
 	CredentialLifetime int `json:"credentialLifetime,omitempty,omitzero"`
 
 	// Enabled Indicates if the given service account must be enabled or disabled where disable means that the credentials cannot be used for authentication
-	Enabled bool `json:"enabled,omitempty,omitzero"`
+	Enabled nullable.Nullable[bool] `json:"enabled,omitempty,omitzero"`
 
 	// IssuerURL The URL of the entity issuer, providing the source or origin
 	IssuerURL string `json:"issuerURL,omitempty,omitzero"`
@@ -1515,6 +1528,24 @@ type PatchServiceAccountByClientIDRequestBody struct {
 
 	// Subject The subject of the entity, representing the main topic or title.
 	Subject string `json:"subject,omitempty,omitzero"`
+}
+
+// PatchSubCaProviderPkcs11ConfigurationInformation defines model for PatchSubCaProviderPkcs11ConfigurationInformation.
+type PatchSubCaProviderPkcs11ConfigurationInformation struct {
+	// AllowedClientLibraries A collection of strings each of which represents SHA256 hash of an allowed HSM client library
+	AllowedClientLibraries []string `json:"allowedClientLibraries,omitempty,omitzero"`
+
+	// PartitionLabel HSM Partition Label
+	PartitionLabel string `json:"partitionLabel,omitempty,omitzero"`
+
+	// PartitionSerialNumber HSM Partition Serial Number
+	PartitionSerialNumber string `json:"partitionSerialNumber,omitempty,omitzero"`
+
+	// Pin HSM PIN
+	Pin string `json:"pin,omitempty,omitzero"`
+
+	// SigningEnabled Indicates whether HSM signing is enabled or not
+	SigningEnabled nullable.Nullable[bool] `json:"signingEnabled,omitempty,omitzero"`
 }
 
 // PolicyCreateRequest defines model for PolicyCreateRequest.
@@ -1645,11 +1676,11 @@ type ProductEntitlementInformation struct {
 
 // PropertyInformation defines model for PropertyInformation.
 type PropertyInformation struct {
-	AllowedValues  []string                `json:"allowedValues"`
-	DefaultValues  []string                `json:"defaultValues"`
-	MaxOccurrences int32                   `json:"maxOccurrences"`
-	MinOccurrences int32                   `json:"minOccurrences"`
-	Type           PropertyInformationType `json:"type"`
+	AllowedValues  []string                `json:"allowedValues,omitempty,omitzero"`
+	DefaultValues  []string                `json:"defaultValues,omitempty,omitzero"`
+	MaxOccurrences int32                   `json:"maxOccurrences,omitempty,omitzero"`
+	MinOccurrences int32                   `json:"minOccurrences,omitempty,omitzero"`
+	Type           PropertyInformationType `json:"type,omitempty,omitzero"`
 }
 
 // PropertyInformationType defines model for PropertyInformation.Type.
@@ -1900,7 +1931,7 @@ type ServiceAccountDetails struct {
 	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn,omitempty,omitzero"`
 
 	// Enabled Indicates if the given service account must be enabled or disabled where disable means that the credentials cannot be used for
-	Enabled *bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty,omitzero"`
 
 	// Id The ID for this service account
 	Id uuid.UUID `json:"id,omitempty,omitzero"`
@@ -1957,7 +1988,7 @@ type ServiceAccountDetailsNoKey struct {
 	CredentialsExpiringOn time.Time `json:"credentialsExpiringOn,omitempty,omitzero"`
 
 	// Enabled Indicates if the given service account must be enabled or disabled where disable means that the credentials cannot be used for
-	Enabled *bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty,omitzero"`
 
 	// Id The ID for this service account
 	Id uuid.UUID `json:"id,omitempty,omitzero"`
@@ -2151,7 +2182,7 @@ type SubCaProviderPkcs11ConfigurationInformation struct {
 	Pin string `json:"pin,omitempty,omitzero"`
 
 	// SigningEnabled Indicates whether HSM signing is enabled or not
-	SigningEnabled *bool `json:"signingEnabled,omitempty"`
+	SigningEnabled bool `json:"signingEnabled,omitempty,omitzero"`
 }
 
 // SubCaProviderResponse defines model for SubCaProviderResponse.
@@ -2183,8 +2214,8 @@ type SubCaProviderUpdateRequest struct {
 	Organization string `json:"organization,omitempty,omitzero"`
 
 	// OrganizationalUnit Organizational unit
-	OrganizationalUnit string                                      `json:"organizationalUnit,omitempty,omitzero"`
-	Pkcs11             SubCaProviderPkcs11ConfigurationInformation `json:"pkcs11,omitempty,omitzero"`
+	OrganizationalUnit string                                           `json:"organizationalUnit,omitempty,omitzero"`
+	Pkcs11             PatchSubCaProviderPkcs11ConfigurationInformation `json:"pkcs11,omitempty,omitzero"`
 
 	// StateOrProvince State or province
 	StateOrProvince string `json:"stateOrProvince,omitempty,omitzero"`

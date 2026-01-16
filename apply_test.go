@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync/atomic"
 	"testing"
 
 	"github.com/goccy/go-yaml"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/mocksrv"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/sjson"
 )
@@ -68,7 +70,7 @@ func Test_applyManifests_WIMConfiguration(t *testing.T) {
 
 }
 
-var testPatchWIMConfiguration = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+var testPatchWIMConfiguration = testPatchFn(func(t *testing.T, existing, expectedPatch string) []mocksrv.Interaction {
 	return []mocksrv.Interaction{
 		{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + sampleAPISubCA + `]}`},
 		{Expect: "GET /v1/distributedissuers/policies/d7a09670-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200, MockBody: sampleAPIPolicy},
@@ -93,7 +95,7 @@ func Test_applyManifests_WIMSubCA(t *testing.T) {
 	}))
 }
 
-var testPatchSubCA = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+var testPatchSubCA = testPatchFn(func(t *testing.T, existing, expectedPatch string) []mocksrv.Interaction {
 	return []mocksrv.Interaction{
 		{Expect: "GET /v1/certificateissuingtemplates", MockCode: 200, MockBody: `{"certificateIssuingTemplates": [` + sampleIssuingTemplate + `]}`},
 		{Expect: "GET /v1/distributedissuers/subcaproviders", MockCode: 200, MockBody: `{"subCaProviders": [` + existing + `]}`},
@@ -108,9 +110,8 @@ var testPatchSubCA = testPatchFn(func(existing, expectedPatch string) []mocksrv.
 
 func Test_applyManifests_WIMIssuerPolicy(t *testing.T) {
 	t.Run("no changes", testPatchWIMIssuerPolicy(testPatch_tc{
-		existing: sampleAPIPolicy,
-		desired:  sampleManifestPolicy,
-		// TODO: the patch doesn't match ⚠️⚠️
+		existing:    sampleAPIPolicy,
+		desired:     sampleManifestPolicy,
 		expectPatch: `{}`,
 	}))
 
@@ -123,18 +124,19 @@ func Test_applyManifests_WIMIssuerPolicy(t *testing.T) {
 		desired: withYAML(sampleManifestPolicy,
 			"subject.commonName.type", "OPTIONAL",
 			"subject.commonName.minOccurrences", 0,
+			"subject.commonName.maxOccurrences", 10,
 		),
-		expectPatch: `{"subject":{"commonName":{"allowedValues":null,"defaultValues":null,"maxOccurrences":10,"minOccurrences":0,"type":"OPTIONAL"}}}`,
-		// TODO: desired doesn't say any maxOccurrences change, but the patch says maxOccurrences=10 ⚠️⚠️
+		expectPatch: `{"subject":{"commonName":{"maxOccurrences":10,"type":"OPTIONAL"}}}`,
 	}))
 }
 
-var testPatchWIMIssuerPolicy = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+var testPatchWIMIssuerPolicy = testPatchFn(func(t *testing.T, existing, expectedPatch string) []mocksrv.Interaction {
 	return []mocksrv.Interaction{
 		{Expect: "GET /v1/distributedissuers/policies", MockCode: 200, MockBody: `{"policies": [` + existing + `]}`},
 		{Expect: "PATCH /v1/distributedissuers/policies/d7a09670-9de6-11f0-b18d-1b1c0845fa26", MockCode: 200,
 			MockBody: `{"policies": [` + existing + `]}`,
 			Assert: func(t *testing.T, r *http.Request, gotBody string) {
+				t.Helper()
 				require.Equal(t, expectedPatch, gotBody)
 			},
 		},
@@ -143,34 +145,63 @@ var testPatchWIMIssuerPolicy = testPatchFn(func(existing, expectedPatch string) 
 
 func Test_applyManifests_ServiceAccount(t *testing.T) {
 	t.Run("no changes", testPatchServiceAccount(testPatch_tc{
-		existing: sampleSA,
-		desired:  sampleManifestSA,
-		// TODO: the patch doesn't match ⚠️⚠️
-		expectPatch: `{"owner":"d2508300-3705-11ee-a17b-69a77fb429d7", "scopes":["distributed-issuance"]}`,
+		existing:    sampleSA,
+		desired:     sampleManifestSA,
+		expectPatch: "", // "" = no PATCH must be made.
 	}))
 
 	t.Run("can change enabled from false to true", testPatchServiceAccount(testPatch_tc{
-		existing: withJSON(sampleSA, "enabled", true),
-		desired:  withYAML(sampleManifestSA, "enabled", false),
-		// TODO: the patch doesn't match ⚠️⚠️
-		expectPatch: `{"owner":"d2508300-3705-11ee-a17b-69a77fb429d7", "scopes":["distributed-issuance"]}`,
+		existing:    withJSON(sampleSA, "enabled", true),
+		desired:     withYAML(sampleManifestSA, "enabled", false),
+		expectPatch: `{"enabled":false}`,
 	}))
 }
 
-var testPatchServiceAccount = testPatchFn(func(existing, expectedPatch string) []mocksrv.Interaction {
+var testPatchServiceAccount = testPatchFn(func(t *testing.T, existing, expectedPatch string) []mocksrv.Interaction {
+	var assertEqual func(t *testing.T, expected, actual any, msgAndArgs ...any)
+	if expectedPatch == "" {
+		assertEqual = requireNotCalled(t, "no PATCH request was expected, but one was made")
+	} else {
+		assertEqual = assertEqualAndCalled(t, "a PATCH request was expected but none was made")
+	}
 	return []mocksrv.Interaction{
 		{Expect: "GET /v1/serviceaccounts", MockCode: 200, MockBody: `[` + existing + `]`},
 		{Expect: "GET /v1/teams", MockCode: 200, MockBody: `{"teams": [` + sampleTeam + `]}`},
 		{Expect: "PATCH /v1/serviceaccounts/d46f1f0d-299f-11ef-a8ac-2ea42f30fe31", MockCode: 200,
 			MockBody: existing,
 			Assert: func(t *testing.T, r *http.Request, gotBody string) {
-				require.JSONEq(t, expectedPatch, gotBody)
+				assertEqual(t, expectedPatch, gotBody)
 			},
 		},
 	}
 })
 
+func assertEqualAndCalled(t *testing.T, msgAndArgs ...any) func(t *testing.T, expected, actual any, msgAndArgs ...any) {
+	t.Helper()
+	called := atomic.Bool{}
+	t.Cleanup(func() {
+		assert.True(t, called.Load(), msgAndArgs...)
+	})
+	return func(t *testing.T, expected, actual any, msgAndArgs ...any) {
+		called.Store(true)
+		assert.Equal(t, expected, actual, msgAndArgs...)
+	}
+}
+
+func requireNotCalled(t *testing.T, msgAndArgs ...any) func(t *testing.T, expected, actual any, msgAndArgs ...any) {
+	t.Helper()
+	called := atomic.Bool{}
+	t.Cleanup(func() {
+		assert.False(t, called.Load(), msgAndArgs...)
+	})
+	return func(t *testing.T, expected, actual any, msgAndArgs ...any) {
+		called.Store(true)
+	}
+}
+
 func run(t *testing.T, givenManifests string, mock []mocksrv.Interaction) {
+	t.Helper()
+
 	_, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
 	srv := mocksrv.UncheckedMock(t, mock, cancel)
@@ -406,7 +437,7 @@ var sampleSA = `
   "id": "d46f1f0d-299f-11ef-a8ac-2ea42f30fe31",
   "owner": "d2508300-3705-11ee-a17b-69a77fb429d7",
   "scopes": [
-      "kubernetes-discovery"
+      "distributed-issuance"
   ],
   "updatedBy": "76a126f0-280e-11ee-84fb-991f3177e2d0",
   "updatedOn": "2024-06-13T16:13:11.238061Z"
@@ -564,10 +595,11 @@ func withJSON(jsonStr string, changes ...any) string {
 	return string(jsonBytes)
 }
 
-func testPatchFn(mock func(existing, expectedPatch string) []mocksrv.Interaction) func(tc testPatch_tc) func(t *testing.T) {
+func testPatchFn(mock func(t *testing.T, existing, expectedPatch string) []mocksrv.Interaction) func(tc testPatch_tc) func(t *testing.T) {
 	return func(tc testPatch_tc) func(t *testing.T) {
 		return func(t *testing.T) {
-			mock := mock(tc.existing, tc.expectPatch)
+			t.Helper()
+			mock := mock(t, tc.existing, tc.expectPatch)
 			run(t, tc.desired, mock)
 		}
 	}
@@ -577,5 +609,5 @@ type testPatch_tc struct {
 	name        string
 	existing    string
 	desired     string
-	expectPatch string
+	expectPatch string // "" = no call to PATCH expected
 }

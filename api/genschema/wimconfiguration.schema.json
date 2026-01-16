@@ -1,12 +1,11 @@
 {
-  "$id": "https://example.com/wim-manifest.schema.json",
-  "title": "CyberArk Workload Identity Manager Manifests",
-  "description": "Schema describing the YAML manifests consumed by vcpctl.",
-  "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
   "allOf": [
     {
       "type": "object",
       "properties": {
+        "kind": {
+          "const": "WIMConfiguration"
+        },
         "name": {
           "type": "string",
           "description": "Name of the configuration"
@@ -14,9 +13,6 @@
         "subCaProvider": {
           "type": "string",
           "description": "Name of the Sub CA provider to associate with the configuration"
-        },
-        "kind": {
-          "const": "WIMConfiguration"
         }
       },
       "required": [
@@ -30,26 +26,6 @@
     }
   ],
   "$defs": {
-    "AdvancedSettingsInformation": {
-      "type": "object",
-      "properties": {
-        "enableIssuanceAuditLog": {
-          "type": "boolean",
-          "description": "Whether audit log entries must be generated for each issued certificate",
-          "example": false
-        },
-        "includeRawCertDataInAuditLog": {
-          "type": "boolean",
-          "description": "Whether the raw certificate data must be included in the audit log entry",
-          "example": false
-        },
-        "requireFIPSCompliantBuild": {
-          "type": "boolean",
-          "description": "Whether FIPS-compliant build is required",
-          "example": false
-        }
-      }
-    },
     "JwtStandardClaimsAuthenticationInformation": {
       "required": [
         "audience",
@@ -61,12 +37,12 @@
           "type": "object",
           "properties": {
             "clients": {
-              "minItems": 1,
-              "type": "array",
-              "description": "List with clients, identified by processing JWTs that include standard/registered claims",
               "items": {
                 "$ref": "#/$defs/JwtClientInformation"
-              }
+              },
+              "minItems": 1,
+              "type": "array",
+              "description": "List with clients, identified by processing JWTs that include standard/registered claims"
             },
             "audience": {
               "maxLength": 256,
@@ -79,6 +55,61 @@
         }
       ]
     },
+    "JwtClientInformation": {
+      "required": [
+        "issuer",
+        "name",
+        "subjects"
+      ],
+      "type": "object",
+      "properties": {
+        "allowedPolicyIds": {
+          "description": "Array of UUIDs of policies that the client is permitted to use",
+          "format": "uuid",
+          "example": [
+            "8ae92800-b1e0-11ed-859d-b39255f965ee"
+          ],
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "name": {
+          "minLength": 0,
+          "type": "string",
+          "description": "Name of the client",
+          "example": "Some client",
+          "maxLength": 64
+        },
+        "issuer": {
+          "maxLength": 2048,
+          "minLength": 0,
+          "type": "string",
+          "description": "Issuer of the JWT",
+          "example": "https://kubernetes.default.svc"
+        },
+        "jwksUri": {
+          "description": "URL used to pull the trusted singing keys used for validation",
+          "example": "https://www.example.com:6443/jwks",
+          "maxLength": 2048,
+          "minLength": 0,
+          "type": "string"
+        },
+        "subjects": {
+          "minItems": 1,
+          "type": "array",
+          "description": "Array of subjects of the JWT",
+          "example": [
+            "system:serviceaccount:venafi:application-team-1"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "ClientAuthorizationInformation": {
       "type": "object",
       "properties": {
@@ -87,33 +118,128 @@
         }
       }
     },
-    "JwtJwksAuthenticationInformation": {
+    "KeyAlgorithmInformation": {
+      "required": [
+        "allowedValues",
+        "defaultValue"
+      ],
+      "type": "object",
+      "properties": {
+        "defaultValue": {
+          "type": "string",
+          "description": "Key algorithm default value",
+          "example": "RSA_4096",
+          "enum": [
+            "RSA_2048",
+            "RSA_3072",
+            "RSA_4096",
+            "EC_P256",
+            "EC_P384",
+            "EC_P521",
+            "EC_ED25519"
+          ]
+        },
+        "allowedValues": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "RSA_2048",
+              "RSA_3072",
+              "RSA_4096",
+              "EC_P256",
+              "EC_P384",
+              "EC_P521",
+              "EC_ED25519"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "description": "Key algorithm allowed values"
+        }
+      },
+      "description": "Key algorithm"
+    },
+    "SubjectAttributesInformation": {
+      "type": "object",
+      "properties": {
+        "commonName": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organization": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organizationalUnit": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "locality": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "stateOrProvince": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "country": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      },
+      "description": "Subject attributes"
+    },
+    "JwtOidcAuthenticationInformation": {
+      "required": [
+        "audience",
+        "baseUrl"
+      ],
+      "type": "object",
       "allOf": [
         {
           "type": "object",
           "properties": {
-            "urls": {
-              "description": "Array of JWT JWKS urls",
-              "example": [
-                "https://jwks.example.com"
-              ],
-              "items": {
-                "type": "string"
-              },
-              "minItems": 1,
-              "type": "array"
+            "baseUrl": {
+              "maxLength": 2048,
+              "minLength": 0,
+              "type": "string",
+              "description": "JWT OpenId base URL",
+              "example": "https://openid.example.com"
+            },
+            "audience": {
+              "type": "string",
+              "description": "OpenId audience",
+              "example": "Client1",
+              "maxLength": 256,
+              "minLength": 0
             }
           }
         }
-      ],
+      ]
+    },
+    "AzureCloudProviderInformation": {
       "required": [
-        "urls"
+        "subscriptionIds"
       ],
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "subscriptionIds": {
+          "description": "Array of Azure subscription IDs each of which should be UUID",
+          "example": [
+            "8d10da13-8125-4ba9-a717-bf7490507b3d"
+          ],
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      }
     },
     "PropertyInformation": {
       "type": "object",
       "properties": {
+        "allowedValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "defaultValues": {
           "type": "array",
           "items": {
@@ -125,202 +251,101 @@
           "format": "int32"
         },
         "maxOccurrences": {
-          "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "type": "integer"
         },
         "type": {
-          "type": "string",
           "enum": [
             "IGNORED",
             "FORBIDDEN",
             "OPTIONAL",
             "REQUIRED",
             "LOCKED"
-          ]
+          ],
+          "type": "string"
+        }
+      }
+    },
+    "AdvancedSettingsInformation": {
+      "type": "object",
+      "properties": {
+        "enableIssuanceAuditLog": {
+          "description": "Whether audit log entries must be generated for each issued certificate",
+          "example": false,
+          "type": "boolean"
         },
-        "allowedValues": {
+        "includeRawCertDataInAuditLog": {
+          "type": "boolean",
+          "description": "Whether the raw certificate data must be included in the audit log entry",
+          "example": false
+        },
+        "requireFIPSCompliantBuild": {
+          "example": false,
+          "type": "boolean",
+          "description": "Whether FIPS-compliant build is required"
+        }
+      }
+    },
+    "SubCaProviderPkcs11ConfigurationInformation": {
+      "type": "object",
+      "properties": {
+        "signingEnabled": {
+          "type": "boolean",
+          "description": "Indicates whether HSM signing is enabled or not",
+          "example": true
+        },
+        "partitionLabel": {
+          "type": "string",
+          "description": "HSM Partition Label",
+          "example": "workload-identity-manager-hsm-partition"
+        },
+        "partitionSerialNumber": {
+          "pattern": "^[A-Fa-fx0-9]{0,18}$",
+          "type": "string",
+          "description": "HSM Partition Serial Number",
+          "example": "1444210958933"
+        },
+        "pin": {
+          "writeOnly": true,
+          "example": "1234",
+          "type": "string",
+          "description": "HSM PIN"
+        },
+        "allowedClientLibraries": {
           "type": "array",
+          "description": "A collection of strings each of which represents SHA256 hash of an allowed HSM client library",
+          "example": [
+            "c34d199f2e30bb679cd9b8533b99975465aefe8b023be1b37972f1ab43ab7b2d"
+          ],
           "items": {
             "type": "string"
           }
         }
       }
     },
-    "ExtendedConfigurationInformation": {
+    "GoogleCloudProviderInformation": {
       "type": "object",
       "properties": {
-        "minTlsVersion": {
-          "type": "string",
-          "description": "Minimum required TLS protocol version",
-          "enum": [
-            "TLS12",
-            "TLS13"
-          ]
-        },
-        "advancedSettings": {
-          "$ref": "#/$defs/AdvancedSettingsInformation"
-        },
-        "subCaProvider": {
-          "$ref": "#/$defs/SubCaProviderInformation"
-        },
-        "policies": {
-          "type": "array",
+        "projectIdentifiers": {
           "items": {
-            "$ref": "#/$defs/PolicyInformation"
-          }
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the configuration",
-          "example": "Some configuration"
-        },
-        "controllerAllowedPolicyIds": {
-          "example": [
-            "8ae92800-b1e0-11ed-859d-b39255f965ee"
-          ],
-          "items": {
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
-          "type": "array",
-          "description": "Array of UUIDs of policies that the kubernetes controller is permitted to use",
-          "format": "uuid"
-        },
-        "unixSocketAllowedPolicyIds": {
-          "format": "uuid",
-          "example": [
-            "8ae92800-b1e0-11ed-859d-b39255f965ee"
-          ],
-          "items": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "type": "array",
-          "description": "Array of UUIDs of policies that are permitted to be used when using the unix socket"
-        },
-        "clientAuthorization": {
-          "$ref": "#/$defs/ClientAuthorizationInformation"
-        },
-        "cloudProviders": {
-          "$ref": "#/$defs/CloudProvidersInformation"
-        },
-        "serviceAccountIds": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uuid"
-          }
-        },
-        "creationDate": {
-          "description": "When the configuration was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00",
-          "type": "string"
-        },
-        "id": {
-          "format": "uuid",
-          "example": "7268d820-a08d-11ed-bbc0-252385d6d389",
-          "type": "string",
-          "description": "UUID of the configuration"
-        },
-        "companyId": {
-          "type": "string",
-          "description": "UUID specific to your company",
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
-        },
-        "policyIds": {
-          "format": "uuid",
-          "example": [
-            "8ae92800-b1e0-11ed-859d-b39255f965ee"
-          ],
-          "items": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "type": "array",
-          "description": "Array of UUIDs of policies to associate with the configuration"
-        },
-        "longLivedCertCount": {
-          "description": "Number of long lived certificates",
-          "format": "int64",
-          "example": 2,
-          "type": "integer"
-        },
-        "shortLivedCertCount": {
-          "type": "integer",
-          "description": "Number of short lived certificates",
-          "format": "int64",
-          "example": 20
-        },
-        "ultraShortLivedCertCount": {
-          "type": "integer",
-          "description": "Number of ultra short lived certificates",
-          "format": "int64",
-          "example": 200
-        },
-        "policyDefinitions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PolicyInformation"
-          }
-        },
-        "clientAuthentication": {
-          "$ref": "#/$defs/ClientAuthenticationInformation"
-        },
-        "modificationDate": {
-          "type": "string",
-          "description": "When the configuration was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
-        }
-      }
-    },
-    "AzureCloudProviderInformation": {
-      "required": [
-        "subscriptionIds"
-      ],
-      "type": "object",
-      "properties": {
-        "subscriptionIds": {
           "minItems": 1,
           "type": "array",
-          "description": "Array of Azure subscription IDs each of which should be UUID",
+          "description": "Array of Google project identifiers each of which should be a string with int64 number or 6 to 30 lowercase letters, digits, or hyphens, should start with a letter and not contain trailing hyphens",
           "example": [
-            "8d10da13-8125-4ba9-a717-bf7490507b3d"
+            "415104041262",
+            "tokyo-rain-123"
+          ]
+        },
+        "regions": {
+          "type": "array",
+          "description": "Array of Google regions",
+          "example": [
+            "us-west1"
           ],
           "items": {
             "type": "string",
-            "format": "uuid"
-          }
-        }
-      }
-    },
-    "SansInformation": {
-      "properties": {
-        "dnsNames": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "ipAddresses": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "rfc822Names": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "uniformResourceIdentifiers": {
-          "$ref": "#/$defs/PropertyInformation"
-        }
-      },
-      "description": "Subject alternative names",
-      "type": "object"
-    },
-    "GoogleCloudProviderInformation": {
-      "required": [
-        "projectIdentifiers",
-        "regions"
-      ],
-      "type": "object",
-      "properties": {
-        "regions": {
-          "items": {
             "enum": [
               "asia-east1",
               "asia-east2",
@@ -359,479 +384,43 @@
               "us-west2",
               "us-west3",
               "us-west4"
-            ],
-            "type": "string"
-          },
-          "type": "array",
-          "description": "Array of Google regions",
-          "example": [
-            "us-west1"
-          ]
-        },
-        "projectIdentifiers": {
-          "example": [
-            "415104041262",
-            "tokyo-rain-123"
-          ],
-          "items": {
-            "type": "string"
-          },
-          "minItems": 1,
-          "type": "array",
-          "description": "Array of Google project identifiers each of which should be a string with int64 number or 6 to 30 lowercase letters, digits, or hyphens, should start with a letter and not contain trailing hyphens"
-        }
-      }
-    },
-    "CustomClaimsAliasesInformation": {
-      "type": "object",
-      "properties": {
-        "configuration": {
-          "maxLength": 128,
-          "minLength": 0,
-          "type": "string"
-        },
-        "allowAllPolicies": {
-          "type": "string",
-          "maxLength": 128,
-          "minLength": 0
-        },
-        "allowedPolicies": {
-          "type": "string",
-          "maxLength": 128,
-          "minLength": 0
-        }
-      }
-    },
-    "AwsCloudProviderInformation": {
-      "required": [
-        "accountIds",
-        "regions"
-      ],
-      "type": "object",
-      "properties": {
-        "accountIds": {
-          "items": {
-            "type": "string"
-          },
-          "minItems": 1,
-          "type": "array",
-          "description": "Array of AWS account IDs each of which should be a 12-digit identifier",
-          "example": [
-            "123456789012"
-          ]
-        },
-        "regions": {
-          "example": [
-            "us-west-1"
-          ],
-          "items": {
-            "type": "string",
-            "enum": [
-              "us-east-1",
-              "us-east-2",
-              "us-west-1",
-              "us-west-2",
-              "af-south-1",
-              "ap-east-1",
-              "ap-south-2",
-              "ap-southeast-3",
-              "ap-southeast-4",
-              "ap-south-1",
-              "ap-northeast-3",
-              "ap-northeast-2",
-              "ap-southeast-1",
-              "ap-southeast-2",
-              "ap-northeast-1",
-              "ca-central-1",
-              "eu-central-1",
-              "eu-west-1",
-              "eu-west-2",
-              "eu-south-1",
-              "eu-west-3",
-              "eu-south-2",
-              "eu-north-1",
-              "eu-central-2",
-              "me-south-1",
-              "me-central-1",
-              "sa-east-1",
-              "us-gov-east-1",
-              "us-gov-west-1"
-            ]
-          },
-          "type": "array",
-          "description": "Array of AWS regions"
-        }
-      }
-    },
-    "JwtClientInformation": {
-      "required": [
-        "issuer",
-        "name",
-        "subjects"
-      ],
-      "type": "object",
-      "properties": {
-        "name": {
-          "maxLength": 64,
-          "minLength": 0,
-          "type": "string",
-          "description": "Name of the client",
-          "example": "Some client"
-        },
-        "issuer": {
-          "maxLength": 2048,
-          "minLength": 0,
-          "type": "string",
-          "description": "Issuer of the JWT",
-          "example": "https://kubernetes.default.svc"
-        },
-        "jwksUri": {
-          "maxLength": 2048,
-          "minLength": 0,
-          "type": "string",
-          "description": "URL used to pull the trusted singing keys used for validation",
-          "example": "https://www.example.com:6443/jwks"
-        },
-        "subjects": {
-          "minItems": 1,
-          "type": "array",
-          "description": "Array of subjects of the JWT",
-          "example": [
-            "system:serviceaccount:venafi:application-team-1"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "allowedPolicyIds": {
-          "minItems": 1,
-          "type": "array",
-          "description": "Array of UUIDs of policies that the client is permitted to use",
-          "format": "uuid",
-          "example": [
-            "8ae92800-b1e0-11ed-859d-b39255f965ee"
-          ],
-          "items": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      }
-    },
-    "CloudProvidersInformation": {
-      "type": "object",
-      "properties": {
-        "google": {
-          "$ref": "#/$defs/GoogleCloudProviderInformation"
-        },
-        "aws": {
-          "$ref": "#/$defs/AwsCloudProviderInformation"
-        },
-        "azure": {
-          "$ref": "#/$defs/AzureCloudProviderInformation"
-        }
-      }
-    },
-    "SubCaProviderPkcs11ConfigurationInformation": {
-      "type": "object",
-      "properties": {
-        "signingEnabled": {
-          "type": "boolean",
-          "description": "Indicates whether HSM signing is enabled or not",
-          "example": true
-        },
-        "partitionLabel": {
-          "type": "string",
-          "description": "HSM Partition Label",
-          "example": "workload-identity-manager-hsm-partition"
-        },
-        "partitionSerialNumber": {
-          "pattern": "^[A-Fa-fx0-9]{0,18}$",
-          "type": "string",
-          "description": "HSM Partition Serial Number",
-          "example": "1444210958933"
-        },
-        "pin": {
-          "type": "string",
-          "description": "HSM PIN",
-          "writeOnly": true,
-          "example": "1234"
-        },
-        "allowedClientLibraries": {
-          "type": "array",
-          "description": "A collection of strings each of which represents SHA256 hash of an allowed HSM client library",
-          "example": [
-            "c34d199f2e30bb679cd9b8533b99975465aefe8b023be1b37972f1ab43ab7b2d"
-          ],
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "JwtOidcAuthenticationInformation": {
-      "allOf": [
-        {
-          "properties": {
-            "baseUrl": {
-              "maxLength": 2048,
-              "minLength": 0,
-              "type": "string",
-              "description": "JWT OpenId base URL",
-              "example": "https://openid.example.com"
-            },
-            "audience": {
-              "maxLength": 256,
-              "minLength": 0,
-              "type": "string",
-              "description": "OpenId audience",
-              "example": "Client1"
-            }
-          },
-          "type": "object"
-        }
-      ],
-      "required": [
-        "audience",
-        "baseUrl"
-      ],
-      "type": "object"
-    },
-    "SubCaProviderInformation": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Name of the Sub CA provider",
-          "example": "Some Sub CA provider"
-        },
-        "caProductOptionId": {
-          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd",
-          "type": "string",
-          "description": "UUID of the CA product option used by this Sub CA provider",
-          "format": "uuid"
-        },
-        "locality": {
-          "type": "string",
-          "description": "Locality",
-          "example": "San Antonio"
-        },
-        "keyAlgorithm": {
-          "description": "Key algorithm type",
-          "example": "EC_P256",
-          "enum": [
-            "RSA_2048",
-            "RSA_3072",
-            "RSA_4096",
-            "EC_P256",
-            "EC_P384",
-            "EC_P521",
-            "EC_ED25519"
-          ],
-          "type": "string"
-        },
-        "id": {
-          "type": "string",
-          "description": "UUID of the Sub CA provider",
-          "format": "uuid",
-          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746"
-        },
-        "validityPeriod": {
-          "type": "string",
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D"
-        },
-        "organization": {
-          "type": "string",
-          "description": "Organization",
-          "example": "Some organization"
-        },
-        "country": {
-          "example": "US",
-          "type": "string",
-          "description": "Country"
-        },
-        "creationDate": {
-          "type": "string",
-          "description": "When the Sub CA provider was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00"
-        },
-        "modificationDate": {
-          "type": "string",
-          "description": "When the Sub CA provider was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
-        },
-        "companyId": {
-          "type": "string",
-          "description": "UUID specific to your company",
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
-        },
-        "caType": {
-          "example": "BUILTIN",
-          "enum": [
-            "MOCKCA",
-            "DIGICERT",
-            "GLOBALSIGN",
-            "BUILTIN",
-            "ENTRUST",
-            "MICROSOFT",
-            "ACME",
-            "ZTPKI",
-            "GLOBALSIGNMSSL",
-            "TPP"
-          ],
-          "type": "string",
-          "description": "Type of CA this Sub CA provider works with"
-        },
-        "caAccountId": {
-          "format": "uuid",
-          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a",
-          "type": "string",
-          "description": "UUID of the CA account used by this Sub CA provider"
-        },
-        "commonName": {
-          "type": "string",
-          "description": "Common name",
-          "example": "example.com"
-        },
-        "organizationalUnit": {
-          "type": "string",
-          "description": "Organizational unit",
-          "example": "Some organizational unit"
-        },
-        "stateOrProvince": {
-          "type": "string",
-          "description": "State or province",
-          "example": "Texas"
-        },
-        "pkcs11": {
-          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
-        }
-      }
-    },
-    "KeyAlgorithmInformation": {
-      "type": "object",
-      "properties": {
-        "allowedValues": {
-          "minItems": 1,
-          "type": "array",
-          "description": "Key algorithm allowed values",
-          "items": {
-            "type": "string",
-            "enum": [
-              "RSA_2048",
-              "RSA_3072",
-              "RSA_4096",
-              "EC_P256",
-              "EC_P384",
-              "EC_P521",
-              "EC_ED25519"
             ]
           }
-        },
-        "defaultValue": {
-          "type": "string",
-          "description": "Key algorithm default value",
-          "example": "RSA_4096",
-          "enum": [
-            "RSA_2048",
-            "RSA_3072",
-            "RSA_4096",
-            "EC_P256",
-            "EC_P384",
-            "EC_P521",
-            "EC_ED25519"
-          ]
         }
       },
-      "description": "Key algorithm",
       "required": [
-        "allowedValues",
-        "defaultValue"
+        "projectIdentifiers",
+        "regions"
       ]
     },
-    "SubjectAttributesInformation": {
+    "ClientAuthenticationInformation": {
+      "discriminator": {
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/JwtStandardClaimsAuthenticationInformation"
+        },
+        {
+          "$ref": "#/$defs/JwtJwksAuthenticationInformation"
+        },
+        {
+          "$ref": "#/$defs/JwtOidcAuthenticationInformation"
+        }
+      ],
+      "required": [
+        "type"
+      ],
       "type": "object",
       "properties": {
-        "organization": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "organizationalUnit": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "locality": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "stateOrProvince": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "country": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "commonName": {
-          "$ref": "#/$defs/PropertyInformation"
+        "type": {
+          "type": "string"
         }
-      },
-      "description": "Subject attributes"
+      }
     },
     "PolicyInformation": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "Name of the policy",
-          "example": "Some policy"
-        },
-        "validityPeriod": {
-          "example": "P30D",
-          "type": "string",
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS"
-        },
-        "keyAlgorithm": {
-          "$ref": "#/$defs/KeyAlgorithmInformation"
-        },
-        "creationDate": {
-          "type": "string",
-          "description": "When the policy was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00"
-        },
-        "companyId": {
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
-          "type": "string",
-          "description": "UUID specific to your company"
-        },
-        "subject": {
-          "$ref": "#/$defs/SubjectAttributesInformation"
-        },
-        "sans": {
-          "$ref": "#/$defs/SansInformation"
-        },
-        "keyUsages": {
-          "type": "array",
-          "description": "Key usages",
-          "example": [
-            "keyEncipherment",
-            "digitalSignature"
-          ],
-          "items": {
-            "type": "string",
-            "enum": [
-              "digitalSignature",
-              "nonRepudiation",
-              "keyEncipherment",
-              "dataEncipherment",
-              "keyAgreement",
-              "keyCertSign",
-              "cRLSign",
-              "encipherOnly",
-              "decipherOnly"
-            ]
-          }
-        },
         "extendedKeyUsages": {
           "type": "array",
           "description": "Extended key usages",
@@ -867,44 +456,455 @@
             ]
           }
         },
+        "creationDate": {
+          "type": "string",
+          "description": "When the policy was initially created",
+          "example": "2022-10-10T14:50:41.710+00:00"
+        },
+        "id": {
+          "type": "string",
+          "description": "UUID of the policy",
+          "format": "uuid",
+          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "UUID specific to your company",
+          "format": "uuid",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
+        },
+        "subject": {
+          "$ref": "#/$defs/SubjectAttributesInformation"
+        },
+        "sans": {
+          "$ref": "#/$defs/SansInformation"
+        },
+        "keyAlgorithm": {
+          "$ref": "#/$defs/KeyAlgorithmInformation"
+        },
         "modificationDate": {
           "type": "string",
           "description": "When the policy was last modified",
           "example": "2023-12-12T20:00:10.500+00:00"
         },
-        "id": {
-          "description": "UUID of the policy",
-          "format": "uuid",
-          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee",
-          "type": "string"
+        "name": {
+          "type": "string",
+          "description": "Name of the policy",
+          "example": "Some policy"
+        },
+        "validityPeriod": {
+          "example": "P30D",
+          "type": "string",
+          "description": "ISO8601 Period Format",
+          "format": "PnYnMnDTnHnMnS"
+        },
+        "keyUsages": {
+          "type": "array",
+          "description": "Key usages",
+          "example": [
+            "keyEncipherment",
+            "digitalSignature"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "digitalSignature",
+              "nonRepudiation",
+              "keyEncipherment",
+              "dataEncipherment",
+              "keyAgreement",
+              "keyCertSign",
+              "cRLSign",
+              "encipherOnly",
+              "decipherOnly"
+            ]
+          }
         }
       }
     },
-    "ClientAuthenticationInformation": {
-      "required": [
-        "type"
+    "JwtJwksAuthenticationInformation": {
+      "type": "object",
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "urls": {
+              "type": "array",
+              "description": "Array of JWT JWKS urls",
+              "example": [
+                "https://jwks.example.com"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          }
+        }
       ],
+      "required": [
+        "urls"
+      ]
+    },
+    "CloudProvidersInformation": {
       "type": "object",
       "properties": {
-        "type": {
+        "google": {
+          "$ref": "#/$defs/GoogleCloudProviderInformation"
+        },
+        "aws": {
+          "$ref": "#/$defs/AwsCloudProviderInformation"
+        },
+        "azure": {
+          "$ref": "#/$defs/AzureCloudProviderInformation"
+        }
+      }
+    },
+    "ExtendedConfigurationInformation": {
+      "type": "object",
+      "properties": {
+        "controllerAllowedPolicyIds": {
+          "type": "array",
+          "description": "Array of UUIDs of policies that the kubernetes controller is permitted to use",
+          "format": "uuid",
+          "example": [
+            "8ae92800-b1e0-11ed-859d-b39255f965ee"
+          ],
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "unixSocketAllowedPolicyIds": {
+          "type": "array",
+          "description": "Array of UUIDs of policies that are permitted to be used when using the unix socket",
+          "format": "uuid",
+          "example": [
+            "8ae92800-b1e0-11ed-859d-b39255f965ee"
+          ],
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "clientAuthorization": {
+          "$ref": "#/$defs/ClientAuthorizationInformation"
+        },
+        "cloudProviders": {
+          "$ref": "#/$defs/CloudProvidersInformation"
+        },
+        "policyDefinitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PolicyInformation"
+          }
+        },
+        "id": {
+          "type": "string",
+          "description": "UUID of the configuration",
+          "format": "uuid",
+          "example": "7268d820-a08d-11ed-bbc0-252385d6d389"
+        },
+        "ultraShortLivedCertCount": {
+          "type": "integer",
+          "description": "Number of ultra short lived certificates",
+          "format": "int64",
+          "example": 200
+        },
+        "policies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PolicyInformation"
+          }
+        },
+        "longLivedCertCount": {
+          "example": 2,
+          "type": "integer",
+          "description": "Number of long lived certificates",
+          "format": "int64"
+        },
+        "companyId": {
+          "description": "UUID specific to your company",
+          "format": "uuid",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
           "type": "string"
+        },
+        "serviceAccountIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "minTlsVersion": {
+          "type": "string",
+          "description": "Minimum required TLS protocol version",
+          "enum": [
+            "TLS12",
+            "TLS13"
+          ]
+        },
+        "advancedSettings": {
+          "$ref": "#/$defs/AdvancedSettingsInformation"
+        },
+        "modificationDate": {
+          "type": "string",
+          "description": "When the configuration was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00"
+        },
+        "subCaProvider": {
+          "$ref": "#/$defs/SubCaProviderInformation"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the configuration",
+          "example": "Some configuration"
+        },
+        "policyIds": {
+          "type": "array",
+          "description": "Array of UUIDs of policies to associate with the configuration",
+          "format": "uuid",
+          "example": [
+            "8ae92800-b1e0-11ed-859d-b39255f965ee"
+          ],
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "clientAuthentication": {
+          "$ref": "#/$defs/ClientAuthenticationInformation"
+        },
+        "shortLivedCertCount": {
+          "format": "int64",
+          "example": 20,
+          "type": "integer",
+          "description": "Number of short lived certificates"
+        },
+        "creationDate": {
+          "type": "string",
+          "description": "When the configuration was initially created",
+          "example": "2022-10-10T14:50:41.710+00:00"
+        }
+      }
+    },
+    "AwsCloudProviderInformation": {
+      "type": "object",
+      "properties": {
+        "accountIds": {
+          "minItems": 1,
+          "type": "array",
+          "description": "Array of AWS account IDs each of which should be a 12-digit identifier",
+          "example": [
+            "123456789012"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "regions": {
+          "type": "array",
+          "description": "Array of AWS regions",
+          "example": [
+            "us-west-1"
+          ],
+          "items": {
+            "enum": [
+              "us-east-1",
+              "us-east-2",
+              "us-west-1",
+              "us-west-2",
+              "af-south-1",
+              "ap-east-1",
+              "ap-south-2",
+              "ap-southeast-3",
+              "ap-southeast-4",
+              "ap-south-1",
+              "ap-northeast-3",
+              "ap-northeast-2",
+              "ap-southeast-1",
+              "ap-southeast-2",
+              "ap-northeast-1",
+              "ca-central-1",
+              "eu-central-1",
+              "eu-west-1",
+              "eu-west-2",
+              "eu-south-1",
+              "eu-west-3",
+              "eu-south-2",
+              "eu-north-1",
+              "eu-central-2",
+              "me-south-1",
+              "me-central-1",
+              "sa-east-1",
+              "us-gov-east-1",
+              "us-gov-west-1"
+            ],
+            "type": "string"
+          }
         }
       },
-      "discriminator": {
-        "propertyName": "type"
-      },
-      "oneOf": [
-        {
-          "$ref": "#/$defs/JwtStandardClaimsAuthenticationInformation"
-        },
-        {
-          "$ref": "#/$defs/JwtJwksAuthenticationInformation"
-        },
-        {
-          "$ref": "#/$defs/JwtOidcAuthenticationInformation"
-        }
+      "required": [
+        "accountIds",
+        "regions"
       ]
+    },
+    "SubCaProviderInformation": {
+      "type": "object",
+      "properties": {
+        "companyId": {
+          "type": "string",
+          "description": "UUID specific to your company",
+          "format": "uuid",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
+        },
+        "validityPeriod": {
+          "example": "P30D",
+          "type": "string",
+          "description": "ISO8601 Period Format",
+          "format": "PnYnMnDTnHnMnS"
+        },
+        "country": {
+          "type": "string",
+          "description": "Country",
+          "example": "US"
+        },
+        "keyAlgorithm": {
+          "type": "string",
+          "description": "Key algorithm type",
+          "example": "EC_P256",
+          "enum": [
+            "RSA_2048",
+            "RSA_3072",
+            "RSA_4096",
+            "EC_P256",
+            "EC_P384",
+            "EC_P521",
+            "EC_ED25519"
+          ]
+        },
+        "caAccountId": {
+          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a",
+          "type": "string",
+          "description": "UUID of the CA account used by this Sub CA provider",
+          "format": "uuid"
+        },
+        "commonName": {
+          "description": "Common name",
+          "example": "example.com",
+          "type": "string"
+        },
+        "locality": {
+          "description": "Locality",
+          "example": "San Antonio",
+          "type": "string"
+        },
+        "stateOrProvince": {
+          "description": "State or province",
+          "example": "Texas",
+          "type": "string"
+        },
+        "creationDate": {
+          "description": "When the Sub CA provider was initially created",
+          "example": "2022-10-10T14:50:41.710+00:00",
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "description": "UUID of the Sub CA provider",
+          "format": "uuid",
+          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the Sub CA provider",
+          "example": "Some Sub CA provider"
+        },
+        "caType": {
+          "enum": [
+            "MOCKCA",
+            "DIGICERT",
+            "GLOBALSIGN",
+            "BUILTIN",
+            "ENTRUST",
+            "MICROSOFT",
+            "ACME",
+            "ZTPKI",
+            "GLOBALSIGNMSSL",
+            "TPP"
+          ],
+          "type": "string",
+          "description": "Type of CA this Sub CA provider works with",
+          "example": "BUILTIN"
+        },
+        "organizationalUnit": {
+          "type": "string",
+          "description": "Organizational unit",
+          "example": "Some organizational unit"
+        },
+        "pkcs11": {
+          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
+        },
+        "modificationDate": {
+          "description": "When the Sub CA provider was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00",
+          "type": "string"
+        },
+        "caProductOptionId": {
+          "format": "uuid",
+          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd",
+          "type": "string",
+          "description": "UUID of the CA product option used by this Sub CA provider"
+        },
+        "organization": {
+          "type": "string",
+          "description": "Organization",
+          "example": "Some organization"
+        }
+      }
+    },
+    "CustomClaimsAliasesInformation": {
+      "properties": {
+        "allowAllPolicies": {
+          "maxLength": 128,
+          "minLength": 0,
+          "type": "string"
+        },
+        "allowedPolicies": {
+          "maxLength": 128,
+          "minLength": 0,
+          "type": "string"
+        },
+        "configuration": {
+          "minLength": 0,
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "type": "object"
+    },
+    "SansInformation": {
+      "type": "object",
+      "properties": {
+        "dnsNames": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "ipAddresses": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "rfc822Names": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "uniformResourceIdentifiers": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      },
+      "description": "Subject alternative names"
     }
   },
-  "$schema": "https://json-schema.org/draft/2020-12/schema"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/wim-manifest.schema.json",
+  "title": "CyberArk Workload Identity Manager Manifests",
+  "description": "Schema describing the YAML manifests consumed by vcpctl.",
+  "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service"
 }
