@@ -209,13 +209,6 @@ func confGetCmd() *cobra.Command {
 				yamlData = buf.Bytes()
 			}
 
-			schemaFile, err := api.SaveSchemaToWellKnownPath()
-			if err != nil {
-				return fmt.Errorf("while saving schema.json to disk so that YAML can reference it: %w", err)
-			}
-
-			yamlData = appendSchemaComment(yamlData, schemaFile)
-
 			coloredYAMLPrint(string(yamlData))
 
 			return nil

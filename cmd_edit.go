@@ -88,14 +88,6 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string) error {
 		return err
 	}
 
-	schemaFile, err := api.SaveSchemaToWellKnownPath()
-	if err != nil {
-		return fmt.Errorf("while saving schema.json to disk so that YAML can reference it: %w", err)
-	}
-	defer os.Remove(schemaFile)
-
-	yamlData = appendSchemaComment(yamlData, schemaFile)
-
 	tmpfile, err := os.CreateTemp("", "vcp-*.yaml")
 	if err != nil {
 		return err
@@ -243,23 +235,6 @@ func genECKeyPair() (string, string, error) {
 		Bytes: pubBytes,
 	})
 	return string(privPEM), string(pubPEM), nil
-}
-
-// For anyone who uses the Red Hat YAML LSP server.
-func appendSchemaComment(b []byte, schemaAbsPath string) []byte {
-	return appendLines(b,
-		"# yaml-language-server: $schema=file://"+schemaAbsPath,
-	)
-}
-
-func appendLines(b []byte, line ...string) []byte {
-	if len(line) == 0 {
-		return b
-	}
-	for _, l := range line {
-		b = append(b, []byte("\n"+l+"\n")...)
-	}
-	return b
 }
 
 func coloredYAMLPrint(yamlBytes string) {

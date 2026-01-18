@@ -106,7 +106,15 @@ func nonEmptyKind(kind string) string {
 	return kind
 }
 
-// The temp schema.json file needs to be removed manually when no longer needed.
+// Use like this:
+//
+//	schemaFile, err := api.SaveSchemaToWellKnownPath()
+//	if err != nil {
+//		return fmt.Errorf("while saving schema.json to disk so that YAML can reference it: %w", err)
+//	}
+//	defer os.Remove(schemaFile)
+//
+//	yamlData = appendSchemaComment(yamlData, schemaFile)
 func SaveSchemaToWellKnownPath() (string, error) {
 	// Open the file /tmp/vcpctl.schema.json.
 	tmpSchemaFile, err := os.Create("/tmp/vcpctl.schema.json")
@@ -119,4 +127,21 @@ func SaveSchemaToWellKnownPath() (string, error) {
 		return "", fmt.Errorf("while writing to /tmp/vcpctl.schema.json: %w", err)
 	}
 	return tmpSchemaFile.Name(), nil
+}
+
+// For anyone who uses the Red Hat YAML LSP server.
+func AppendSchemaComment(b []byte, schemaAbsPath string) []byte {
+	return appendLines(b,
+		"# yaml-language-server: $schema=file://"+schemaAbsPath,
+	)
+}
+
+func appendLines(b []byte, line ...string) []byte {
+	if len(line) == 0 {
+		return b
+	}
+	for _, l := range line {
+		b = append(b, []byte("\n"+l+"\n")...)
+	}
+	return b
 }
