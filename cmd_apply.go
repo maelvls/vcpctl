@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/maelvls/undent"
-	api "github.com/maelvls/vcpctl/api"
 	"github.com/spf13/cobra"
 )
 
@@ -88,7 +87,7 @@ func runApply(cmd *cobra.Command, filePath string, args []string, dryRun bool) e
 		return fmt.Errorf("%s: while decoding WIM manifests from '%s': %w", cmdName, filePath, err)
 	}
 
-	apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+	apiClient, err := newAPIClient(conf)
 	if err != nil {
 		return fmt.Errorf("%s: while creating API client: %w", cmdName, err)
 	}

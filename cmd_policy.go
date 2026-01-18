@@ -61,7 +61,7 @@ func policyLsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("policy ls: %w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -114,7 +114,7 @@ func policyGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("%w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -184,7 +184,7 @@ func policyRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -222,7 +222,7 @@ func policyEditCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("policy edit: %w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("policy edit: while creating API client: %w", err)
 			}

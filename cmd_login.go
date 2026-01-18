@@ -30,10 +30,12 @@ type FileConf struct {
 }
 
 type Auth struct {
-	URL      string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
-	APIURL   string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
-	APIKey   string `json:"apiKey"`
-	TenantID string `json:"tenantID"` // The tenant ID (company ID)
+	URL           string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	APIURL        string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	APIKey        string `json:"apiKey"`
+	AccessToken   string `json:"accessToken"`
+	WIFPrivateKey string `json:"wifPrivateKey"`
+	TenantID      string `json:"tenantID"` // The tenant ID (company ID)
 }
 
 // Styles for prompts.
@@ -157,6 +159,8 @@ var venafiRegions = []string{
 
 func loginCmd() *cobra.Command {
 	var apiURL, apiKey string
+	var wifServiceAccount string
+	var wifScopes []string
 	cmd := &cobra.Command{
 		Use:           "login [url]",
 		SilenceErrors: true,
@@ -190,9 +194,21 @@ func loginCmd() *cobra.Command {
 
 			# Bypass tenant URL to API URL conversion (for advanced use):
 			vcpctl login --api-url https://api.venafi.cloud --api-key <key>
+
+			# WIF login (creates/updates service account, uploads JWKS to 0x0.st, and stores access token):
+			vcpctl login --wif my-sa --api-url https://api.venafi.cloud --api-key <key>
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Check for conflicts between positional URL argument and --api-url flag or env vars
+			if wifServiceAccount != "" {
+				return loginWithWIF(cmd.Context(), args, wifLoginParams{
+					ServiceAccount: wifServiceAccount,
+					Scopes:         wifScopes,
+					APIURL:         apiURL,
+					APIKey:         apiKey,
+				})
+			}
+			// Check for conflicts between positional URL argument and --api-url
+			// flag or env vars.
 			if len(args) > 0 {
 				if apiURL != "" {
 					logutil.Infof("⚠️  Warning: --api-url will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
@@ -474,8 +490,10 @@ func loginCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it.")
-	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it.")
+	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
+	cmd.Flags().StringVar(&wifServiceAccount, "wif", "", "Login using Workload Identity Federation with the given service account name")
+	cmd.Flags().StringArrayVar(&wifScopes, "scope", []string{}, "Scopes for the WIF service account (can be specified multiple times)")
 
 	return cmd
 }
@@ -692,9 +710,12 @@ func saveCurrentTenant(auth Auth) error {
 	// If it doesn't exist, add it.
 	conf.CurrentURL = auth.URL
 	newAuth := Auth{
-		URL:    auth.URL,
-		APIURL: auth.APIURL,
-		APIKey: auth.APIKey,
+		URL:           auth.URL,
+		APIURL:        auth.APIURL,
+		APIKey:        auth.APIKey,
+		AccessToken:   auth.AccessToken,
+		WIFPrivateKey: auth.WIFPrivateKey,
+		TenantID:      auth.TenantID,
 	}
 	conf.Auths = append(conf.Auths, newAuth)
 
@@ -773,8 +794,9 @@ func resolveTenant(conf FileConf, tenantInput string) (Auth, bool) {
 
 // For now we aren't yet using ~/.config/vcpctl.yml.
 type ToolConf struct {
-	APIURL string `json:"apiURL"`
-	APIKey string `json:"apiKey"`
+	APIURL      string `json:"apiURL"`
+	APIKey      string `json:"apiKey"`
+	AccessToken string `json:"accessToken"`
 }
 
 // This must be used by all other commands to get the API key and API URL.
@@ -846,10 +868,14 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 
 	// Let's make sure the URL never contains a trailing slash.
 	current.APIURL = strings.TrimRight(current.APIURL, "/")
+	if current.APIKey == "" && current.AccessToken == "" {
+		return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl login")
+	}
 
 	return ToolConf{
-		APIURL: current.APIURL,
-		APIKey: current.APIKey,
+		APIURL:      current.APIURL,
+		APIKey:      current.APIKey,
+		AccessToken: current.AccessToken,
 	}, nil
 }
 

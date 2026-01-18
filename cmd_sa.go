@@ -75,7 +75,7 @@ func saLsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("sa ls: %w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -200,7 +200,7 @@ func saGenkeypairCmd() *cobra.Command {
 
 			saName := args[0]
 
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -300,7 +300,7 @@ func saPutKeypairCmd() *cobra.Command {
 			saName := args[0]
 
 			// Does it already exist?
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -418,7 +418,7 @@ func saPutWifCmd() *cobra.Command {
 				return fmt.Errorf("sa put wif: --jwks-uri is required")
 			}
 
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -434,6 +434,19 @@ func saPutWifCmd() *cobra.Command {
 				applications[i] = appUUID
 			}
 
+			// If no application is provided, let's pick the first one available.
+			if len(applications) == 0 {
+				availableApps, err := api.GetApplications(context.Background(), apiClient)
+				if err != nil {
+					return fmt.Errorf("sa put wif: while retrieving available applications: %w", err)
+				}
+				if len(availableApps) == 0 {
+					return fmt.Errorf("sa put wif: no application provided and no application available in the account")
+				}
+				applications = []api.Application{availableApps[0].Id}
+				logutil.Infof("No application provided, using the first available one: %s (%s)", availableApps[0].Name, availableApps[0].Id.String())
+			}
+
 			// Parse owner team (UUID) if provided.
 			ownerUUID := openapi_types.UUID{}
 			if ownerTeam != "" {
@@ -441,6 +454,19 @@ func saPutWifCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("sa put wif: invalid owner team UUID '%s': %w", ownerTeam, err)
 				}
+			}
+
+			// If no owner team is provided, let's pick the first one available.
+			if ownerTeam == "" {
+				teams, err := api.GetTeams(context.Background(), apiClient)
+				if err != nil {
+					return fmt.Errorf("sa put wif: while retrieving available teams: %w", err)
+				}
+				if len(teams) == 0 {
+					return fmt.Errorf("sa put wif: no owner team provided and no team available in the account")
+				}
+				ownerUUID = teams[0].Id
+				logutil.Infof("No owner team provided, using the first available one: %s (%s)", teams[0].Name, teams[0].Id.String())
 			}
 
 			// Check if service account exists
@@ -560,7 +586,7 @@ func saGetCmd() *cobra.Command {
 
 			saName := args[0]
 
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -642,7 +668,7 @@ func saEditCmd() *cobra.Command {
 				return fmt.Errorf("sa edit: %w", err)
 			}
 
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("sa edit: while creating API client: %w", err)
 			}
@@ -704,7 +730,7 @@ func saScopesCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("sa scopes: %w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
@@ -772,7 +798,7 @@ func saRmCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
-				apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+				apiClient, err := newAPIClient(conf)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
@@ -803,7 +829,7 @@ func saRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}

@@ -1,11 +1,14 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/wim-manifest.schema.json",
   "title": "CyberArk Workload Identity Manager Manifests",
   "description": "Schema describing the YAML manifests consumed by vcpctl.",
   "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
   "allOf": [
     {
+      "required": [
+        "kind",
+        "name"
+      ],
+      "type": "object",
       "properties": {
         "apiVersion": {
           "type": "string"
@@ -13,12 +16,7 @@
         "kind": {
           "const": "WIMSubCAProvider"
         }
-      },
-      "required": [
-        "kind",
-        "name"
-      ],
-      "type": "object"
+      }
     },
     {
       "$ref": "#/$defs/SubCaProviderInformation"
@@ -28,26 +26,57 @@
     "SubCaProviderInformation": {
       "type": "object",
       "properties": {
+        "caProductOptionId": {
+          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd",
+          "type": "string",
+          "description": "UUID of the CA product option used by this Sub CA provider",
+          "format": "uuid"
+        },
+        "validityPeriod": {
+          "format": "PnYnMnDTnHnMnS",
+          "example": "P30D",
+          "type": "string",
+          "description": "ISO8601 Period Format"
+        },
+        "modificationDate": {
+          "type": "string",
+          "description": "When the Sub CA provider was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00"
+        },
+        "id": {
+          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746",
+          "type": "string",
+          "description": "UUID of the Sub CA provider",
+          "format": "uuid"
+        },
         "organization": {
           "example": "Some organization",
           "type": "string",
           "description": "Organization"
         },
-        "companyId": {
+        "organizationalUnit": {
+          "example": "Some organizational unit",
           "type": "string",
-          "description": "UUID specific to your company",
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
-        },
-        "validityPeriod": {
-          "type": "string",
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D"
+          "description": "Organizational unit"
         },
         "country": {
+          "type": "string",
           "description": "Country",
-          "example": "US",
+          "example": "US"
+        },
+        "commonName": {
+          "type": "string",
+          "description": "Common name",
+          "example": "example.com"
+        },
+        "locality": {
+          "type": "string",
+          "description": "Locality",
+          "example": "San Antonio"
+        },
+        "stateOrProvince": {
+          "description": "State or province",
+          "example": "Texas",
           "type": "string"
         },
         "keyAlgorithm": {
@@ -64,44 +93,34 @@
             "EC_ED25519"
           ]
         },
-        "caAccountId": {
-          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a",
-          "type": "string",
-          "description": "UUID of the CA account used by this Sub CA provider",
-          "format": "uuid"
-        },
-        "commonName": {
-          "type": "string",
-          "description": "Common name",
-          "example": "example.com"
-        },
-        "locality": {
-          "type": "string",
-          "description": "Locality",
-          "example": "San Antonio"
-        },
-        "stateOrProvince": {
-          "type": "string",
-          "description": "State or province",
-          "example": "Texas"
+        "pkcs11": {
+          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
         },
         "creationDate": {
-          "type": "string",
           "description": "When the Sub CA provider was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00"
+          "example": "2022-10-10T14:50:41.710+00:00",
+          "type": "string"
         },
-        "id": {
+        "companyId": {
           "type": "string",
-          "description": "UUID of the Sub CA provider",
+          "description": "UUID specific to your company",
           "format": "uuid",
-          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746"
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
         },
         "name": {
+          "example": "Some Sub CA provider",
           "type": "string",
-          "description": "Name of the Sub CA provider",
-          "example": "Some Sub CA provider"
+          "description": "Name of the Sub CA provider"
+        },
+        "caAccountId": {
+          "description": "UUID of the CA account used by this Sub CA provider",
+          "format": "uuid",
+          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a",
+          "type": "string"
         },
         "caType": {
+          "description": "Type of CA this Sub CA provider works with",
+          "example": "BUILTIN",
           "enum": [
             "MOCKCA",
             "DIGICERT",
@@ -114,38 +133,13 @@
             "GLOBALSIGNMSSL",
             "TPP"
           ],
-          "type": "string",
-          "description": "Type of CA this Sub CA provider works with",
-          "example": "BUILTIN"
-        },
-        "organizationalUnit": {
-          "type": "string",
-          "description": "Organizational unit",
-          "example": "Some organizational unit"
-        },
-        "pkcs11": {
-          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
-        },
-        "modificationDate": {
-          "type": "string",
-          "description": "When the Sub CA provider was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
-        },
-        "caProductOptionId": {
-          "type": "string",
-          "description": "UUID of the CA product option used by this Sub CA provider",
-          "format": "uuid",
-          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd"
+          "type": "string"
         }
       }
     },
     "SubCaProviderPkcs11ConfigurationInformation": {
+      "type": "object",
       "properties": {
-        "partitionLabel": {
-          "type": "string",
-          "description": "HSM Partition Label",
-          "example": "workload-identity-manager-hsm-partition"
-        },
         "partitionSerialNumber": {
           "pattern": "^[A-Fa-fx0-9]{0,18}$",
           "type": "string",
@@ -169,12 +163,18 @@
           }
         },
         "signingEnabled": {
+          "type": "boolean",
           "description": "Indicates whether HSM signing is enabled or not",
-          "example": true,
-          "type": "boolean"
+          "example": true
+        },
+        "partitionLabel": {
+          "description": "HSM Partition Label",
+          "example": "workload-identity-manager-hsm-partition",
+          "type": "string"
         }
-      },
-      "type": "object"
+      }
     }
-  }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/wim-manifest.schema.json"
 }

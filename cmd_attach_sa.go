@@ -34,7 +34,7 @@ func attachSaCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("%w", err)
 			}
-			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}

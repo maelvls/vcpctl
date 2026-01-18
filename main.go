@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
 
@@ -86,12 +87,12 @@ func main() {
 	rootCmd.AddCommand(ophis.Command(&ophis.Config{}))
 
 	ctx := context.Background()
-	err := fang.Execute(
-		ctx,
-		rootCmd,
-		fang.WithErrorHandler(errHandler),
-		fang.WithNotifySignal(os.Interrupt, os.Kill),
-	)
+
+	var cancel context.CancelFunc
+	ctx, cancel = signal.NotifyContext(ctx, os.Interrupt, os.Kill)
+	defer cancel()
+
+	err := fang.Execute(ctx, rootCmd, fang.WithErrorHandler(errHandler))
 	switch {
 	case err != nil:
 		os.Exit(1)

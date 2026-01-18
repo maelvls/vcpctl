@@ -117,7 +117,7 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		method = "POST"
 	}
 
-	cl, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+	cl, err := newAPIClient(conf)
 	if err != nil {
 		return fmt.Errorf("creating API client: %w", err)
 	}

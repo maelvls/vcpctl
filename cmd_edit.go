@@ -58,7 +58,7 @@ func confEditCmd() *cobra.Command {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			client, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			client, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}

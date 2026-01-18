@@ -16,3 +16,4 @@ output-options:
     - Certificate Policy
     - User Accounts # Only for check API key.
     - Teams
+    - Application

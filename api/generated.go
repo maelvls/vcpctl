@@ -51,6 +51,14 @@ const (
 	V1  ApiVersion = "V1"
 )
 
+// Defines values for ApplicationsAssignRequestAction.
+const (
+	ApplicationsAssignRequestActionADD       ApplicationsAssignRequestAction = "ADD"
+	ApplicationsAssignRequestActionDELETE    ApplicationsAssignRequestAction = "DELETE"
+	ApplicationsAssignRequestActionDELETEALL ApplicationsAssignRequestAction = "DELETE_ALL"
+	ApplicationsAssignRequestActionREPLACE   ApplicationsAssignRequestAction = "REPLACE"
+)
+
 // Defines values for AwsCloudProviderInformationRegions.
 const (
 	AwsCloudProviderInformationRegionsAfSouth1     AwsCloudProviderInformationRegions = "af-south-1"
@@ -86,22 +94,22 @@ const (
 
 // Defines values for Capability.
 const (
-	CLOUDPROVIDERS                            Capability = "CLOUD_PROVIDERS"
-	CREDENTIALMANAGER                         Capability = "CREDENTIAL_MANAGER"
-	DEFAULT                                   Capability = "DEFAULT"
-	DISTRIBUTEDISSUER                         Capability = "DISTRIBUTED_ISSUER"
-	ENTERPRISE                                Capability = "ENTERPRISE"
-	ISSUANCE                                  Capability = "ISSUANCE"
-	KUBERNETESDISCOVERY                       Capability = "KUBERNETES_DISCOVERY"
-	KUBERNETESENTERPRISECOMPONENTS            Capability = "KUBERNETES_ENTERPRISE_COMPONENTS"
-	KUBERNETESENTERPRISECOMPONENTSAPE         Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_APE"
-	KUBERNETESENTERPRISECOMPONENTSCERTMANAGER Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_CERT_MANAGER"
-	KUBERNETESENTERPRISECOMPONENTSOS          Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_OS"
-	KUBERNETESENTERPRISECOMPONENTSVEI         Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_VEI"
-	KUBERNETESINTEGRATIONTLSPDC               Capability = "KUBERNETES_INTEGRATION_TLSPDC"
-	PROVISIONING                              Capability = "PROVISIONING"
-	SINGLESIGNON                              Capability = "SINGLE_SIGN_ON"
-	VALIDATION                                Capability = "VALIDATION"
+	CapabilityCLOUDPROVIDERS                            Capability = "CLOUD_PROVIDERS"
+	CapabilityCREDENTIALMANAGER                         Capability = "CREDENTIAL_MANAGER"
+	CapabilityDEFAULT                                   Capability = "DEFAULT"
+	CapabilityDISTRIBUTEDISSUER                         Capability = "DISTRIBUTED_ISSUER"
+	CapabilityENTERPRISE                                Capability = "ENTERPRISE"
+	CapabilityISSUANCE                                  Capability = "ISSUANCE"
+	CapabilityKUBERNETESDISCOVERY                       Capability = "KUBERNETES_DISCOVERY"
+	CapabilityKUBERNETESENTERPRISECOMPONENTS            Capability = "KUBERNETES_ENTERPRISE_COMPONENTS"
+	CapabilityKUBERNETESENTERPRISECOMPONENTSAPE         Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_APE"
+	CapabilityKUBERNETESENTERPRISECOMPONENTSCERTMANAGER Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_CERT_MANAGER"
+	CapabilityKUBERNETESENTERPRISECOMPONENTSOS          Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_OS"
+	CapabilityKUBERNETESENTERPRISECOMPONENTSVEI         Capability = "KUBERNETES_ENTERPRISE_COMPONENTS_VEI"
+	CapabilityKUBERNETESINTEGRATIONTLSPDC               Capability = "KUBERNETES_INTEGRATION_TLSPDC"
+	CapabilityPROVISIONING                              Capability = "PROVISIONING"
+	CapabilitySINGLESIGNON                              Capability = "SINGLE_SIGN_ON"
+	CapabilityVALIDATION                                Capability = "VALIDATION"
 )
 
 // Defines values for CertificateAuthorityProductInformation1CertificateType.
@@ -129,6 +137,152 @@ const (
 	CertificateAuthorityProductInformation1ProductTypesSSL      CertificateAuthorityProductInformation1ProductTypes = "SSL"
 )
 
+// Defines values for CertificateAuthorityProductInformation2CertificateType.
+const (
+	CertificateAuthorityProductInformation2CertificateTypeDOMAINVALIDATEDSSL CertificateAuthorityProductInformation2CertificateType = "DOMAIN_VALIDATED_SSL"
+	CertificateAuthorityProductInformation2CertificateTypeOTHER              CertificateAuthorityProductInformation2CertificateType = "OTHER"
+)
+
+// Defines values for CertificateAuthorityProductInformation2HashAlgorithm.
+const (
+	CertificateAuthorityProductInformation2HashAlgorithmGOSTR341194 CertificateAuthorityProductInformation2HashAlgorithm = "GOSTR3411_94"
+	CertificateAuthorityProductInformation2HashAlgorithmMD2         CertificateAuthorityProductInformation2HashAlgorithm = "MD2"
+	CertificateAuthorityProductInformation2HashAlgorithmMD5         CertificateAuthorityProductInformation2HashAlgorithm = "MD5"
+	CertificateAuthorityProductInformation2HashAlgorithmSHA1        CertificateAuthorityProductInformation2HashAlgorithm = "SHA1"
+	CertificateAuthorityProductInformation2HashAlgorithmSHA224      CertificateAuthorityProductInformation2HashAlgorithm = "SHA224"
+	CertificateAuthorityProductInformation2HashAlgorithmSHA256      CertificateAuthorityProductInformation2HashAlgorithm = "SHA256"
+	CertificateAuthorityProductInformation2HashAlgorithmSHA384      CertificateAuthorityProductInformation2HashAlgorithm = "SHA384"
+	CertificateAuthorityProductInformation2HashAlgorithmSHA512      CertificateAuthorityProductInformation2HashAlgorithm = "SHA512"
+	CertificateAuthorityProductInformation2HashAlgorithmUNKNOWN     CertificateAuthorityProductInformation2HashAlgorithm = "UNKNOWN"
+)
+
+// Defines values for CertificateAuthorityProductInformation2ProductTypes.
+const (
+	CertificateAuthorityProductInformation2ProductTypesCODESIGN CertificateAuthorityProductInformation2ProductTypes = "CODESIGN"
+	CertificateAuthorityProductInformation2ProductTypesSSL      CertificateAuthorityProductInformation2ProductTypes = "SSL"
+)
+
+// Defines values for CertificateInformationCertificateStatus.
+const (
+	CertificateInformationCertificateStatusACTIVE  CertificateInformationCertificateStatus = "ACTIVE"
+	CertificateInformationCertificateStatusDELETED CertificateInformationCertificateStatus = "DELETED"
+	CertificateInformationCertificateStatusRETIRED CertificateInformationCertificateStatus = "RETIRED"
+)
+
+// Defines values for CertificateInformationEncryptionType.
+const (
+	CertificateInformationEncryptionTypeDSA        CertificateInformationEncryptionType = "DSA"
+	CertificateInformationEncryptionTypeEC         CertificateInformationEncryptionType = "EC"
+	CertificateInformationEncryptionTypeECGOST3410 CertificateInformationEncryptionType = "ECGOST3410"
+	CertificateInformationEncryptionTypeGOST3410   CertificateInformationEncryptionType = "GOST3410"
+	CertificateInformationEncryptionTypeRESERVED3  CertificateInformationEncryptionType = "RESERVED3"
+	CertificateInformationEncryptionTypeRSA        CertificateInformationEncryptionType = "RSA"
+	CertificateInformationEncryptionTypeUNKNOWN    CertificateInformationEncryptionType = "UNKNOWN"
+)
+
+// Defines values for CertificateInformationKeyCurve.
+const (
+	CertificateInformationKeyCurveED25519 CertificateInformationKeyCurve = "ED25519"
+	CertificateInformationKeyCurveP256    CertificateInformationKeyCurve = "P256"
+	CertificateInformationKeyCurveP384    CertificateInformationKeyCurve = "P384"
+	CertificateInformationKeyCurveP521    CertificateInformationKeyCurve = "P521"
+	CertificateInformationKeyCurveUNKNOWN CertificateInformationKeyCurve = "UNKNOWN"
+)
+
+// Defines values for CertificateInformationSignatureAlgorithm.
+const (
+	CertificateInformationSignatureAlgorithmDsaWithSHA1                  CertificateInformationSignatureAlgorithm = "dsaWithSHA1"
+	CertificateInformationSignatureAlgorithmECDSAWITHSHA1                CertificateInformationSignatureAlgorithm = "EC_DSA_WITH_SHA1"
+	CertificateInformationSignatureAlgorithmECDSAWITHSHA224              CertificateInformationSignatureAlgorithm = "EC_DSA_WITH_SHA224"
+	CertificateInformationSignatureAlgorithmECDSAWITHSHA256              CertificateInformationSignatureAlgorithm = "EC_DSA_WITH_SHA256"
+	CertificateInformationSignatureAlgorithmECDSAWITHSHA384              CertificateInformationSignatureAlgorithm = "EC_DSA_WITH_SHA384"
+	CertificateInformationSignatureAlgorithmECDSAWITHSHA512              CertificateInformationSignatureAlgorithm = "EC_DSA_WITH_SHA512"
+	CertificateInformationSignatureAlgorithmGOSTR341194WITHGOSTR34102001 CertificateInformationSignatureAlgorithm = "GOST_R3411_94_WITH_GOST_R3410_2001"
+	CertificateInformationSignatureAlgorithmGOSTR341194WITHGOSTR341094   CertificateInformationSignatureAlgorithm = "GOST_R3411_94_WITH_GOST_R3410_94"
+	CertificateInformationSignatureAlgorithmIDDSAWITHSHA1                CertificateInformationSignatureAlgorithm = "ID_DSA_WITH_SHA1"
+	CertificateInformationSignatureAlgorithmMD2WITHRSAENCRYPTION         CertificateInformationSignatureAlgorithm = "MD2_WITH_RSA_ENCRYPTION"
+	CertificateInformationSignatureAlgorithmMD5WITHRSAENCRYPTION         CertificateInformationSignatureAlgorithm = "MD5_WITH_RSA_ENCRYPTION"
+	CertificateInformationSignatureAlgorithmSHA1WITHRSAENCRYPTION        CertificateInformationSignatureAlgorithm = "SHA1_WITH_RSA_ENCRYPTION"
+	CertificateInformationSignatureAlgorithmSHA1WITHRSAENCRYPTION2       CertificateInformationSignatureAlgorithm = "SHA1_WITH_RSA_ENCRYPTION2"
+	CertificateInformationSignatureAlgorithmSHA1WITHRSAandMGF1           CertificateInformationSignatureAlgorithm = "SHA1_WITH_RSAandMGF1"
+	CertificateInformationSignatureAlgorithmSHA256WITHRSAENCRYPTION      CertificateInformationSignatureAlgorithm = "SHA256_WITH_RSA_ENCRYPTION"
+	CertificateInformationSignatureAlgorithmSHA384WITHRSAENCRYPTION      CertificateInformationSignatureAlgorithm = "SHA384_WITH_RSA_ENCRYPTION"
+	CertificateInformationSignatureAlgorithmSHA512WITHRSAENCRYPTION      CertificateInformationSignatureAlgorithm = "SHA512_WITH_RSA_ENCRYPTION"
+	CertificateInformationSignatureAlgorithmUNKNOWN                      CertificateInformationSignatureAlgorithm = "UNKNOWN"
+)
+
+// Defines values for CertificateInformationSignatureHashAlgorithm.
+const (
+	CertificateInformationSignatureHashAlgorithmGOSTR341194 CertificateInformationSignatureHashAlgorithm = "GOSTR3411_94"
+	CertificateInformationSignatureHashAlgorithmMD2         CertificateInformationSignatureHashAlgorithm = "MD2"
+	CertificateInformationSignatureHashAlgorithmMD5         CertificateInformationSignatureHashAlgorithm = "MD5"
+	CertificateInformationSignatureHashAlgorithmSHA1        CertificateInformationSignatureHashAlgorithm = "SHA1"
+	CertificateInformationSignatureHashAlgorithmSHA224      CertificateInformationSignatureHashAlgorithm = "SHA224"
+	CertificateInformationSignatureHashAlgorithmSHA256      CertificateInformationSignatureHashAlgorithm = "SHA256"
+	CertificateInformationSignatureHashAlgorithmSHA384      CertificateInformationSignatureHashAlgorithm = "SHA384"
+	CertificateInformationSignatureHashAlgorithmSHA512      CertificateInformationSignatureHashAlgorithm = "SHA512"
+	CertificateInformationSignatureHashAlgorithmUNKNOWN     CertificateInformationSignatureHashAlgorithm = "UNKNOWN"
+)
+
+// Defines values for CertificateInformationVersionType.
+const (
+	CURRENT CertificateInformationVersionType = "CURRENT"
+	OLD     CertificateInformationVersionType = "OLD"
+)
+
+// Defines values for CertificateInstanceInformationCertificateSource.
+const (
+	CertificateInstanceInformationCertificateSourceAWSDISCOVERY            CertificateInstanceInformationCertificateSource = "AWS_DISCOVERY"
+	CertificateInstanceInformationCertificateSourceAZUREDISCOVERY          CertificateInstanceInformationCertificateSource = "AZURE_DISCOVERY"
+	CertificateInstanceInformationCertificateSourceDOMAINSCAN              CertificateInstanceInformationCertificateSource = "DOMAIN_SCAN"
+	CertificateInstanceInformationCertificateSourceEXTERNALCAIMPORT        CertificateInstanceInformationCertificateSource = "EXTERNAL_CA_IMPORT"
+	CertificateInstanceInformationCertificateSourceEXTERNALSCAN            CertificateInstanceInformationCertificateSource = "EXTERNAL_SCAN"
+	CertificateInstanceInformationCertificateSourceFILEIMPORT              CertificateInstanceInformationCertificateSource = "FILE_IMPORT"
+	CertificateInstanceInformationCertificateSourceGCPDISCOVERY            CertificateInstanceInformationCertificateSource = "GCP_DISCOVERY"
+	CertificateInstanceInformationCertificateSourceKUBERNETESDISCOVERY     CertificateInstanceInformationCertificateSource = "KUBERNETES_DISCOVERY"
+	CertificateInstanceInformationCertificateSourceMACHINEDISCOVERY        CertificateInstanceInformationCertificateSource = "MACHINE_DISCOVERY"
+	CertificateInstanceInformationCertificateSourceONPREMCAIMPORT          CertificateInstanceInformationCertificateSource = "ON_PREM_CA_IMPORT"
+	CertificateInstanceInformationCertificateSourceSMARTSCANEXTERNAL       CertificateInstanceInformationCertificateSource = "SMART_SCAN_EXTERNAL"
+	CertificateInstanceInformationCertificateSourceSMARTSCANINTERNAL       CertificateInstanceInformationCertificateSource = "SMART_SCAN_INTERNAL"
+	CertificateInstanceInformationCertificateSourceSMARTVALIDATIONEXTERNAL CertificateInstanceInformationCertificateSource = "SMART_VALIDATION_EXTERNAL"
+	CertificateInstanceInformationCertificateSourceSMARTVALIDATIONINTERNAL CertificateInstanceInformationCertificateSource = "SMART_VALIDATION_INTERNAL"
+	CertificateInstanceInformationCertificateSourceTRUSTNETSCAN            CertificateInstanceInformationCertificateSource = "TRUSTNET_SCAN"
+	CertificateInstanceInformationCertificateSourceUNKNOWN                 CertificateInstanceInformationCertificateSource = "UNKNOWN"
+	CertificateInstanceInformationCertificateSourceUSERIMPORTED            CertificateInstanceInformationCertificateSource = "USER_IMPORTED"
+	CertificateInstanceInformationCertificateSourceUSERPROVIDED            CertificateInstanceInformationCertificateSource = "USER_PROVIDED"
+	CertificateInstanceInformationCertificateSourceUSERSCAN                CertificateInstanceInformationCertificateSource = "USER_SCAN"
+)
+
+// Defines values for CertificateInstanceInformationDeploymentStatus.
+const (
+	CertificateInstanceInformationDeploymentStatusINUSE      CertificateInstanceInformationDeploymentStatus = "IN_USE"
+	CertificateInstanceInformationDeploymentStatusSUPERSEDED CertificateInstanceInformationDeploymentStatus = "SUPERSEDED"
+	CertificateInstanceInformationDeploymentStatusUNKNOWN    CertificateInstanceInformationDeploymentStatus = "UNKNOWN"
+)
+
+// Defines values for CertificateInstanceInformationInstanceChainValidationStatus.
+const (
+	CertificateInstanceInformationInstanceChainValidationStatusCHAINBUILDINGFAILED CertificateInstanceInformationInstanceChainValidationStatus = "CHAIN_BUILDING_FAILED"
+	CertificateInstanceInformationInstanceChainValidationStatusCHAINEXPIREBEFOREEE CertificateInstanceInformationInstanceChainValidationStatus = "CHAIN_EXPIRE_BEFORE_EE"
+	CertificateInstanceInformationInstanceChainValidationStatusDISTRUSTED          CertificateInstanceInformationInstanceChainValidationStatus = "DISTRUSTED"
+	CertificateInstanceInformationInstanceChainValidationStatusINCOMPLETECHAIN     CertificateInstanceInformationInstanceChainValidationStatus = "INCOMPLETE_CHAIN"
+	CertificateInstanceInformationInstanceChainValidationStatusOK                  CertificateInstanceInformationInstanceChainValidationStatus = "OK"
+	CertificateInstanceInformationInstanceChainValidationStatusSELFSIGNED          CertificateInstanceInformationInstanceChainValidationStatus = "SELF_SIGNED"
+	CertificateInstanceInformationInstanceChainValidationStatusUNKNOWNERROR        CertificateInstanceInformationInstanceChainValidationStatus = "UNKNOWN_ERROR"
+)
+
+// Defines values for CertificateInstanceInformationSslValidationStatus.
+const (
+	CertificateInstanceInformationSslValidationStatusHOSTNAMENOTRESOLVABLE      CertificateInstanceInformationSslValidationStatus = "HOSTNAME_NOT_RESOLVABLE"
+	CertificateInstanceInformationSslValidationStatusINVALIDCERTIFICATEFOUND    CertificateInstanceInformationSslValidationStatus = "INVALID_CERTIFICATE_FOUND"
+	CertificateInstanceInformationSslValidationStatusNOCERTIFICATEPRESENTED     CertificateInstanceInformationSslValidationStatus = "NO_CERTIFICATE_PRESENTED"
+	CertificateInstanceInformationSslValidationStatusOK                         CertificateInstanceInformationSslValidationStatus = "OK"
+	CertificateInstanceInformationSslValidationStatusOLDVERSIONCERTIFICATEFOUND CertificateInstanceInformationSslValidationStatus = "OLD_VERSION_CERTIFICATE_FOUND"
+	CertificateInstanceInformationSslValidationStatusTARGETUNREACHABLE          CertificateInstanceInformationSslValidationStatus = "TARGET_UNREACHABLE"
+	CertificateInstanceInformationSslValidationStatusUNEXPECTEDCERTIFICATEFOUND CertificateInstanceInformationSslValidationStatus = "UNEXPECTED_CERTIFICATE_FOUND"
+	CertificateInstanceInformationSslValidationStatusUNKNOWNERROR               CertificateInstanceInformationSslValidationStatus = "UNKNOWN_ERROR"
+)
+
 // Defines values for CertificateIssuingTemplateInformation1CertificateAuthority.
 const (
 	CertificateIssuingTemplateInformation1CertificateAuthorityACME           CertificateIssuingTemplateInformation1CertificateAuthority = "ACME"
@@ -152,8 +306,47 @@ const (
 
 // Defines values for CertificateIssuingTemplateInformation1Status.
 const (
-	AVAILABLE   CertificateIssuingTemplateInformation1Status = "AVAILABLE"
-	UNAVAILABLE CertificateIssuingTemplateInformation1Status = "UNAVAILABLE"
+	CertificateIssuingTemplateInformation1StatusAVAILABLE   CertificateIssuingTemplateInformation1Status = "AVAILABLE"
+	CertificateIssuingTemplateInformation1StatusUNAVAILABLE CertificateIssuingTemplateInformation1Status = "UNAVAILABLE"
+)
+
+// Defines values for CertificateIssuingTemplateInformation2CertificateAuthority.
+const (
+	CertificateIssuingTemplateInformation2CertificateAuthorityACME           CertificateIssuingTemplateInformation2CertificateAuthority = "ACME"
+	CertificateIssuingTemplateInformation2CertificateAuthorityBUILTIN        CertificateIssuingTemplateInformation2CertificateAuthority = "BUILTIN"
+	CertificateIssuingTemplateInformation2CertificateAuthorityCONNECTOR      CertificateIssuingTemplateInformation2CertificateAuthority = "CONNECTOR"
+	CertificateIssuingTemplateInformation2CertificateAuthorityDIGICERT       CertificateIssuingTemplateInformation2CertificateAuthority = "DIGICERT"
+	CertificateIssuingTemplateInformation2CertificateAuthorityENTRUST        CertificateIssuingTemplateInformation2CertificateAuthority = "ENTRUST"
+	CertificateIssuingTemplateInformation2CertificateAuthorityGLOBALSIGN     CertificateIssuingTemplateInformation2CertificateAuthority = "GLOBALSIGN"
+	CertificateIssuingTemplateInformation2CertificateAuthorityGLOBALSIGNMSSL CertificateIssuingTemplateInformation2CertificateAuthority = "GLOBALSIGNMSSL"
+	CertificateIssuingTemplateInformation2CertificateAuthorityMICROSOFT      CertificateIssuingTemplateInformation2CertificateAuthority = "MICROSOFT"
+	CertificateIssuingTemplateInformation2CertificateAuthorityMOCKCA         CertificateIssuingTemplateInformation2CertificateAuthority = "MOCKCA"
+	CertificateIssuingTemplateInformation2CertificateAuthorityTPP            CertificateIssuingTemplateInformation2CertificateAuthority = "TPP"
+	CertificateIssuingTemplateInformation2CertificateAuthorityZTPKI          CertificateIssuingTemplateInformation2CertificateAuthority = "ZTPKI"
+)
+
+// Defines values for CertificateIssuingTemplateInformation2ProductEntitlement.
+const (
+	CertificateIssuingTemplateInformation2ProductEntitlementANY             CertificateIssuingTemplateInformation2ProductEntitlement = "ANY"
+	CertificateIssuingTemplateInformation2ProductEntitlementCODESIGN        CertificateIssuingTemplateInformation2ProductEntitlement = "CODESIGN"
+	CertificateIssuingTemplateInformation2ProductEntitlementDEVOPS          CertificateIssuingTemplateInformation2ProductEntitlement = "DEVOPS"
+	CertificateIssuingTemplateInformation2ProductEntitlementMIRA            CertificateIssuingTemplateInformation2ProductEntitlement = "MIRA"
+	CertificateIssuingTemplateInformation2ProductEntitlementOUTAGEDETECTION CertificateIssuingTemplateInformation2ProductEntitlement = "OUTAGE_DETECTION"
+)
+
+// Defines values for CertificateIssuingTemplateInformation2ProductEntitlements.
+const (
+	CertificateIssuingTemplateInformation2ProductEntitlementsANY             CertificateIssuingTemplateInformation2ProductEntitlements = "ANY"
+	CertificateIssuingTemplateInformation2ProductEntitlementsCODESIGN        CertificateIssuingTemplateInformation2ProductEntitlements = "CODESIGN"
+	CertificateIssuingTemplateInformation2ProductEntitlementsDEVOPS          CertificateIssuingTemplateInformation2ProductEntitlements = "DEVOPS"
+	CertificateIssuingTemplateInformation2ProductEntitlementsMIRA            CertificateIssuingTemplateInformation2ProductEntitlements = "MIRA"
+	CertificateIssuingTemplateInformation2ProductEntitlementsOUTAGEDETECTION CertificateIssuingTemplateInformation2ProductEntitlements = "OUTAGE_DETECTION"
+)
+
+// Defines values for CertificateIssuingTemplateInformation2Status.
+const (
+	CertificateIssuingTemplateInformation2StatusAVAILABLE   CertificateIssuingTemplateInformation2Status = "AVAILABLE"
+	CertificateIssuingTemplateInformation2StatusUNAVAILABLE CertificateIssuingTemplateInformation2Status = "UNAVAILABLE"
 )
 
 // Defines values for CertificateIssuingTemplateRequestCertificateAuthority.
@@ -313,6 +506,18 @@ const (
 	GoogleCloudProviderInformationRegionsUsWest4                GoogleCloudProviderInformationRegions = "us-west4"
 )
 
+// Defines values for InvitationRequestRole.
+const (
+	InvitationRequestRoleDEVOPSLEAD           InvitationRequestRole = "DEVOPS_LEAD"
+	InvitationRequestRoleDEVOPSUSER           InvitationRequestRole = "DEVOPS_USER"
+	InvitationRequestRoleGUEST                InvitationRequestRole = "GUEST"
+	InvitationRequestRoleOUTAGEDETECTIONADMIN InvitationRequestRole = "OUTAGEDETECTION_ADMIN"
+	InvitationRequestRolePKIADMIN             InvitationRequestRole = "PKI_ADMIN"
+	InvitationRequestRolePLATFORMADMIN        InvitationRequestRole = "PLATFORM_ADMIN"
+	InvitationRequestRoleRESOURCEOWNER        InvitationRequestRole = "RESOURCE_OWNER"
+	InvitationRequestRoleSECURITYADMIN        InvitationRequestRole = "SECURITY_ADMIN"
+)
+
 // Defines values for IssuingTemplateDomainsSyncInformationStatus.
 const (
 	COMPLETED IssuingTemplateDomainsSyncInformationStatus = "COMPLETED"
@@ -321,7 +526,7 @@ const (
 
 // Defines values for IssuingTemplatesDomainsSyncRequestAction.
 const (
-	REPLACE IssuingTemplatesDomainsSyncRequestAction = "REPLACE"
+	IssuingTemplatesDomainsSyncRequestActionREPLACE IssuingTemplatesDomainsSyncRequestAction = "REPLACE"
 )
 
 // Defines values for KeyAlgorithmInformationAllowedValues.
@@ -361,6 +566,15 @@ const (
 	KeyTypeParameters1KeyTypeRSA KeyTypeParameters1KeyType = "RSA"
 )
 
+// Defines values for MetadataInformationProductEntitlement.
+const (
+	MetadataInformationProductEntitlementANY             MetadataInformationProductEntitlement = "ANY"
+	MetadataInformationProductEntitlementCODESIGN        MetadataInformationProductEntitlement = "CODESIGN"
+	MetadataInformationProductEntitlementDEVOPS          MetadataInformationProductEntitlement = "DEVOPS"
+	MetadataInformationProductEntitlementMIRA            MetadataInformationProductEntitlement = "MIRA"
+	MetadataInformationProductEntitlementOUTAGEDETECTION MetadataInformationProductEntitlement = "OUTAGE_DETECTION"
+)
+
 // Defines values for NaryOperator.
 const (
 	NaryOperatorAND NaryOperator = "AND"
@@ -375,6 +589,13 @@ const (
 	NOTCONTAINS Operator = "NOT_CONTAINS"
 	NOTEQUALS   Operator = "NOT_EQUALS"
 	STARTSWITH  Operator = "STARTS_WITH"
+)
+
+// Defines values for OwnerIdAndTypeOwnerType.
+const (
+	SERVICEACCOUNT OwnerIdAndTypeOwnerType = "SERVICE_ACCOUNT"
+	TEAM           OwnerIdAndTypeOwnerType = "TEAM"
+	USER           OwnerIdAndTypeOwnerType = "USER"
 )
 
 // Defines values for PolicyCreateRequestExtendedKeyUsages.
@@ -527,19 +748,34 @@ const (
 	RecommendedSettingsKeyTypeInformation1TypeRSA RecommendedSettingsKeyTypeInformation1Type = "RSA"
 )
 
+// Defines values for RecommendedSettingsKeyTypeInformation2Curve.
+const (
+	RecommendedSettingsKeyTypeInformation2CurveED25519 RecommendedSettingsKeyTypeInformation2Curve = "ED25519"
+	RecommendedSettingsKeyTypeInformation2CurveP256    RecommendedSettingsKeyTypeInformation2Curve = "P256"
+	RecommendedSettingsKeyTypeInformation2CurveP384    RecommendedSettingsKeyTypeInformation2Curve = "P384"
+	RecommendedSettingsKeyTypeInformation2CurveP521    RecommendedSettingsKeyTypeInformation2Curve = "P521"
+	RecommendedSettingsKeyTypeInformation2CurveUNKNOWN RecommendedSettingsKeyTypeInformation2Curve = "UNKNOWN"
+)
+
+// Defines values for RecommendedSettingsKeyTypeInformation2Type.
+const (
+	RecommendedSettingsKeyTypeInformation2TypeEC  RecommendedSettingsKeyTypeInformation2Type = "EC"
+	RecommendedSettingsKeyTypeInformation2TypeRSA RecommendedSettingsKeyTypeInformation2Type = "RSA"
+)
+
 // Defines values for RecommendedSettingsKeyTypeParameterCurve.
 const (
-	RecommendedSettingsKeyTypeParameterCurveED25519 RecommendedSettingsKeyTypeParameterCurve = "ED25519"
-	RecommendedSettingsKeyTypeParameterCurveP256    RecommendedSettingsKeyTypeParameterCurve = "P256"
-	RecommendedSettingsKeyTypeParameterCurveP384    RecommendedSettingsKeyTypeParameterCurve = "P384"
-	RecommendedSettingsKeyTypeParameterCurveP521    RecommendedSettingsKeyTypeParameterCurve = "P521"
-	RecommendedSettingsKeyTypeParameterCurveUNKNOWN RecommendedSettingsKeyTypeParameterCurve = "UNKNOWN"
+	ED25519 RecommendedSettingsKeyTypeParameterCurve = "ED25519"
+	P256    RecommendedSettingsKeyTypeParameterCurve = "P256"
+	P384    RecommendedSettingsKeyTypeParameterCurve = "P384"
+	P521    RecommendedSettingsKeyTypeParameterCurve = "P521"
+	UNKNOWN RecommendedSettingsKeyTypeParameterCurve = "UNKNOWN"
 )
 
 // Defines values for RecommendedSettingsKeyTypeParameterType.
 const (
-	EC  RecommendedSettingsKeyTypeParameterType = "EC"
-	RSA RecommendedSettingsKeyTypeParameterType = "RSA"
+	RecommendedSettingsKeyTypeParameterTypeEC  RecommendedSettingsKeyTypeParameterType = "EC"
+	RecommendedSettingsKeyTypeParameterTypeRSA RecommendedSettingsKeyTypeParameterType = "RSA"
 )
 
 // Defines values for Role.
@@ -587,16 +823,16 @@ const (
 
 // Defines values for SubCaProviderInformationCaType.
 const (
-	SubCaProviderInformationCaTypeACME           SubCaProviderInformationCaType = "ACME"
-	SubCaProviderInformationCaTypeBUILTIN        SubCaProviderInformationCaType = "BUILTIN"
-	SubCaProviderInformationCaTypeDIGICERT       SubCaProviderInformationCaType = "DIGICERT"
-	SubCaProviderInformationCaTypeENTRUST        SubCaProviderInformationCaType = "ENTRUST"
-	SubCaProviderInformationCaTypeGLOBALSIGN     SubCaProviderInformationCaType = "GLOBALSIGN"
-	SubCaProviderInformationCaTypeGLOBALSIGNMSSL SubCaProviderInformationCaType = "GLOBALSIGNMSSL"
-	SubCaProviderInformationCaTypeMICROSOFT      SubCaProviderInformationCaType = "MICROSOFT"
-	SubCaProviderInformationCaTypeMOCKCA         SubCaProviderInformationCaType = "MOCKCA"
-	SubCaProviderInformationCaTypeTPP            SubCaProviderInformationCaType = "TPP"
-	SubCaProviderInformationCaTypeZTPKI          SubCaProviderInformationCaType = "ZTPKI"
+	ACME           SubCaProviderInformationCaType = "ACME"
+	BUILTIN        SubCaProviderInformationCaType = "BUILTIN"
+	DIGICERT       SubCaProviderInformationCaType = "DIGICERT"
+	ENTRUST        SubCaProviderInformationCaType = "ENTRUST"
+	GLOBALSIGN     SubCaProviderInformationCaType = "GLOBALSIGN"
+	GLOBALSIGNMSSL SubCaProviderInformationCaType = "GLOBALSIGNMSSL"
+	MICROSOFT      SubCaProviderInformationCaType = "MICROSOFT"
+	MOCKCA         SubCaProviderInformationCaType = "MOCKCA"
+	TPP            SubCaProviderInformationCaType = "TPP"
+	ZTPKI          SubCaProviderInformationCaType = "ZTPKI"
 )
 
 // Defines values for SubCaProviderInformationKeyAlgorithm.
@@ -623,8 +859,26 @@ const (
 
 // Defines values for SystemRole.
 const (
-	CONDORMETRICS SystemRole = "CONDOR_METRICS"
-	SYSTEMADMIN   SystemRole = "SYSTEM_ADMIN"
+	SystemRoleCONDORMETRICS SystemRole = "CONDOR_METRICS"
+	SystemRoleSYSTEMADMIN   SystemRole = "SYSTEM_ADMIN"
+)
+
+// Defines values for TeamInformation2ProductRoles.
+const (
+	TeamInformation2ProductRolesDEVOPSLEAD           TeamInformation2ProductRoles = "DEVOPS_LEAD"
+	TeamInformation2ProductRolesDEVOPSUSER           TeamInformation2ProductRoles = "DEVOPS_USER"
+	TeamInformation2ProductRolesGUEST                TeamInformation2ProductRoles = "GUEST"
+	TeamInformation2ProductRolesOUTAGEDETECTIONADMIN TeamInformation2ProductRoles = "OUTAGEDETECTION_ADMIN"
+	TeamInformation2ProductRolesPKIADMIN             TeamInformation2ProductRoles = "PKI_ADMIN"
+	TeamInformation2ProductRolesPLATFORMADMIN        TeamInformation2ProductRoles = "PLATFORM_ADMIN"
+	TeamInformation2ProductRolesRESOURCEOWNER        TeamInformation2ProductRoles = "RESOURCE_OWNER"
+	TeamInformation2ProductRolesSECURITYADMIN        TeamInformation2ProductRoles = "SECURITY_ADMIN"
+)
+
+// Defines values for TeamInformation2SystemRoles.
+const (
+	TeamInformation2SystemRolesCONDORMETRICS TeamInformation2SystemRoles = "CONDOR_METRICS"
+	TeamInformation2SystemRolesSYSTEMADMIN   TeamInformation2SystemRoles = "SYSTEM_ADMIN"
 )
 
 // Defines values for TeamRole.
@@ -647,17 +901,35 @@ const (
 	WEBUI UserAccountType = "WEB_UI"
 )
 
+// Defines values for UserInformation2ProductRoles.
+const (
+	DEVOPSLEAD           UserInformation2ProductRoles = "DEVOPS_LEAD"
+	DEVOPSUSER           UserInformation2ProductRoles = "DEVOPS_USER"
+	GUEST                UserInformation2ProductRoles = "GUEST"
+	OUTAGEDETECTIONADMIN UserInformation2ProductRoles = "OUTAGEDETECTION_ADMIN"
+	PKIADMIN             UserInformation2ProductRoles = "PKI_ADMIN"
+	PLATFORMADMIN        UserInformation2ProductRoles = "PLATFORM_ADMIN"
+	RESOURCEOWNER        UserInformation2ProductRoles = "RESOURCE_OWNER"
+	SECURITYADMIN        UserInformation2ProductRoles = "SECURITY_ADMIN"
+)
+
+// Defines values for UserInformation2SystemRoles.
+const (
+	CONDORMETRICS UserInformation2SystemRoles = "CONDOR_METRICS"
+	SYSTEMADMIN   UserInformation2SystemRoles = "SYSTEM_ADMIN"
+)
+
 // Defines values for UserStatus.
 const (
-	ACTIVE            UserStatus = "ACTIVE"
-	INACTIVE          UserStatus = "INACTIVE"
-	PENDINGACTIVATION UserStatus = "PENDING_ACTIVATION"
+	UserStatusACTIVE            UserStatus = "ACTIVE"
+	UserStatusINACTIVE          UserStatus = "INACTIVE"
+	UserStatusPENDINGACTIVATION UserStatus = "PENDING_ACTIVATION"
 )
 
 // Defines values for UserType.
 const (
-	EXTERNAL UserType = "EXTERNAL"
-	INTERNAL UserType = "INTERNAL"
+	UserTypeEXTERNAL UserType = "EXTERNAL"
+	UserTypeINTERNAL UserType = "INTERNAL"
 )
 
 // ActivityLogCondition A Condition for filtering
@@ -767,6 +1039,95 @@ type ApiVersion string
 // Application Application ID to associate with the service account
 type Application = uuid.UUID
 
+// ApplicationInformation defines model for ApplicationInformation.
+type ApplicationInformation struct {
+	CertificateIssuingTemplateAliasIdMap map[string]openapi_types.UUID `json:"certificateIssuingTemplateAliasIdMap,omitempty,omitzero"`
+	CompanyId                            openapi_types.UUID            `json:"companyId,omitempty,omitzero"`
+	CreationDate                         time.Time                     `json:"creationDate,omitempty,omitzero"`
+	Description                          string                        `json:"description,omitempty,omitzero"`
+	FullyQualifiedDomainNames            []string                      `json:"fullyQualifiedDomainNames,omitempty,omitzero"`
+	Id                                   openapi_types.UUID            `json:"id,omitempty,omitzero"`
+	IpRanges                             []string                      `json:"ipRanges,omitempty,omitzero"`
+	ModificationDate                     time.Time                     `json:"modificationDate,omitempty,omitzero"`
+	Name                                 string                        `json:"name,omitempty,omitzero"`
+	OwnerIdsAndTypes                     []OwnerIdAndType              `json:"ownerIdsAndTypes,omitempty,omitzero"`
+	Ownership                            ApplicationOwnership          `json:"ownership,omitempty,omitzero"`
+	OwningServiceAccounts                []ServiceAccountInformation   `json:"owningServiceAccounts,omitempty,omitzero"`
+	OwningTeams                          []TeamInformation2            `json:"owningTeams,omitempty,omitzero"`
+	OwningUsers                          []UserInformation2            `json:"owningUsers,omitempty,omitzero"`
+	Ports                                []string                      `json:"ports,omitempty,omitzero"`
+}
+
+// ApplicationOwnership defines model for ApplicationOwnership.
+type ApplicationOwnership struct {
+	OwningTeams []openapi_types.UUID `json:"owningTeams,omitempty,omitzero"`
+	OwningUsers []openapi_types.UUID `json:"owningUsers,omitempty,omitzero"`
+}
+
+// ApplicationRequest defines model for ApplicationRequest.
+type ApplicationRequest struct {
+	// CertificateIssuingTemplateAliasIdMap Represents a mapping of certificate issuing template aliases to their UUIDs.
+	CertificateIssuingTemplateAliasIdMap map[string]openapi_types.UUID `json:"certificateIssuingTemplateAliasIdMap,omitempty,omitzero"`
+
+	// Description A description for an applications
+	Description string `json:"description,omitempty,omitzero"`
+
+	// ExternalIpRanges Represents a collection of external IP ranges.
+	ExternalIpRanges []string `json:"externalIpRanges,omitempty,omitzero"`
+
+	// Fqdns A collection of FQDNs
+	Fqdns []string `json:"fqdns,omitempty,omitzero"`
+
+	// FullyQualifiedDomainNames Represents a collection of fully qualified domain names (FQDNs).
+	FullyQualifiedDomainNames []string `json:"fullyQualifiedDomainNames"`
+
+	// InternalFqdns Represents a collection of fully qualified domain names (FQDNs) used for internal purposes.
+	InternalFqdns []string `json:"internalFqdns,omitempty,omitzero"`
+
+	// InternalIpRanges epresents a collection of internal IP ranges.
+	InternalIpRanges []string `json:"internalIpRanges,omitempty,omitzero"`
+
+	// InternalPorts Represents a collection of external ports.
+	InternalPorts []string `json:"internalPorts"`
+
+	// IpRanges Represents a collection of CIDR (Classless Inter-Domain Routing) ranges.
+	IpRanges []string `json:"ipRanges"`
+
+	// Name An application name
+	Name string `json:"name"`
+
+	// OwnerIdsAndTypes Represents a collection of ownership UUIDs and types.
+	OwnerIdsAndTypes []OwnerIdAndType `json:"ownerIdsAndTypes"`
+
+	// Ports Represents a collection of network ports.
+	Ports []string `json:"ports"`
+
+	// StartTargetedDiscovery Specifies whether to start target discovery.
+	StartTargetedDiscovery bool `json:"startTargetedDiscovery,omitempty,omitzero"`
+}
+
+// ApplicationResponse defines model for ApplicationResponse.
+type ApplicationResponse struct {
+	Applications   []ApplicationInformation `json:"applications,omitempty,omitzero"`
+	OwnershipCount int32                    `json:"ownershipCount,omitempty,omitzero"`
+	TotalCount     int32                    `json:"totalCount,omitempty,omitzero"`
+}
+
+// ApplicationsAssignRequest defines model for ApplicationsAssignRequest.
+type ApplicationsAssignRequest struct {
+	Action                 ApplicationsAssignRequestAction `json:"action"`
+	CertificateIds         []openapi_types.UUID            `json:"certificateIds"`
+	TargetedApplicationIds []openapi_types.UUID            `json:"targetedApplicationIds"`
+}
+
+// ApplicationsAssignRequestAction defines model for ApplicationsAssignRequest.Action.
+type ApplicationsAssignRequestAction string
+
+// ApplicationsAssignResponse defines model for ApplicationsAssignResponse.
+type ApplicationsAssignResponse struct {
+	Certificates []CertificateInformation `json:"certificates,omitempty,omitzero"`
+}
+
 // AwsCloudProviderInformation defines model for AwsCloudProviderInformation.
 type AwsCloudProviderInformation struct {
 	// AccountIds Array of AWS account IDs each of which should be a 12-digit identifier
@@ -830,6 +1191,283 @@ type CertificateAuthorityProductInformation1HashAlgorithm string
 // CertificateAuthorityProductInformation1ProductTypes defines model for CertificateAuthorityProductInformation1.ProductTypes.
 type CertificateAuthorityProductInformation1ProductTypes string
 
+// CertificateAuthorityProductInformation2 defines model for CertificateAuthorityProductInformation2.
+type CertificateAuthorityProductInformation2 struct {
+	CertificateType CertificateAuthorityProductInformation2CertificateType `json:"certificateType,omitempty,omitzero"`
+	HashAlgorithm   CertificateAuthorityProductInformation2HashAlgorithm   `json:"hashAlgorithm,omitempty,omitzero"`
+	ProductName     string                                                 `json:"productName,omitempty,omitzero"`
+	ProductTypes    []CertificateAuthorityProductInformation2ProductTypes  `json:"productTypes,omitempty,omitzero"`
+
+	// ValidityPeriod ISO8601 Period Format
+	ValidityPeriod string `json:"validityPeriod,omitempty,omitzero"`
+}
+
+// CertificateAuthorityProductInformation2CertificateType defines model for CertificateAuthorityProductInformation2.CertificateType.
+type CertificateAuthorityProductInformation2CertificateType string
+
+// CertificateAuthorityProductInformation2HashAlgorithm defines model for CertificateAuthorityProductInformation2.HashAlgorithm.
+type CertificateAuthorityProductInformation2HashAlgorithm string
+
+// CertificateAuthorityProductInformation2ProductTypes defines model for CertificateAuthorityProductInformation2.ProductTypes.
+type CertificateAuthorityProductInformation2ProductTypes string
+
+// CertificateInformation defines model for CertificateInformation.
+type CertificateInformation struct {
+	// ApplicationIds A collection of application IDs
+	ApplicationIds []openapi_types.UUID `json:"applicationIds,omitempty,omitzero"`
+
+	// ArchivedDate The date a certificate was archived
+	ArchivedDate time.Time `json:"archivedDate,omitempty,omitzero"`
+
+	// AuthorityKeyIdentifierHash An authority key identifier hash
+	AuthorityKeyIdentifierHash string `json:"authorityKeyIdentifierHash,omitempty,omitzero"`
+
+	// CertificateAuthorityAccountId UUID  of a certificate authority account
+	CertificateAuthorityAccountId openapi_types.UUID `json:"certificateAuthorityAccountId,omitempty,omitzero"`
+
+	// CertificateName A certificate name
+	CertificateName string `json:"certificateName,omitempty,omitzero"`
+
+	// CertificateRequestId UUID  of a certificate request
+	CertificateRequestId openapi_types.UUID `json:"certificateRequestId,omitempty,omitzero"`
+
+	// CertificateStatus Certificate's status
+	CertificateStatus CertificateInformationCertificateStatus `json:"certificateStatus,omitempty,omitzero"`
+
+	// CompanyId UUID  of a company
+	CompanyId openapi_types.UUID `json:"companyId,omitempty,omitzero"`
+
+	// DekHash A certificate dek hash
+	DekHash string `json:"dekHash,omitempty,omitzero"`
+
+	// EncryptionType A certificate encryption type
+	EncryptionType CertificateInformationEncryptionType `json:"encryptionType,omitempty,omitzero"`
+
+	// ExtendedKeyUsage A collection of certificate extended key usages
+	ExtendedKeyUsage []string `json:"extendedKeyUsage,omitempty,omitzero"`
+
+	// Fingerprint A certificate fingerprint
+	Fingerprint string `json:"fingerprint,omitempty,omitzero"`
+
+	// Id UUID of a certificate
+	Id openapi_types.UUID `json:"id,omitempty,omitzero"`
+
+	// InhibitAnyPolicy Inhibit any policy
+	InhibitAnyPolicy int32 `json:"inhibitAnyPolicy,omitempty,omitzero"`
+
+	// InhibitPolicyMapping Inhibit policy mapping
+	InhibitPolicyMapping int32 `json:"inhibitPolicyMapping,omitempty,omitzero"`
+
+	// Instances A collection of certificate instances information
+	Instances []CertificateInstanceInformation `json:"instances,omitempty,omitzero"`
+
+	// IssuerAlternativeNameDns A collection of certificate issuer alternative names DNs
+	IssuerAlternativeNameDns []string `json:"issuerAlternativeNameDns,omitempty,omitzero"`
+
+	// IssuerAlternativeNameNonDns A collection of certificate issuer alternative name none DNs
+	IssuerAlternativeNameNonDns []string `json:"issuerAlternativeNameNonDns,omitempty,omitzero"`
+
+	// IssuerC A certificate issues Country
+	IssuerC string `json:"issuerC,omitempty,omitzero"`
+
+	// IssuerCN A collection of certificate issuer Common names
+	IssuerCN []string `json:"issuerCN,omitempty,omitzero"`
+
+	// IssuerCertificateIds A collection of issuer certificate IDs
+	IssuerCertificateIds []openapi_types.UUID `json:"issuerCertificateIds,omitempty,omitzero"`
+
+	// IssuerDN A certificate issue DN
+	IssuerDN string `json:"issuerDN,omitempty,omitzero"`
+
+	// IssuerL A certificate issues Locality
+	IssuerL string `json:"issuerL,omitempty,omitzero"`
+
+	// IssuerOU A collection of certificate issuer Organization units
+	IssuerOU []string `json:"issuerOU,omitempty,omitzero"`
+
+	// IssuerST A certificate issuer State
+	IssuerST string `json:"issuerST,omitempty,omitzero"`
+
+	// KeyCurve A certificate key curve
+	KeyCurve CertificateInformationKeyCurve `json:"keyCurve,omitempty,omitzero"`
+
+	// KeyStrength A certificate key strength
+	KeyStrength int32 `json:"keyStrength,omitempty,omitzero"`
+
+	// KeyUsage A collection of certificate key usages
+	KeyUsage         []string `json:"keyUsage,omitempty,omitzero"`
+	LastNotification int32    `json:"lastNotification,omitempty,omitzero"`
+
+	// ManagedCertificateId UUID  of a managed certificate
+	ManagedCertificateId openapi_types.UUID `json:"managedCertificateId,omitempty,omitzero"`
+
+	// ModificationDate The last date a certificate was modified
+	ModificationDate time.Time `json:"modificationDate,omitempty,omitzero"`
+
+	// OcspNoCheck If a certificate no ocsp check
+	OcspNoCheck bool                 `json:"ocspNoCheck,omitempty,omitzero"`
+	Ownership   CertificateOwnership `json:"ownership,omitempty,omitzero"`
+
+	// PathLength A certificate path length
+	PathLength int32 `json:"pathLength,omitempty,omitzero"`
+
+	// RequireExplicitPolicy Required explicit policy is required
+	RequireExplicitPolicy int32 `json:"requireExplicitPolicy,omitempty,omitzero"`
+
+	// SelfSigned If the certificate is self singed
+	SelfSigned bool `json:"selfSigned,omitempty,omitzero"`
+
+	// SerialNumber A certificate serial number
+	SerialNumber string `json:"serialNumber,omitempty,omitzero"`
+
+	// SignatureAlgorithm A certificate signature algorithm
+	SignatureAlgorithm CertificateInformationSignatureAlgorithm `json:"signatureAlgorithm,omitempty,omitzero"`
+
+	// SignatureHashAlgorithm A certificate signature hash algorithm
+	SignatureHashAlgorithm CertificateInformationSignatureHashAlgorithm `json:"signatureHashAlgorithm,omitempty,omitzero"`
+
+	// StatusModificationDate The date a certificate's status was modified
+	StatusModificationDate time.Time `json:"statusModificationDate,omitempty,omitzero"`
+
+	// StatusModificationUserId UUID of the user that modified the certificate installation
+	StatusModificationUserId openapi_types.UUID `json:"statusModificationUserId,omitempty,omitzero"`
+
+	// SubjectAlternativeNameDns A collection of certificate subject alternative names DNs
+	SubjectAlternativeNameDns []string `json:"subjectAlternativeNameDns,omitempty,omitzero"`
+
+	// SubjectAlternativeNameNonDns A collection of certificate subject alternative name none DNs
+	SubjectAlternativeNameNonDns []string `json:"subjectAlternativeNameNonDns,omitempty,omitzero"`
+
+	// SubjectAlternativeNamesByType A certificate subject alternative name by type
+	SubjectAlternativeNamesByType GeneralNamesData2 `json:"subjectAlternativeNamesByType,omitempty,omitzero"`
+
+	// SubjectC A certificate subject Country
+	SubjectC string `json:"subjectC,omitempty,omitzero"`
+
+	// SubjectCN A collection of certificate subject CNs
+	SubjectCN []string `json:"subjectCN,omitempty,omitzero"`
+
+	// SubjectDN A certificate subject DN
+	SubjectDN string `json:"subjectDN,omitempty,omitzero"`
+
+	// SubjectKeyIdentifierHash A subject key identifier hash
+	SubjectKeyIdentifierHash string `json:"subjectKeyIdentifierHash,omitempty,omitzero"`
+
+	// SubjectL A certificate subject Locality
+	SubjectL string `json:"subjectL,omitempty,omitzero"`
+
+	// SubjectO A certificate subject Organization
+	SubjectO string `json:"subjectO,omitempty,omitzero"`
+
+	// SubjectOU A collection of certificate subject Organization units
+	SubjectOU []string `json:"subjectOU,omitempty,omitzero"`
+
+	// SubjectST A certificate subject State
+	SubjectST string `json:"subjectST,omitempty,omitzero"`
+
+	// Tags A collection of tags
+	Tags []string `json:"tags,omitempty,omitzero"`
+
+	// TotalActiveInstanceCount total active instances of a certificate
+	TotalActiveInstanceCount int32 `json:"totalActiveInstanceCount,omitempty,omitzero"`
+
+	// TotalInstanceCount total instances of a certificate
+	TotalInstanceCount int32 `json:"totalInstanceCount,omitempty,omitzero"`
+
+	// ValidityEnd The date a certificate validity ends
+	ValidityEnd time.Time `json:"validityEnd,omitempty,omitzero"`
+
+	// ValidityStart The date a certificate validity starts
+	ValidityStart time.Time `json:"validityStart,omitempty,omitzero"`
+
+	// VersionType A certificate version type
+	VersionType CertificateInformationVersionType `json:"versionType,omitempty,omitzero"`
+}
+
+// CertificateInformationCertificateStatus Certificate's status
+type CertificateInformationCertificateStatus string
+
+// CertificateInformationEncryptionType A certificate encryption type
+type CertificateInformationEncryptionType string
+
+// CertificateInformationKeyCurve A certificate key curve
+type CertificateInformationKeyCurve string
+
+// CertificateInformationSignatureAlgorithm A certificate signature algorithm
+type CertificateInformationSignatureAlgorithm string
+
+// CertificateInformationSignatureHashAlgorithm A certificate signature hash algorithm
+type CertificateInformationSignatureHashAlgorithm string
+
+// CertificateInformationVersionType A certificate version type
+type CertificateInformationVersionType string
+
+// CertificateInstanceInformation defines model for CertificateInstanceInformation.
+type CertificateInstanceInformation struct {
+	// ApplicationIds A collection of application IDs
+	ApplicationIds []openapi_types.UUID `json:"applicationIds,omitempty,omitzero"`
+
+	// CertificateId UUID of a certificate
+	CertificateId openapi_types.UUID `json:"certificateId,omitempty,omitzero"`
+
+	// CertificateInstanceId UUID of a certificate instance
+	CertificateInstanceId openapi_types.UUID `json:"certificateInstanceId,omitempty,omitzero"`
+
+	// CertificateSource Certificate source
+	CertificateSource CertificateInstanceInformationCertificateSource `json:"certificateSource,omitempty,omitzero"`
+
+	// DeploymentStatus The deployment status
+	DeploymentStatus CertificateInstanceInformationDeploymentStatus `json:"deploymentStatus,omitempty,omitzero"`
+
+	// Hostname A hostname
+	Hostname string `json:"hostname,omitempty,omitzero"`
+
+	// InstanceChainValidationStatus A collection of the instance chain validation status
+	InstanceChainValidationStatus []CertificateInstanceInformationInstanceChainValidationStatus `json:"instanceChainValidationStatus,omitempty,omitzero"`
+
+	// IpAddress An ip address
+	IpAddress string `json:"ipAddress,omitempty,omitzero"`
+
+	// LastScanDate The last scan date
+	LastScanDate time.Time `json:"lastScanDate,omitempty,omitzero"`
+
+	// LastValidatedAttempt The last validation attempt date
+	LastValidatedAttempt time.Time `json:"lastValidatedAttempt,omitempty,omitzero"`
+
+	// ModificationDate The last modification date
+	ModificationDate time.Time `json:"modificationDate,omitempty,omitzero"`
+
+	// Port A port number
+	Port int32 `json:"port,omitempty,omitzero"`
+
+	// ServiceIds A collection of service IDs
+	ServiceIds []openapi_types.UUID `json:"serviceIds,omitempty,omitzero"`
+
+	// SslProtocols A collection of ssl protocols
+	SslProtocols []string `json:"sslProtocols,omitempty,omitzero"`
+
+	// SslValidationErrorArguments A collection of ssl validation error arguments
+	SslValidationErrorArguments []string `json:"sslValidationErrorArguments,omitempty,omitzero"`
+
+	// SslValidationStatus SSL validation status
+	SslValidationStatus CertificateInstanceInformationSslValidationStatus `json:"sslValidationStatus,omitempty,omitzero"`
+
+	// SslValidationStatusMessage SSL validation status message
+	SslValidationStatusMessage string `json:"sslValidationStatusMessage,omitempty,omitzero"`
+}
+
+// CertificateInstanceInformationCertificateSource Certificate source
+type CertificateInstanceInformationCertificateSource string
+
+// CertificateInstanceInformationDeploymentStatus The deployment status
+type CertificateInstanceInformationDeploymentStatus string
+
+// CertificateInstanceInformationInstanceChainValidationStatus defines model for CertificateInstanceInformation.InstanceChainValidationStatus.
+type CertificateInstanceInformationInstanceChainValidationStatus string
+
+// CertificateInstanceInformationSslValidationStatus SSL validation status
+type CertificateInstanceInformationSslValidationStatus string
+
 // CertificateIssuingTemplateDeleteResponse defines model for CertificateIssuingTemplateDeleteResponse.
 type CertificateIssuingTemplateDeleteResponse struct {
 	Id   openapi_types.UUID `json:"id,omitempty,omitzero"`
@@ -891,6 +1529,59 @@ type CertificateIssuingTemplateInformation1ExtendedKeyUsageValues string
 // CertificateIssuingTemplateInformation1Status defines model for CertificateIssuingTemplateInformation1.Status.
 type CertificateIssuingTemplateInformation1Status string
 
+// CertificateIssuingTemplateInformation2 defines model for CertificateIssuingTemplateInformation2.
+type CertificateIssuingTemplateInformation2 struct {
+	CertificateAuthority                CertificateIssuingTemplateInformation2CertificateAuthority `json:"certificateAuthority,omitempty,omitzero"`
+	CertificateAuthorityAccountId       openapi_types.UUID                                         `json:"certificateAuthorityAccountId,omitempty,omitzero"`
+	CertificateAuthorityProductOptionId openapi_types.UUID                                         `json:"certificateAuthorityProductOptionId,omitempty,omitzero"`
+	CompanyId                           openapi_types.UUID                                         `json:"companyId,omitempty,omitzero"`
+	CreationDate                        time.Time                                                  `json:"creationDate,omitempty,omitzero"`
+	CsrUploadAllowed                    bool                                                       `json:"csrUploadAllowed,omitempty,omitzero"`
+	EveryoneIsConsumer                  bool                                                       `json:"everyoneIsConsumer,omitempty,omitzero"`
+	Id                                  openapi_types.UUID                                         `json:"id,omitempty,omitzero"`
+	KeyGeneratedByVenafiAllowed         bool                                                       `json:"keyGeneratedByVenafiAllowed,omitempty,omitzero"`
+	KeyReuse                            bool                                                       `json:"keyReuse,omitempty,omitzero"`
+	KeyTypes                            []KeyTypeInformation2                                      `json:"keyTypes,omitempty,omitzero"`
+	ModificationDate                    time.Time                                                  `json:"modificationDate,omitempty,omitzero"`
+	Name                                string                                                     `json:"name,omitempty,omitzero"`
+	Priority                            int32                                                      `json:"priority,omitempty,omitzero"`
+	Product                             CertificateAuthorityProductInformation2                    `json:"product,omitempty,omitzero"`
+	ProductEntitlement                  CertificateIssuingTemplateInformation2ProductEntitlement   `json:"productEntitlement,omitempty,omitzero"`
+	ProductEntitlements                 CertificateIssuingTemplateInformation2ProductEntitlements  `json:"productEntitlements,omitempty,omitzero"`
+	Reason                              string                                                     `json:"reason,omitempty,omitzero"`
+	RecommendedSettings                 RecommendedSettingsInformation2                            `json:"recommendedSettings,omitempty,omitzero"`
+	ResourceConsumerTeamIds             []openapi_types.UUID                                       `json:"resourceConsumerTeamIds,omitempty,omitzero"`
+	ResourceConsumerUserIds             []openapi_types.UUID                                       `json:"resourceConsumerUserIds,omitempty,omitzero"`
+	SanDnsNameRegexes                   []string                                                   `json:"sanDnsNameRegexes,omitempty,omitzero"`
+	SanIpAddressRegexes                 []string                                                   `json:"sanIpAddressRegexes,omitempty,omitzero"`
+	SanRegexes                          []string                                                   `json:"sanRegexes,omitempty,omitzero"`
+	SanRfc822NameRegexes                []string                                                   `json:"sanRfc822NameRegexes,omitempty,omitzero"`
+	SanUniformResourceIdentifierRegexes []string                                                   `json:"sanUniformResourceIdentifierRegexes,omitempty,omitzero"`
+	Status                              CertificateIssuingTemplateInformation2Status               `json:"status,omitempty,omitzero"`
+	SubjectCNRegexes                    []string                                                   `json:"subjectCNRegexes,omitempty,omitzero"`
+	SubjectCValues                      []string                                                   `json:"subjectCValues,omitempty,omitzero"`
+	SubjectLRegexes                     []string                                                   `json:"subjectLRegexes,omitempty,omitzero"`
+	SubjectORegexes                     []string                                                   `json:"subjectORegexes,omitempty,omitzero"`
+	SubjectOURegexes                    []string                                                   `json:"subjectOURegexes,omitempty,omitzero"`
+	SubjectSTRegexes                    []string                                                   `json:"subjectSTRegexes,omitempty,omitzero"`
+	SystemGenerated                     bool                                                       `json:"systemGenerated,omitempty,omitzero"`
+
+	// ValidityPeriod ISO8601 Period Format
+	ValidityPeriod string `json:"validityPeriod,omitempty,omitzero"`
+}
+
+// CertificateIssuingTemplateInformation2CertificateAuthority defines model for CertificateIssuingTemplateInformation2.CertificateAuthority.
+type CertificateIssuingTemplateInformation2CertificateAuthority string
+
+// CertificateIssuingTemplateInformation2ProductEntitlement defines model for CertificateIssuingTemplateInformation2.ProductEntitlement.
+type CertificateIssuingTemplateInformation2ProductEntitlement string
+
+// CertificateIssuingTemplateInformation2ProductEntitlements defines model for CertificateIssuingTemplateInformation2.ProductEntitlements.
+type CertificateIssuingTemplateInformation2ProductEntitlements string
+
+// CertificateIssuingTemplateInformation2Status defines model for CertificateIssuingTemplateInformation2.Status.
+type CertificateIssuingTemplateInformation2Status string
+
 // CertificateIssuingTemplateRequest defines model for CertificateIssuingTemplateRequest.
 type CertificateIssuingTemplateRequest struct {
 	CertificateAuthority                CertificateIssuingTemplateRequestCertificateAuthority     `json:"certificateAuthority"`
@@ -936,6 +1627,11 @@ type CertificateIssuingTemplateRequestExtendedKeyUsageValues string
 // CertificateIssuingTemplateResponse defines model for CertificateIssuingTemplateResponse.
 type CertificateIssuingTemplateResponse struct {
 	CertificateIssuingTemplates []CertificateIssuingTemplateInformation1 `json:"certificateIssuingTemplates,omitempty,omitzero"`
+}
+
+// CertificateOwnership defines model for CertificateOwnership.
+type CertificateOwnership struct {
+	OwningContainers []ExtendedApplicationOwnership `json:"owningContainers,omitempty,omitzero"`
 }
 
 // ChangePasswordRequest defines model for ChangePasswordRequest.
@@ -1217,6 +1913,13 @@ type ErrorInformation6 struct {
 	Message string      `json:"message,omitempty,omitzero"`
 }
 
+// ErrorInformation8 defines model for ErrorInformation8.
+type ErrorInformation8 struct {
+	Args    []AnyValue8 `json:"args,omitempty,omitzero"`
+	Code    int32       `json:"code,omitempty,omitzero"`
+	Message string      `json:"message,omitempty,omitzero"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Errors []ErrorInformation `json:"errors,omitempty,omitzero"`
@@ -1225,6 +1928,19 @@ type ErrorResponse struct {
 // ErrorResponse7 defines model for ErrorResponse7.
 type ErrorResponse7 struct {
 	Errors []ErrorInformation6 `json:"errors,omitempty,omitzero"`
+}
+
+// ErrorResponse9 defines model for ErrorResponse9.
+type ErrorResponse9 struct {
+	Errors []ErrorInformation8 `json:"errors,omitempty,omitzero"`
+}
+
+// ExtendedApplicationOwnership defines model for ExtendedApplicationOwnership.
+type ExtendedApplicationOwnership struct {
+	Id          openapi_types.UUID   `json:"id,omitempty,omitzero"`
+	OwningTeams []openapi_types.UUID `json:"owningTeams,omitempty,omitzero"`
+	OwningUsers []openapi_types.UUID `json:"owningUsers,omitempty,omitzero"`
+	Type        string               `json:"type,omitempty,omitzero"`
 }
 
 // ExtendedConfigurationInformation defines model for ExtendedConfigurationInformation.
@@ -1352,6 +2068,19 @@ type FilterOperands struct {
 // FilterOperandsOperator An operator for filtering
 type FilterOperandsOperator string
 
+// GeneralNamesData2 A certificate subject alternative name by type
+type GeneralNamesData2 struct {
+	DNSName                   []string `json:"dNSName,omitempty,omitzero"`
+	DirectoryName             []string `json:"directoryName,omitempty,omitzero"`
+	EdiPartyName              []string `json:"ediPartyName,omitempty,omitzero"`
+	IPAddress                 []string `json:"iPAddress,omitempty,omitzero"`
+	OtherName                 []string `json:"otherName,omitempty,omitzero"`
+	RegisteredID              []string `json:"registeredID,omitempty,omitzero"`
+	Rfc822Name                []string `json:"rfc822Name,omitempty,omitzero"`
+	UniformResourceIdentifier []string `json:"uniformResourceIdentifier,omitempty,omitzero"`
+	X400Address               []string `json:"x400Address,omitempty,omitzero"`
+}
+
 // GetServiceAccountScopesResponseBody defines model for GetServiceAccountScopesResponseBody.
 type GetServiceAccountScopesResponseBody = []ScopeDetails
 
@@ -1369,6 +2098,31 @@ type GoogleCloudProviderInformation struct {
 
 // GoogleCloudProviderInformationRegions defines model for GoogleCloudProviderInformation.Regions.
 type GoogleCloudProviderInformationRegions string
+
+// InvitationInformation defines model for InvitationInformation.
+type InvitationInformation struct {
+	CompanyId    openapi_types.UUID `json:"companyId,omitempty,omitzero"`
+	Id           openapi_types.UUID `json:"id,omitempty,omitzero"`
+	ProductRoles map[string][]Role  `json:"productRoles,omitempty,omitzero"`
+	Properties   map[string]string  `json:"properties,omitempty,omitzero"`
+	UserId       openapi_types.UUID `json:"userId,omitempty,omitzero"`
+}
+
+// InvitationRequest defines model for InvitationRequest.
+type InvitationRequest struct {
+	Properties map[string]string     `json:"properties,omitempty,omitzero"`
+	Role       InvitationRequestRole `json:"role"`
+	Roles      map[string]Role       `json:"roles,omitempty,omitzero"`
+	Teams      []openapi_types.UUID  `json:"teams,omitempty,omitzero"`
+}
+
+// InvitationRequestRole defines model for InvitationRequest.Role.
+type InvitationRequestRole string
+
+// InvitationResponse defines model for InvitationResponse.
+type InvitationResponse struct {
+	Invitations []InvitationInformation `json:"invitations,omitempty,omitzero"`
+}
 
 // IssuingTemplateDomainsSyncInformation defines model for IssuingTemplateDomainsSyncInformation.
 type IssuingTemplateDomainsSyncInformation struct {
@@ -1463,6 +2217,11 @@ type KeyTypeInformation1 struct {
 	KeyType string `json:"keyType,omitempty,omitzero"`
 }
 
+// KeyTypeInformation2 defines model for KeyTypeInformation2.
+type KeyTypeInformation2 struct {
+	KeyType string `json:"keyType,omitempty,omitzero"`
+}
+
 // KeyTypeParameters1 defines model for KeyTypeParameters1.
 type KeyTypeParameters1 struct {
 	KeyCurves  []KeyTypeParameters1KeyCurves `json:"keyCurves,omitempty,omitzero"`
@@ -1476,11 +2235,29 @@ type KeyTypeParameters1KeyCurves string
 // KeyTypeParameters1KeyType defines model for KeyTypeParameters1.KeyType.
 type KeyTypeParameters1KeyType string
 
+// MetadataInformation defines model for MetadataInformation.
+type MetadataInformation struct {
+	CompanyId          openapi_types.UUID                    `json:"companyId,omitempty,omitzero"`
+	ProductEntitlement MetadataInformationProductEntitlement `json:"productEntitlement,omitempty,omitzero"`
+}
+
+// MetadataInformationProductEntitlement defines model for MetadataInformation.ProductEntitlement.
+type MetadataInformationProductEntitlement string
+
 // NaryOperator An operator for filtering
 type NaryOperator string
 
 // Operator defines model for Operator.
 type Operator string
+
+// OwnerIdAndType defines model for OwnerIdAndType.
+type OwnerIdAndType struct {
+	OwnerId   openapi_types.UUID      `json:"ownerId"`
+	OwnerType OwnerIdAndTypeOwnerType `json:"ownerType"`
+}
+
+// OwnerIdAndTypeOwnerType defines model for OwnerIdAndType.OwnerType.
+type OwnerIdAndTypeOwnerType string
 
 // PatchAdvancedSettingsInformation defines model for PatchAdvancedSettingsInformation.
 type PatchAdvancedSettingsInformation struct {
@@ -1686,6 +2463,27 @@ type PropertyInformation struct {
 // PropertyInformationType defines model for PropertyInformation.Type.
 type PropertyInformationType string
 
+// ProviderConfigInformation defines model for ProviderConfigInformation.
+type ProviderConfigInformation struct {
+	ApiKey   string `json:"api_key,omitempty,omitzero"`
+	Endpoint string `json:"endpoint,omitempty,omitzero"`
+}
+
+// ProviderInformation defines model for ProviderInformation.
+type ProviderInformation struct {
+	Config ProviderConfigInformation  `json:"config,omitempty,omitzero"`
+	Inputs []ProviderInputInformation `json:"inputs,omitempty,omitzero"`
+	Type   string                     `json:"type,omitempty,omitzero"`
+}
+
+// ProviderInputInformation defines model for ProviderInputInformation.
+type ProviderInputInformation struct {
+	Hosts  []string `json:"hosts,omitempty,omitzero"`
+	Ports  []string `json:"ports,omitempty,omitzero"`
+	Subnet string   `json:"subnet,omitempty,omitzero"`
+	Type   string   `json:"type,omitempty,omitzero"`
+}
+
 // PutServiceAccountByClientIDCredentialsRequestBody defines model for PutServiceAccountByClientIDCredentialsRequestBody.
 type PutServiceAccountByClientIDCredentialsRequestBody struct {
 	// ExtendCredentialLifetime Extend the credential lifetime
@@ -1717,6 +2515,18 @@ type RecommendedSettingsInformation1 struct {
 	SubjectSTValue   string                                 `json:"subjectSTValue,omitempty,omitzero"`
 }
 
+// RecommendedSettingsInformation2 defines model for RecommendedSettingsInformation2.
+type RecommendedSettingsInformation2 struct {
+	Key              RecommendedSettingsKeyTypeInformation2 `json:"key,omitempty,omitzero"`
+	SanRegexes       []string                               `json:"sanRegexes,omitempty,omitzero"`
+	SubjectCNRegexes []string                               `json:"subjectCNRegexes,omitempty,omitzero"`
+	SubjectCValue    string                                 `json:"subjectCValue,omitempty,omitzero"`
+	SubjectLValue    string                                 `json:"subjectLValue,omitempty,omitzero"`
+	SubjectOUValue   string                                 `json:"subjectOUValue,omitempty,omitzero"`
+	SubjectOValue    string                                 `json:"subjectOValue,omitempty,omitzero"`
+	SubjectSTValue   string                                 `json:"subjectSTValue,omitempty,omitzero"`
+}
+
 // RecommendedSettingsKeyTypeInformation1 defines model for RecommendedSettingsKeyTypeInformation1.
 type RecommendedSettingsKeyTypeInformation1 struct {
 	Curve  RecommendedSettingsKeyTypeInformation1Curve `json:"curve,omitempty,omitzero"`
@@ -1729,6 +2539,19 @@ type RecommendedSettingsKeyTypeInformation1Curve string
 
 // RecommendedSettingsKeyTypeInformation1Type defines model for RecommendedSettingsKeyTypeInformation1.Type.
 type RecommendedSettingsKeyTypeInformation1Type string
+
+// RecommendedSettingsKeyTypeInformation2 defines model for RecommendedSettingsKeyTypeInformation2.
+type RecommendedSettingsKeyTypeInformation2 struct {
+	Curve  RecommendedSettingsKeyTypeInformation2Curve `json:"curve,omitempty,omitzero"`
+	Length int32                                       `json:"length,omitempty,omitzero"`
+	Type   RecommendedSettingsKeyTypeInformation2Type  `json:"type,omitempty,omitzero"`
+}
+
+// RecommendedSettingsKeyTypeInformation2Curve defines model for RecommendedSettingsKeyTypeInformation2.Curve.
+type RecommendedSettingsKeyTypeInformation2Curve string
+
+// RecommendedSettingsKeyTypeInformation2Type defines model for RecommendedSettingsKeyTypeInformation2.Type.
+type RecommendedSettingsKeyTypeInformation2Type string
 
 // RecommendedSettingsKeyTypeParameter defines model for RecommendedSettingsKeyTypeParameter.
 type RecommendedSettingsKeyTypeParameter struct {
@@ -1788,6 +2611,13 @@ type SansInformation struct {
 	IpAddresses                PropertyInformation `json:"ipAddresses,omitempty,omitzero"`
 	Rfc822Names                PropertyInformation `json:"rfc822Names,omitempty,omitzero"`
 	UniformResourceIdentifiers PropertyInformation `json:"uniformResourceIdentifiers,omitempty,omitzero"`
+}
+
+// ScanafiConfigResponseV1 defines model for ScanafiConfigResponseV1.
+type ScanafiConfigResponseV1 struct {
+	Id       string              `json:"id,omitempty,omitzero"`
+	Metadata MetadataInformation `json:"metadata,omitempty,omitzero"`
+	Provider ProviderInformation `json:"provider,omitempty,omitzero"`
 }
 
 // Scope The service account authorization scopes
@@ -2019,6 +2849,26 @@ type ServiceAccountDetailsNoKey struct {
 
 	// UpdatedOn The last time the account details were updated
 	UpdatedOn time.Time `json:"updatedOn,omitempty,omitzero"`
+}
+
+// ServiceAccountInformation defines model for ServiceAccountInformation.
+type ServiceAccountInformation struct {
+	Applications        []openapi_types.UUID            `json:"applications,omitempty,omitzero"`
+	ApplicationsAdded   []openapi_types.UUID            `json:"applicationsAdded,omitempty,omitzero"`
+	ApplicationsRemoved []openapi_types.UUID            `json:"applicationsRemoved,omitempty,omitzero"`
+	AuthType            string                          `json:"authType,omitempty,omitzero"`
+	AuthenticationType  string                          `json:"authenticationType,omitempty,omitzero"`
+	CompanyId           openapi_types.UUID              `json:"companyId,omitempty,omitzero"`
+	Enabled             bool                            `json:"enabled,omitempty,omitzero"`
+	Id                  openapi_types.UUID              `json:"id,omitempty,omitzero"`
+	Name                string                          `json:"name,omitempty,omitzero"`
+	Owner               openapi_types.UUID              `json:"owner,omitempty,omitzero"`
+	Ownership           map[string][]openapi_types.UUID `json:"ownership,omitempty,omitzero"`
+	Roles               []string                        `json:"roles,omitempty,omitzero"`
+	Scopes              []string                        `json:"scopes,omitempty,omitzero"`
+	ServiceAccount      bool                            `json:"serviceAccount,omitempty,omitzero"`
+	TenantId            openapi_types.UUID              `json:"tenantId,omitempty,omitzero"`
+	UserAccount         bool                            `json:"userAccount,omitempty,omitzero"`
 }
 
 // ServiceAccountPatchBaseObject defines model for ServiceAccountPatchBaseObject.
@@ -2254,6 +3104,24 @@ type TeamInformation struct {
 	UserMatchingRules []UserMatchingRule   `json:"userMatchingRules,omitempty,omitzero"`
 }
 
+// TeamInformation2 defines model for TeamInformation2.
+type TeamInformation2 struct {
+	CompanyId    openapi_types.UUID                        `json:"companyId,omitempty,omitzero"`
+	Id           openapi_types.UUID                        `json:"id,omitempty,omitzero"`
+	Members      []openapi_types.UUID                      `json:"members,omitempty,omitzero"`
+	Name         string                                    `json:"name,omitempty,omitzero"`
+	Owners       []openapi_types.UUID                      `json:"owners,omitempty,omitzero"`
+	Ownership    map[string][]openapi_types.UUID           `json:"ownership,omitempty,omitzero"`
+	ProductRoles map[string][]TeamInformation2ProductRoles `json:"productRoles,omitempty,omitzero"`
+	SystemRoles  []TeamInformation2SystemRoles             `json:"systemRoles,omitempty,omitzero"`
+}
+
+// TeamInformation2ProductRoles defines model for TeamInformation2.ProductRoles.
+type TeamInformation2ProductRoles string
+
+// TeamInformation2SystemRoles defines model for TeamInformation2.SystemRoles.
+type TeamInformation2SystemRoles string
+
 // TeamMembersRequest defines model for TeamMembersRequest.
 type TeamMembersRequest struct {
 	Members []openapi_types.UUID `json:"members"`
@@ -2336,6 +3204,33 @@ type UserInformation struct {
 	Username                     string               `json:"username,omitempty,omitzero"`
 }
 
+// UserInformation2 defines model for UserInformation2.
+type UserInformation2 struct {
+	Admin           bool                                      `json:"admin,omitempty,omitzero"`
+	CompanyId       openapi_types.UUID                        `json:"companyId,omitempty,omitzero"`
+	CreationDate    time.Time                                 `json:"creationDate,omitempty,omitzero"`
+	Firstname       string                                    `json:"firstname,omitempty,omitzero"`
+	Id              openapi_types.UUID                        `json:"id,omitempty,omitzero"`
+	Lastname        string                                    `json:"lastname,omitempty,omitzero"`
+	MemberedTeams   []openapi_types.UUID                      `json:"memberedTeams,omitempty,omitzero"`
+	OwnedTeams      []openapi_types.UUID                      `json:"ownedTeams,omitempty,omitzero"`
+	ProductRoles    map[string][]UserInformation2ProductRoles `json:"productRoles,omitempty,omitzero"`
+	ResourceOwner   bool                                      `json:"resourceOwner,omitempty,omitzero"`
+	ServiceAccount  bool                                      `json:"serviceAccount,omitempty,omitzero"`
+	SystemRoles     []UserInformation2SystemRoles             `json:"systemRoles,omitempty,omitzero"`
+	TeamsIds        []openapi_types.UUID                      `json:"teamsIds,omitempty,omitzero"`
+	UserAccountType string                                    `json:"userAccountType,omitempty,omitzero"`
+	UserStatus      string                                    `json:"userStatus,omitempty,omitzero"`
+	UserType        string                                    `json:"userType,omitempty,omitzero"`
+	Username        string                                    `json:"username,omitempty,omitzero"`
+}
+
+// UserInformation2ProductRoles defines model for UserInformation2.ProductRoles.
+type UserInformation2ProductRoles string
+
+// UserInformation2SystemRoles defines model for UserInformation2.SystemRoles.
+type UserInformation2SystemRoles string
+
 // UserMatchingRule defines model for UserMatchingRule.
 type UserMatchingRule struct {
 	ClaimName string   `json:"claimName"`
@@ -2362,6 +3257,33 @@ type CMSConfigIdParam = CMSConfId
 
 // CredentialIdParam The ID of the Credential in our System.
 type CredentialIdParam = CredentialId
+
+// ApplicationsGetAllParams defines parameters for ApplicationsGetAll.
+type ApplicationsGetAllParams struct {
+	// OwnerDetails Indicates whether or not the response should include the `owningUsers` and `owningTeams` details.
+	OwnerDetails bool `form:"ownerDetails,omitempty" json:"ownerDetails,omitempty,omitzero"`
+
+	// OwnershipCheck Indicates whether or not the response should exclude applications that are not editable by the current user.
+	OwnershipCheck bool `form:"ownershipCheck,omitempty" json:"ownershipCheck,omitempty,omitzero"`
+
+	// IssuingTemplateAssigned Indicates whether or not the response should exclude applications with no issuing templates assigned to them.
+	IssuingTemplateAssigned bool `form:"issuingTemplateAssigned,omitempty" json:"issuingTemplateAssigned,omitempty,omitzero"`
+
+	// OwnershipTree This parameter is deprecated for Application endpoints.
+	OwnershipTree bool `form:"ownershipTree,omitempty" json:"ownershipTree,omitempty,omitzero"`
+}
+
+// ApplicationsGetByNameParams defines parameters for ApplicationsGetByName.
+type ApplicationsGetByNameParams struct {
+	// OwnershipTree Indicates whether response should include nested ownership data (e.g., `owningContainers`).
+	OwnershipTree bool `form:"ownershipTree,omitempty" json:"ownershipTree,omitempty,omitzero"`
+}
+
+// ApplicationsGetByIdParams defines parameters for ApplicationsGetById.
+type ApplicationsGetByIdParams struct {
+	// OwnershipTree Indicates whether response should include nested ownership data (e.g., `owningContainers`).
+	OwnershipTree bool `form:"ownershipTree,omitempty" json:"ownershipTree,omitempty,omitzero"`
+}
 
 // CertificateissuingtemplateGetAllParams defines parameters for CertificateissuingtemplateGetAll.
 type CertificateissuingtemplateGetAllParams struct {
@@ -2395,6 +3317,18 @@ type UseraccountsCheckResetPasswordTokenParams struct {
 type UseraccountsResetPasswordParams struct {
 	UrlPrefix string `form:"urlPrefix,omitempty" json:"urlPrefix,omitempty,omitzero"`
 }
+
+// ApplicationsCreateJSONRequestBody defines body for ApplicationsCreate for application/json ContentType.
+type ApplicationsCreateJSONRequestBody = ApplicationRequest
+
+// ApplicationsAssignToCertificatesJSONRequestBody defines body for ApplicationsAssignToCertificates for application/json ContentType.
+type ApplicationsAssignToCertificatesJSONRequestBody = ApplicationsAssignRequest
+
+// ApplicationsUpdateJSONRequestBody defines body for ApplicationsUpdate for application/json ContentType.
+type ApplicationsUpdateJSONRequestBody = ApplicationRequest
+
+// ApplicationsInvitationsCreateJSONRequestBody defines body for ApplicationsInvitationsCreate for application/json ContentType.
+type ApplicationsInvitationsCreateJSONRequestBody = InvitationRequest
 
 // CertificateissuingtemplateCreateJSONRequestBody defines body for CertificateissuingtemplateCreate for application/json ContentType.
 type CertificateissuingtemplateCreateJSONRequestBody = CertificateIssuingTemplateRequest
@@ -2830,6 +3764,44 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// ApplicationsGetAll request
+	ApplicationsGetAll(ctx context.Context, params *ApplicationsGetAllParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsCreateWithBody request with any body
+	ApplicationsCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApplicationsCreate(ctx context.Context, body ApplicationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsAssignToCertificatesWithBody request with any body
+	ApplicationsAssignToCertificatesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApplicationsAssignToCertificates(ctx context.Context, body ApplicationsAssignToCertificatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsGetByName request
+	ApplicationsGetByName(ctx context.Context, name string, params *ApplicationsGetByNameParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsDelete request
+	ApplicationsDelete(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsGetById request
+	ApplicationsGetById(ctx context.Context, id openapi_types.UUID, params *ApplicationsGetByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsUpdateWithBody request with any body
+	ApplicationsUpdateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApplicationsUpdate(ctx context.Context, id openapi_types.UUID, body ApplicationsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsInvitationsCreateWithBody request with any body
+	ApplicationsInvitationsCreateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApplicationsInvitationsCreate(ctx context.Context, id openapi_types.UUID, body ApplicationsInvitationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplicationsGetScanafiConfigById request
+	ApplicationsGetScanafiConfigById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CertificateissuingtemplatesGetByAlias request
+	CertificateissuingtemplatesGetByAlias(ctx context.Context, name string, alias string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CertificateissuingtemplateGetAll request
 	CertificateissuingtemplateGetAll(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3011,6 +3983,174 @@ type ClientInterface interface {
 	UseraccountsResetPasswordWithBody(ctx context.Context, params *UseraccountsResetPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UseraccountsResetPassword(ctx context.Context, params *UseraccountsResetPasswordParams, body UseraccountsResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ApplicationsGetAll(ctx context.Context, params *ApplicationsGetAllParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsGetAllRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsCreateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsCreateRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsCreate(ctx context.Context, body ApplicationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsCreateRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsAssignToCertificatesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsAssignToCertificatesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsAssignToCertificates(ctx context.Context, body ApplicationsAssignToCertificatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsAssignToCertificatesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsGetByName(ctx context.Context, name string, params *ApplicationsGetByNameParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsGetByNameRequest(c.Server, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsDelete(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsDeleteRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsGetById(ctx context.Context, id openapi_types.UUID, params *ApplicationsGetByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsGetByIdRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsUpdateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsUpdateRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsUpdate(ctx context.Context, id openapi_types.UUID, body ApplicationsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsUpdateRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsInvitationsCreateWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsInvitationsCreateRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsInvitationsCreate(ctx context.Context, id openapi_types.UUID, body ApplicationsInvitationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsInvitationsCreateRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApplicationsGetScanafiConfigById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplicationsGetScanafiConfigByIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CertificateissuingtemplatesGetByAlias(ctx context.Context, name string, alias string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCertificateissuingtemplatesGetByAliasRequest(c.Server, name, alias)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) CertificateissuingtemplateGetAll(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3827,6 +4967,474 @@ func (c *Client) UseraccountsResetPassword(ctx context.Context, params *Useracco
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewApplicationsGetAllRequest generates requests for ApplicationsGetAll
+func NewApplicationsGetAllRequest(server string, params *ApplicationsGetAllParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ownerDetails", runtime.ParamLocationQuery, params.OwnerDetails); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ownershipCheck", runtime.ParamLocationQuery, params.OwnershipCheck); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "issuingTemplateAssigned", runtime.ParamLocationQuery, params.IssuingTemplateAssigned); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ownershipTree", runtime.ParamLocationQuery, params.OwnershipTree); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApplicationsCreateRequest calls the generic ApplicationsCreate builder with application/json body
+func NewApplicationsCreateRequest(server string, body ApplicationsCreateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplicationsCreateRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewApplicationsCreateRequestWithBody generates requests for ApplicationsCreate with any type of body
+func NewApplicationsCreateRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApplicationsAssignToCertificatesRequest calls the generic ApplicationsAssignToCertificates builder with application/json body
+func NewApplicationsAssignToCertificatesRequest(server string, body ApplicationsAssignToCertificatesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplicationsAssignToCertificatesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewApplicationsAssignToCertificatesRequestWithBody generates requests for ApplicationsAssignToCertificates with any type of body
+func NewApplicationsAssignToCertificatesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/certificates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApplicationsGetByNameRequest generates requests for ApplicationsGetByName
+func NewApplicationsGetByNameRequest(server string, name string, params *ApplicationsGetByNameParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/name/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ownershipTree", runtime.ParamLocationQuery, params.OwnershipTree); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApplicationsDeleteRequest generates requests for ApplicationsDelete
+func NewApplicationsDeleteRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApplicationsGetByIdRequest generates requests for ApplicationsGetById
+func NewApplicationsGetByIdRequest(server string, id openapi_types.UUID, params *ApplicationsGetByIdParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ownershipTree", runtime.ParamLocationQuery, params.OwnershipTree); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApplicationsUpdateRequest calls the generic ApplicationsUpdate builder with application/json body
+func NewApplicationsUpdateRequest(server string, id openapi_types.UUID, body ApplicationsUpdateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplicationsUpdateRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewApplicationsUpdateRequestWithBody generates requests for ApplicationsUpdate with any type of body
+func NewApplicationsUpdateRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApplicationsInvitationsCreateRequest calls the generic ApplicationsInvitationsCreate builder with application/json body
+func NewApplicationsInvitationsCreateRequest(server string, id openapi_types.UUID, body ApplicationsInvitationsCreateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplicationsInvitationsCreateRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewApplicationsInvitationsCreateRequestWithBody generates requests for ApplicationsInvitationsCreate with any type of body
+func NewApplicationsInvitationsCreateRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/%s/invitations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApplicationsGetScanafiConfigByIdRequest generates requests for ApplicationsGetScanafiConfigById
+func NewApplicationsGetScanafiConfigByIdRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/%s/scanaficonfiguration", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCertificateissuingtemplatesGetByAliasRequest generates requests for CertificateissuingtemplatesGetByAlias
+func NewCertificateissuingtemplatesGetByAliasRequest(server string, name string, alias string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "alias", runtime.ParamLocationPath, alias)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/outagedetection/v1/applications/%s/certificateissuingtemplates/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewCertificateissuingtemplateGetAllRequest generates requests for CertificateissuingtemplateGetAll
@@ -5700,6 +7308,44 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ApplicationsGetAllWithResponse request
+	ApplicationsGetAllWithResponse(ctx context.Context, params *ApplicationsGetAllParams, reqEditors ...RequestEditorFn) (*ApplicationsGetAllResponse, error)
+
+	// ApplicationsCreateWithBodyWithResponse request with any body
+	ApplicationsCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsCreateResponse, error)
+
+	ApplicationsCreateWithResponse(ctx context.Context, body ApplicationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsCreateResponse, error)
+
+	// ApplicationsAssignToCertificatesWithBodyWithResponse request with any body
+	ApplicationsAssignToCertificatesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsAssignToCertificatesResponse, error)
+
+	ApplicationsAssignToCertificatesWithResponse(ctx context.Context, body ApplicationsAssignToCertificatesJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsAssignToCertificatesResponse, error)
+
+	// ApplicationsGetByNameWithResponse request
+	ApplicationsGetByNameWithResponse(ctx context.Context, name string, params *ApplicationsGetByNameParams, reqEditors ...RequestEditorFn) (*ApplicationsGetByNameResponse, error)
+
+	// ApplicationsDeleteWithResponse request
+	ApplicationsDeleteWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApplicationsDeleteResponse, error)
+
+	// ApplicationsGetByIdWithResponse request
+	ApplicationsGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *ApplicationsGetByIdParams, reqEditors ...RequestEditorFn) (*ApplicationsGetByIdResponse, error)
+
+	// ApplicationsUpdateWithBodyWithResponse request with any body
+	ApplicationsUpdateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsUpdateResponse, error)
+
+	ApplicationsUpdateWithResponse(ctx context.Context, id openapi_types.UUID, body ApplicationsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsUpdateResponse, error)
+
+	// ApplicationsInvitationsCreateWithBodyWithResponse request with any body
+	ApplicationsInvitationsCreateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsInvitationsCreateResponse, error)
+
+	ApplicationsInvitationsCreateWithResponse(ctx context.Context, id openapi_types.UUID, body ApplicationsInvitationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsInvitationsCreateResponse, error)
+
+	// ApplicationsGetScanafiConfigByIdWithResponse request
+	ApplicationsGetScanafiConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApplicationsGetScanafiConfigByIdResponse, error)
+
+	// CertificateissuingtemplatesGetByAliasWithResponse request
+	CertificateissuingtemplatesGetByAliasWithResponse(ctx context.Context, name string, alias string, reqEditors ...RequestEditorFn) (*CertificateissuingtemplatesGetByAliasResponse, error)
+
 	// CertificateissuingtemplateGetAllWithResponse request
 	CertificateissuingtemplateGetAllWithResponse(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateGetAllResponse, error)
 
@@ -5881,6 +7527,252 @@ type ClientWithResponsesInterface interface {
 	UseraccountsResetPasswordWithBodyWithResponse(ctx context.Context, params *UseraccountsResetPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UseraccountsResetPasswordResponse, error)
 
 	UseraccountsResetPasswordWithResponse(ctx context.Context, params *UseraccountsResetPasswordParams, body UseraccountsResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*UseraccountsResetPasswordResponse, error)
+}
+
+type ApplicationsGetAllResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApplicationResponse
+	JSON400      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsGetAllResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsGetAllResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsCreateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *ApplicationResponse
+	JSON400      *ErrorResponse9
+	JSON409      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsCreateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsCreateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsAssignToCertificatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApplicationsAssignResponse
+	JSON400      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsAssignToCertificatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsAssignToCertificatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsGetByNameResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApplicationInformation
+	JSON400      *ErrorResponse9
+	JSON404      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsGetByNameResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsGetByNameResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse9
+	JSON404      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsGetByIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApplicationInformation
+	JSON400      *ErrorResponse9
+	JSON404      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsGetByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsGetByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsUpdateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApplicationInformation
+	JSON400      *ErrorResponse9
+	JSON404      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsUpdateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsUpdateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsInvitationsCreateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *InvitationResponse
+	JSON400      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsInvitationsCreateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsInvitationsCreateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApplicationsGetScanafiConfigByIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ScanafiConfigResponseV1
+	JSON400      *ErrorResponse9
+	JSON404      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplicationsGetScanafiConfigByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplicationsGetScanafiConfigByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CertificateissuingtemplatesGetByAliasResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CertificateIssuingTemplateInformation2
+	JSON400      *ErrorResponse9
+	JSON404      *ErrorResponse9
+	JSON412      *ErrorResponse9
+}
+
+// Status returns HTTPResponse.Status
+func (r CertificateissuingtemplatesGetByAliasResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CertificateissuingtemplatesGetByAliasResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type CertificateissuingtemplateGetAllResponse struct {
@@ -6983,6 +8875,128 @@ func (r UseraccountsResetPasswordResponse) StatusCode() int {
 	return 0
 }
 
+// ApplicationsGetAllWithResponse request returning *ApplicationsGetAllResponse
+func (c *ClientWithResponses) ApplicationsGetAllWithResponse(ctx context.Context, params *ApplicationsGetAllParams, reqEditors ...RequestEditorFn) (*ApplicationsGetAllResponse, error) {
+	rsp, err := c.ApplicationsGetAll(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsGetAllResponse(rsp)
+}
+
+// ApplicationsCreateWithBodyWithResponse request with arbitrary body returning *ApplicationsCreateResponse
+func (c *ClientWithResponses) ApplicationsCreateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsCreateResponse, error) {
+	rsp, err := c.ApplicationsCreateWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsCreateResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApplicationsCreateWithResponse(ctx context.Context, body ApplicationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsCreateResponse, error) {
+	rsp, err := c.ApplicationsCreate(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsCreateResponse(rsp)
+}
+
+// ApplicationsAssignToCertificatesWithBodyWithResponse request with arbitrary body returning *ApplicationsAssignToCertificatesResponse
+func (c *ClientWithResponses) ApplicationsAssignToCertificatesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsAssignToCertificatesResponse, error) {
+	rsp, err := c.ApplicationsAssignToCertificatesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsAssignToCertificatesResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApplicationsAssignToCertificatesWithResponse(ctx context.Context, body ApplicationsAssignToCertificatesJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsAssignToCertificatesResponse, error) {
+	rsp, err := c.ApplicationsAssignToCertificates(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsAssignToCertificatesResponse(rsp)
+}
+
+// ApplicationsGetByNameWithResponse request returning *ApplicationsGetByNameResponse
+func (c *ClientWithResponses) ApplicationsGetByNameWithResponse(ctx context.Context, name string, params *ApplicationsGetByNameParams, reqEditors ...RequestEditorFn) (*ApplicationsGetByNameResponse, error) {
+	rsp, err := c.ApplicationsGetByName(ctx, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsGetByNameResponse(rsp)
+}
+
+// ApplicationsDeleteWithResponse request returning *ApplicationsDeleteResponse
+func (c *ClientWithResponses) ApplicationsDeleteWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApplicationsDeleteResponse, error) {
+	rsp, err := c.ApplicationsDelete(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsDeleteResponse(rsp)
+}
+
+// ApplicationsGetByIdWithResponse request returning *ApplicationsGetByIdResponse
+func (c *ClientWithResponses) ApplicationsGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *ApplicationsGetByIdParams, reqEditors ...RequestEditorFn) (*ApplicationsGetByIdResponse, error) {
+	rsp, err := c.ApplicationsGetById(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsGetByIdResponse(rsp)
+}
+
+// ApplicationsUpdateWithBodyWithResponse request with arbitrary body returning *ApplicationsUpdateResponse
+func (c *ClientWithResponses) ApplicationsUpdateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsUpdateResponse, error) {
+	rsp, err := c.ApplicationsUpdateWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsUpdateResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApplicationsUpdateWithResponse(ctx context.Context, id openapi_types.UUID, body ApplicationsUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsUpdateResponse, error) {
+	rsp, err := c.ApplicationsUpdate(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsUpdateResponse(rsp)
+}
+
+// ApplicationsInvitationsCreateWithBodyWithResponse request with arbitrary body returning *ApplicationsInvitationsCreateResponse
+func (c *ClientWithResponses) ApplicationsInvitationsCreateWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplicationsInvitationsCreateResponse, error) {
+	rsp, err := c.ApplicationsInvitationsCreateWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsInvitationsCreateResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApplicationsInvitationsCreateWithResponse(ctx context.Context, id openapi_types.UUID, body ApplicationsInvitationsCreateJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplicationsInvitationsCreateResponse, error) {
+	rsp, err := c.ApplicationsInvitationsCreate(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsInvitationsCreateResponse(rsp)
+}
+
+// ApplicationsGetScanafiConfigByIdWithResponse request returning *ApplicationsGetScanafiConfigByIdResponse
+func (c *ClientWithResponses) ApplicationsGetScanafiConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApplicationsGetScanafiConfigByIdResponse, error) {
+	rsp, err := c.ApplicationsGetScanafiConfigById(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplicationsGetScanafiConfigByIdResponse(rsp)
+}
+
+// CertificateissuingtemplatesGetByAliasWithResponse request returning *CertificateissuingtemplatesGetByAliasResponse
+func (c *ClientWithResponses) CertificateissuingtemplatesGetByAliasWithResponse(ctx context.Context, name string, alias string, reqEditors ...RequestEditorFn) (*CertificateissuingtemplatesGetByAliasResponse, error) {
+	rsp, err := c.CertificateissuingtemplatesGetByAlias(ctx, name, alias, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCertificateissuingtemplatesGetByAliasResponse(rsp)
+}
+
 // CertificateissuingtemplateGetAllWithResponse request returning *CertificateissuingtemplateGetAllResponse
 func (c *ClientWithResponses) CertificateissuingtemplateGetAllWithResponse(ctx context.Context, params *CertificateissuingtemplateGetAllParams, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateGetAllResponse, error) {
 	rsp, err := c.CertificateissuingtemplateGetAll(ctx, params, reqEditors...)
@@ -7571,6 +9585,448 @@ func (c *ClientWithResponses) UseraccountsResetPasswordWithResponse(ctx context.
 		return nil, err
 	}
 	return ParseUseraccountsResetPasswordResponse(rsp)
+}
+
+// ParseApplicationsGetAllResponse parses an HTTP response from a ApplicationsGetAllWithResponse call
+func ParseApplicationsGetAllResponse(rsp *http.Response) (*ApplicationsGetAllResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsGetAllResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApplicationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsCreateResponse parses an HTTP response from a ApplicationsCreateWithResponse call
+func ParseApplicationsCreateResponse(rsp *http.Response) (*ApplicationsCreateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsCreateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ApplicationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsAssignToCertificatesResponse parses an HTTP response from a ApplicationsAssignToCertificatesWithResponse call
+func ParseApplicationsAssignToCertificatesResponse(rsp *http.Response) (*ApplicationsAssignToCertificatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsAssignToCertificatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApplicationsAssignResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsGetByNameResponse parses an HTTP response from a ApplicationsGetByNameWithResponse call
+func ParseApplicationsGetByNameResponse(rsp *http.Response) (*ApplicationsGetByNameResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsGetByNameResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApplicationInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsDeleteResponse parses an HTTP response from a ApplicationsDeleteWithResponse call
+func ParseApplicationsDeleteResponse(rsp *http.Response) (*ApplicationsDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsGetByIdResponse parses an HTTP response from a ApplicationsGetByIdWithResponse call
+func ParseApplicationsGetByIdResponse(rsp *http.Response) (*ApplicationsGetByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsGetByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApplicationInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsUpdateResponse parses an HTTP response from a ApplicationsUpdateWithResponse call
+func ParseApplicationsUpdateResponse(rsp *http.Response) (*ApplicationsUpdateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsUpdateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApplicationInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsInvitationsCreateResponse parses an HTTP response from a ApplicationsInvitationsCreateWithResponse call
+func ParseApplicationsInvitationsCreateResponse(rsp *http.Response) (*ApplicationsInvitationsCreateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsInvitationsCreateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest InvitationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplicationsGetScanafiConfigByIdResponse parses an HTTP response from a ApplicationsGetScanafiConfigByIdWithResponse call
+func ParseApplicationsGetScanafiConfigByIdResponse(rsp *http.Response) (*ApplicationsGetScanafiConfigByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplicationsGetScanafiConfigByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ScanafiConfigResponseV1
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCertificateissuingtemplatesGetByAliasResponse parses an HTTP response from a CertificateissuingtemplatesGetByAliasWithResponse call
+func ParseCertificateissuingtemplatesGetByAliasResponse(rsp *http.Response) (*CertificateissuingtemplatesGetByAliasResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CertificateissuingtemplatesGetByAliasResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CertificateIssuingTemplateInformation2
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse9
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseCertificateissuingtemplateGetAllResponse parses an HTTP response from a CertificateissuingtemplateGetAllWithResponse call

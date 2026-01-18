@@ -148,10 +148,10 @@ func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccoun
 	if desired.Owner == (openapi_types.UUID{}) {
 		teams, err := GetTeams(ctx, cl)
 		if err != nil {
-			return CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: while getting teams: %w", err)
+			return CreateServiceAccountResponseBody{}, fmt.Errorf("while getting teams: %w", err)
 		}
 		if len(teams) == 0 {
-			return CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: no teams found, please specify an owner")
+			return CreateServiceAccountResponseBody{}, fmt.Errorf("no teams found, please specify an owner")
 		}
 		ownerUUID := teams[0].Id
 
@@ -177,7 +177,7 @@ func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccoun
 	var result CreateServiceAccountResponseBody
 	err = decodeJSON(resp.Body, &result)
 	if err != nil {
-		return CreateServiceAccountResponseBody{}, fmt.Errorf("createServiceAccount: while decoding response: %w", err)
+		return CreateServiceAccountResponseBody{}, fmt.Errorf("while decoding response: %w", err)
 	}
 	return result, nil
 }

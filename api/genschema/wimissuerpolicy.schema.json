@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/wim-manifest.schema.json",
   "title": "CyberArk Workload Identity Manager Manifests",
   "description": "Schema describing the YAML manifests consumed by vcpctl.",
@@ -8,11 +7,11 @@
     {
       "type": "object",
       "properties": {
-        "apiVersion": {
-          "type": "string"
-        },
         "kind": {
           "const": "WIMIssuerPolicy"
+        },
+        "apiVersion": {
+          "type": "string"
         }
       },
       "required": [
@@ -25,72 +24,125 @@
     }
   ],
   "$defs": {
+    "PropertyInformation": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "IGNORED",
+            "FORBIDDEN",
+            "OPTIONAL",
+            "REQUIRED",
+            "LOCKED"
+          ]
+        },
+        "allowedValues": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "defaultValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "minOccurrences": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "maxOccurrences": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "SansInformation": {
+      "type": "object",
+      "properties": {
+        "dnsNames": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "ipAddresses": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "rfc822Names": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "uniformResourceIdentifiers": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      },
+      "description": "Subject alternative names"
+    },
+    "KeyAlgorithmInformation": {
+      "type": "object",
+      "properties": {
+        "allowedValues": {
+          "type": "array",
+          "description": "Key algorithm allowed values",
+          "items": {
+            "type": "string",
+            "enum": [
+              "RSA_2048",
+              "RSA_3072",
+              "RSA_4096",
+              "EC_P256",
+              "EC_P384",
+              "EC_P521",
+              "EC_ED25519"
+            ]
+          },
+          "minItems": 1
+        },
+        "defaultValue": {
+          "enum": [
+            "RSA_2048",
+            "RSA_3072",
+            "RSA_4096",
+            "EC_P256",
+            "EC_P384",
+            "EC_P521",
+            "EC_ED25519"
+          ],
+          "type": "string",
+          "description": "Key algorithm default value",
+          "example": "RSA_4096"
+        }
+      },
+      "description": "Key algorithm",
+      "required": [
+        "allowedValues",
+        "defaultValue"
+      ]
+    },
     "PolicyInformation": {
       "type": "object",
       "properties": {
-        "creationDate": {
-          "type": "string",
-          "description": "When the policy was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00"
-        },
         "id": {
+          "type": "string",
           "description": "UUID of the policy",
           "format": "uuid",
-          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee",
-          "type": "string"
+          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
         },
         "companyId": {
-          "type": "string",
           "description": "UUID specific to your company",
           "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
-        },
-        "subject": {
-          "$ref": "#/$defs/SubjectAttributesInformation"
-        },
-        "sans": {
-          "$ref": "#/$defs/SansInformation"
-        },
-        "keyAlgorithm": {
-          "$ref": "#/$defs/KeyAlgorithmInformation"
-        },
-        "modificationDate": {
-          "type": "string",
-          "description": "When the policy was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
+          "type": "string"
         },
         "name": {
           "type": "string",
           "description": "Name of the policy",
           "example": "Some policy"
         },
-        "validityPeriod": {
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D",
-          "type": "string"
+        "subject": {
+          "$ref": "#/$defs/SubjectAttributesInformation"
         },
-        "keyUsages": {
-          "type": "array",
-          "description": "Key usages",
-          "example": [
-            "keyEncipherment",
-            "digitalSignature"
-          ],
-          "items": {
-            "type": "string",
-            "enum": [
-              "digitalSignature",
-              "nonRepudiation",
-              "keyEncipherment",
-              "dataEncipherment",
-              "keyAgreement",
-              "keyCertSign",
-              "cRLSign",
-              "encipherOnly",
-              "decipherOnly"
-            ]
-          }
+        "sans": {
+          "$ref": "#/$defs/SansInformation"
         },
         "extendedKeyUsages": {
           "example": [
@@ -126,12 +178,55 @@
           },
           "type": "array",
           "description": "Extended key usages"
+        },
+        "keyAlgorithm": {
+          "$ref": "#/$defs/KeyAlgorithmInformation"
+        },
+        "creationDate": {
+          "example": "2022-10-10T14:50:41.710+00:00",
+          "type": "string",
+          "description": "When the policy was initially created"
+        },
+        "validityPeriod": {
+          "type": "string",
+          "description": "ISO8601 Period Format",
+          "format": "PnYnMnDTnHnMnS",
+          "example": "P30D"
+        },
+        "keyUsages": {
+          "type": "array",
+          "description": "Key usages",
+          "example": [
+            "keyEncipherment",
+            "digitalSignature"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "digitalSignature",
+              "nonRepudiation",
+              "keyEncipherment",
+              "dataEncipherment",
+              "keyAgreement",
+              "keyCertSign",
+              "cRLSign",
+              "encipherOnly",
+              "decipherOnly"
+            ]
+          }
+        },
+        "modificationDate": {
+          "type": "string",
+          "description": "When the policy was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00"
         }
       }
     },
     "SubjectAttributesInformation": {
-      "type": "object",
       "properties": {
+        "country": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
         "commonName": {
           "$ref": "#/$defs/PropertyInformation"
         },
@@ -146,106 +241,11 @@
         },
         "stateOrProvince": {
           "$ref": "#/$defs/PropertyInformation"
-        },
-        "country": {
-          "$ref": "#/$defs/PropertyInformation"
         }
       },
-      "description": "Subject attributes"
-    },
-    "PropertyInformation": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "IGNORED",
-            "FORBIDDEN",
-            "OPTIONAL",
-            "REQUIRED",
-            "LOCKED"
-          ]
-        },
-        "allowedValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "defaultValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "minOccurrences": {
-          "format": "int32",
-          "type": "integer"
-        },
-        "maxOccurrences": {
-          "format": "int32",
-          "type": "integer"
-        }
-      }
-    },
-    "SansInformation": {
-      "description": "Subject alternative names",
-      "type": "object",
-      "properties": {
-        "ipAddresses": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "rfc822Names": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "uniformResourceIdentifiers": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "dnsNames": {
-          "$ref": "#/$defs/PropertyInformation"
-        }
-      }
-    },
-    "KeyAlgorithmInformation": {
-      "required": [
-        "allowedValues",
-        "defaultValue"
-      ],
-      "type": "object",
-      "properties": {
-        "allowedValues": {
-          "items": {
-            "type": "string",
-            "enum": [
-              "RSA_2048",
-              "RSA_3072",
-              "RSA_4096",
-              "EC_P256",
-              "EC_P384",
-              "EC_P521",
-              "EC_ED25519"
-            ]
-          },
-          "minItems": 1,
-          "type": "array",
-          "description": "Key algorithm allowed values"
-        },
-        "defaultValue": {
-          "type": "string",
-          "description": "Key algorithm default value",
-          "example": "RSA_4096",
-          "enum": [
-            "RSA_2048",
-            "RSA_3072",
-            "RSA_4096",
-            "EC_P256",
-            "EC_P384",
-            "EC_P521",
-            "EC_ED25519"
-          ]
-        }
-      },
-      "description": "Key algorithm"
+      "description": "Subject attributes",
+      "type": "object"
     }
-  }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
 }
