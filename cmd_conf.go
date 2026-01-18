@@ -27,6 +27,7 @@ func confCmd() *cobra.Command {
 	}
 	cmd.AddCommand(confLsCmd())
 	cmd.AddCommand(confGetCmd())
+	cmd.AddCommand(confEditCmd())
 	cmd.AddCommand(confRmCmd())
 	return cmd
 }

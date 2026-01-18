@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/errutil"
+	manifest "github.com/maelvls/vcpctl/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +35,7 @@ func subcaCmd() *cobra.Command {
 	cmd.AddCommand(
 		subcaLsCmd(),
 		subcaGetCmd(),
+		subcaEditCmd(),
 		subcaRmCmd(),
 	)
 	return cmd
@@ -198,6 +202,80 @@ func subcaRmCmd() *cobra.Command {
 			}
 
 			return nil
+		},
+	}
+	return cmd
+}
+
+func subcaEditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit <subca-name-or-id>",
+		Short: "Edit a SubCA Provider",
+		Long: undent.Undent(`
+			Edit a SubCA Provider using a single YAML manifest. The temporary file
+			opened in your editor contains a single WIMSubCAProvider manifest.
+		`),
+		Example: undent.Undent(`
+			vcpctl subca edit <subca-name>
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("expected a single argument (the SubCA Provider name or ID), got %s", args)
+			}
+			nameOrID := args[0]
+
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("subca edit: %w", err)
+			}
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("subca edit: while creating API client: %w", err)
+			}
+
+			subca, err := api.GetSubCAProvider(context.Background(), apiClient, nameOrID)
+			switch {
+			case errors.As(err, &errutil.NotFound{}):
+				return errutil.Fixable(fmt.Errorf("SubCA Provider '%s' not found. Please create it first using 'vcpctl apply -f <manifest.yaml>'", nameOrID))
+			case err != nil:
+				return fmt.Errorf("subca edit: while getting SubCA Provider: %w", err)
+			}
+
+			issuingTemplates, err := api.GetIssuingTemplates(context.Background(), apiClient)
+			if err != nil {
+				return fmt.Errorf("subca edit: while getting issuing templates: %w", err)
+			}
+
+			manifestSubCa, err := apiToManifestSubCa(issuingtemplateResolver(issuingTemplates), subca)
+			if err != nil {
+				return fmt.Errorf("subca edit: while converting to manifest: %w", err)
+			}
+
+			subCaManifest := subCaProviderManifest{
+				Kind:  kindWIMSubCaProvider,
+				SubCa: manifestSubCa,
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			if err := enc.Encode(subCaManifest); err != nil {
+				return fmt.Errorf("subca edit: while encoding WIMSubCAProvider to YAML: %w", err)
+			}
+
+			return editManifestsInEditor(
+				buf.Bytes(),
+				func(raw []byte) ([]manifest.Manifest, error) {
+					return parseSingleManifestOfKind(raw, kindWIMSubCaProvider)
+				},
+				func(items []manifest.Manifest) error {
+					if err := applyManifests(apiClient, items, false); err != nil {
+						return fmt.Errorf("subca edit: while patching WIMSubCAProvider: %w", err)
+					}
+					return nil
+				},
+			)
 		},
 	}
 	return cmd

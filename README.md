@@ -22,7 +22,14 @@ vcpctl conf ls
 You can edit the configuration in your `$EDITOR` with the command:
 
 ```bash
-vcpctl edit test
+vcpctl conf edit test
+```
+
+To edit the configuration together with all dependencies (Service Accounts,
+policies, and Sub CA), use:
+
+```bash
+vcpctl conf edit test --deps
 ```
 
 You can export a Workload Identity Manager configuration with:
@@ -35,6 +42,14 @@ To also export the associated Sub CA, policies, and service accounts, use the `-
 
 ```bash
 vcpctl conf get test --deps
+```
+
+You can edit a Service Account, Policy, or SubCA Provider with:
+
+```bash
+vcpctl sa edit <sa-name>
+vcpctl policy edit <policy-name>
+vcpctl subca edit <subca-name>
 ```
 
 You can delete a Workload Identity Manager configuration with:
@@ -65,10 +80,13 @@ Use `--ignore-not-found` to skip missing resources without failing the command.
 
 > [!NOTE]
 >
-> The `apply` and `edit` commands expect a kubectl-style multi-document manifest. Declare
-> `ServiceAccount` resources first, followed by `WIMIssuerPolicy` resources, and finish
-> with a single `WIMConfiguration` resource. All dependencies (service accounts, issuer
-> policies, and the Sub CA) are created or patched automatically.
+> The `apply` command expects a kubectl-style multi-document manifest. Declare
+> `ServiceAccount` resources first, followed by `WIMIssuerPolicy`, then
+> `WIMSubCAProvider`, and finish with a single `WIMConfiguration` resource.
+>
+> The `conf edit --deps` command outputs a multi-document manifest in the same
+> order as `conf get --deps`: `WIMConfiguration`, `ServiceAccount`,
+> `WIMIssuerPolicy`, `WIMSubCAProvider`.
 
 Example manifest consumed by `vcpctl apply`:
 

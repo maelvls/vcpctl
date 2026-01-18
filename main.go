@@ -39,7 +39,7 @@ func main() {
 			vcpctl conf ls
 			vcpctl apply -f config.yaml
 			vcpctl delete -f config.yaml
-			vcpctl edit <config-name>
+			vcpctl conf edit <config-name>
 			vcpctl conf get <config-name> > config.yaml
 			vcpctl attach-sa <config-name> --sa <sa-name>
 			vcpctl sa ls
@@ -71,7 +71,6 @@ func main() {
 		authCmd(),
 		apiCmd(),
 		confCmd(),
-		editCmd(),
 		attachSaCmd(),
 		applyCmd(),
 		deleteCmd(),

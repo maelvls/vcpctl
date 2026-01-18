@@ -1,15 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
+	manifest "github.com/maelvls/vcpctl/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -33,6 +37,7 @@ func policyCmd() *cobra.Command {
 	cmd.AddCommand(
 		policyLsCmd(),
 		policyGetCmd(),
+		policyEditCmd(),
 		policyRmCmd(),
 	)
 	return cmd
@@ -189,6 +194,70 @@ func policyRmCmd() *cobra.Command {
 			}
 			logutil.Debugf("Policy '%s' deleted successfully.", policyNameOrID)
 			return nil
+		},
+	}
+	return cmd
+}
+
+func policyEditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit <policy-name-or-id>",
+		Short: "Edit a Policy",
+		Long: undent.Undent(`
+			Edit a Policy using a single YAML manifest. The temporary file opened
+			in your editor contains a single WIMIssuerPolicy manifest.
+		`),
+		Example: undent.Undent(`
+			vcpctl policy edit <policy-name>
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("expected a single argument (the policy name or ID), got %s", args)
+			}
+			nameOrID := args[0]
+
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("policy edit: %w", err)
+			}
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("policy edit: while creating API client: %w", err)
+			}
+
+			policy, err := api.GetPolicy(context.Background(), apiClient, nameOrID)
+			switch {
+			case errors.As(err, &errutil.NotFound{}):
+				return errutil.Fixable(fmt.Errorf("policy '%s' not found. Please create it first using 'vcpctl apply -f <manifest.yaml>'", nameOrID))
+			case err != nil:
+				return fmt.Errorf("policy edit: while getting policy: %w", err)
+			}
+
+			policyManifest := policyManifest{
+				Kind:   kindIssuerPolicy,
+				Policy: apiToManifestExtendedPolicyInformation(policy),
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			if err := enc.Encode(policyManifest); err != nil {
+				return fmt.Errorf("policy edit: while encoding WIMIssuerPolicy to YAML: %w", err)
+			}
+
+			return editManifestsInEditor(
+				buf.Bytes(),
+				func(raw []byte) ([]manifest.Manifest, error) {
+					return parseSingleManifestOfKind(raw, kindIssuerPolicy)
+				},
+				func(items []manifest.Manifest) error {
+					if err := applyManifests(apiClient, items, false); err != nil {
+						return fmt.Errorf("policy edit: while patching WIMIssuerPolicy: %w", err)
+					}
+					return nil
+				},
+			)
 		},
 	}
 	return cmd

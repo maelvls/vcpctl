@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -16,26 +17,34 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
+	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/printer"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
+	manifest "github.com/maelvls/vcpctl/manifest"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
-func editCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "edit",
+func confEditCmd() *cobra.Command {
+	var showDeps bool
+	cmd := &cobra.Command{
+		Use:   "edit <config-name>",
 		Short: "Edit a WIM configuration",
 		Long: undent.Undent(`
 			Edit a WIM (Workload Identity Manager, formerly Firefly) configuration.
-			The temporary file opened in your editor is a multi-document manifest
-			containing the ServiceAccount, WIMIssuerPolicy, and WIMConfiguration
-			objects in dependency order.
+			By default, the temporary file opened in your editor contains a
+			single WIMConfiguration manifest. Use --deps to include all
+			dependencies in the same order as 'vcpctl conf get --deps':
+			WIMConfiguration, ServiceAccount, WIMIssuerPolicy, WIMSubCAProvider.
+		`),
+		Example: undent.Undent(`
+			vcpctl conf edit <config-name>
+			vcpctl conf edit <config-name> --deps
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -54,7 +63,7 @@ func editCmd() *cobra.Command {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			err = confEditCmdLogic(context.Background(), client, args[0])
+			err = confEditCmdLogic(context.Background(), client, args[0], showDeps)
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}
@@ -62,9 +71,11 @@ func editCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&showDeps, "deps", false, "Include dependencies (service accounts, policies, and Sub CA)")
+	return cmd
 }
 
-func confEditCmdLogic(ctx context.Context, cl *api.Client, name string) error {
+func confEditCmdLogic(ctx context.Context, cl *api.Client, name string, includeDeps bool) error {
 	knownSvcaccts, err := api.GetServiceAccounts(ctx, cl)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
@@ -83,17 +94,61 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string) error {
 		return fmt.Errorf("while fetching issuing templates: %w", err)
 	}
 
-	yamlData, err := renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
-	if err != nil {
-		return err
+	var yamlData []byte
+	if includeDeps {
+		yamlData, err = renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
+		if err != nil {
+			return err
+		}
+	} else {
+		wimConfig, _, _, _, err := renderToManifests(saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
+		if err != nil {
+			return fmt.Errorf("while rendering to manifests: %w", err)
+		}
+		configManifest := configurationManifest{
+			Kind:             kindConfiguration,
+			WIMConfiguration: wimConfig,
+		}
+
+		var buf bytes.Buffer
+		enc := yaml.NewEncoder(&buf)
+		if err := enc.Encode(configManifest); err != nil {
+			return fmt.Errorf("while encoding WIMConfiguration to YAML: %w", err)
+		}
+		yamlData = buf.Bytes()
 	}
 
+	parseFn := parseManifests
+	if !includeDeps {
+		parseFn = func(raw []byte) ([]manifest.Manifest, error) {
+			return parseSingleManifestOfKind(raw, kindConfiguration)
+		}
+	}
+
+	return editManifestsInEditor(
+		yamlData,
+		parseFn,
+		func(items []manifest.Manifest) error {
+			err := applyManifests(cl, items, false)
+			if err != nil {
+				return fmt.Errorf("while merging and patching Workload Identity Manager configuration: %w", err)
+			}
+			return nil
+		},
+	)
+}
+
+func editManifestsInEditor(
+	initial []byte,
+	parse func([]byte) ([]manifest.Manifest, error),
+	apply func([]manifest.Manifest) error,
+) error {
 	tmpfile, err := os.CreateTemp("", "vcp-*.yaml")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmpfile.Name())
-	if _, err := tmpfile.Write(yamlData); err != nil {
+	if _, err := tmpfile.Write(initial); err != nil {
 		return err
 	}
 	defer tmpfile.Close()
@@ -104,6 +159,7 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string) error {
 		info, _ := os.Stat(tmpfile.Name())
 		lastSaved = info.ModTime()
 	}
+
 edit:
 	// Open editor to let you edit YAML.
 	editor := os.Getenv("EDITOR")
@@ -127,7 +183,7 @@ edit:
 
 	// Abort if the file is empty or if the file hasn't been written to.
 	if len(modifiedRaw) == 0 {
-		logutil.Debugf("the configuration file is empty, aborting")
+		logutil.Debugf("the manifest file is empty, aborting")
 		return nil
 	}
 	info, _ = os.Stat(tmpfile.Name())
@@ -136,7 +192,7 @@ edit:
 		return nil
 	}
 
-	modified, err := parseManifests(modifiedRaw)
+	modified, err := parse(modifiedRaw)
 	switch {
 	case errutil.ErrIsFixable(err):
 		err = addErrorNoticeToFile(tmpfile.Name(), err)
@@ -146,13 +202,10 @@ edit:
 		justSaved()
 		goto edit
 	case err != nil:
-		return fmt.Errorf("while parsing modified Workload Identity Manager manifests: %w", err)
+		return fmt.Errorf("while parsing modified manifests: %w", err)
 	}
 
-	if err != nil {
-		return fmt.Errorf("edit: while creating API client: %w", err)
-	}
-	err = applyManifests(cl, modified, false)
+	err = apply(modified)
 	switch {
 	// In case we were returned a 400 Bad Request or if it's a fixable error,
 	// let's give a chance to the user to fix the problem.
@@ -164,10 +217,27 @@ edit:
 		justSaved()
 		goto edit
 	case err != nil:
-		return fmt.Errorf("while merging and patching Workload Identity Manager configuration: %w", err)
+		return err
 	}
 
 	return nil
+}
+
+func parseSingleManifestOfKind(raw []byte, expectedKind string) ([]manifest.Manifest, error) {
+	manifests, err := parseManifests(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(manifests) != 1 {
+		return nil, errutil.Fixable(fmt.Errorf("expected a single %s manifest, got %d document(s)", expectedKind, len(manifests)))
+	}
+
+	gotKind := getManifestKind(manifests[0])
+	if gotKind != expectedKind {
+		return nil, errutil.Fixable(fmt.Errorf("expected manifest kind %q, got %q", expectedKind, gotKind))
+	}
+
+	return manifests, nil
 }
 
 func addErrorNoticeToFile(tmpfile string, err error) error {

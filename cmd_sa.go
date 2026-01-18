@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
+	manifest "github.com/maelvls/vcpctl/manifest"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/spf13/cobra"
 )
@@ -41,6 +43,7 @@ func saCmd() *cobra.Command {
 		saPutCmd(),
 		saGenCmd(),
 		saGetCmd(),
+		saEditCmd(),
 		saScopesCmd(),
 		&cobra.Command{Use: "gen-rsa", Deprecated: "the 'gen-rsa' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
 		&cobra.Command{Use: "keygen", Deprecated: "the 'keygen' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
@@ -573,7 +576,7 @@ func saGetCmd() *cobra.Command {
 				return fmt.Errorf("service account '%s' has no client ID", saName)
 			}
 
-			// Convert to manifest unless --raw is specified
+			// Convert to manifest unless --raw is specified.
 			var outputData interface{}
 			if raw {
 				outputData = sa
@@ -612,6 +615,71 @@ func saGetCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&format, "output", "o", "yaml", "Output format (id, json, yaml). The 'id' is the service account's client ID.")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Display raw API response instead of manifest format")
+	return cmd
+}
+
+func saEditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit <sa-name-or-id>",
+		Short: "Edit a Service Account",
+		Long: undent.Undent(`
+			Edit a Service Account using a single YAML manifest. The temporary
+			file opened in your editor contains a single ServiceAccount manifest.
+		`),
+		Example: undent.Undent(`
+			vcpctl sa edit <sa-name>
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("expected a single argument (the service account name or ID), got: %s", args)
+			}
+			nameOrID := args[0]
+
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("sa edit: %w", err)
+			}
+
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("sa edit: while creating API client: %w", err)
+			}
+
+			sa, err := api.GetServiceAccount(context.Background(), apiClient, nameOrID)
+			switch {
+			case errors.As(err, &errutil.NotFound{}):
+				return errutil.Fixable(fmt.Errorf("service account '%s' not found. Please create it first using 'vcpctl sa put keypair %s' or 'vcpctl sa put wif %s'", nameOrID, nameOrID, nameOrID))
+			case err != nil:
+				return fmt.Errorf("sa edit: while getting service account: %w", err)
+			}
+
+			saManifest := serviceAccountManifest{
+				Kind:           kindServiceAccount,
+				ServiceAccount: apiToManifestServiceAccount(sa),
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			if err := enc.Encode(saManifest); err != nil {
+				return fmt.Errorf("sa edit: while encoding ServiceAccount to YAML: %w", err)
+			}
+
+			return editManifestsInEditor(
+				buf.Bytes(),
+				func(raw []byte) ([]manifest.Manifest, error) {
+					return parseSingleManifestOfKind(raw, kindServiceAccount)
+				},
+				func(items []manifest.Manifest) error {
+					if err := applyManifests(apiClient, items, false); err != nil {
+						return fmt.Errorf("sa edit: while patching ServiceAccount: %w", err)
+					}
+					return nil
+				},
+			)
+		},
+	}
 	return cmd
 }
 
