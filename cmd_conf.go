@@ -1,17 +1,35 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
 )
+
+// Parent command for conf operations
+func confCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "conf",
+		Short: "Manage WIM (Workload Identity Manager) configurations",
+		Long: undent.Undent(`
+			Manage WIM (Workload Identity Manager, formerly Firefly) configurations in
+			CyberArk Certificate Manager, SaaS.
+		`),
+	}
+	cmd.AddCommand(confLsCmd())
+	cmd.AddCommand(confGetCmd())
+	cmd.AddCommand(confRmCmd())
+	return cmd
+}
 
 // List Workload Identity Manager configurations.
 func confLsCmd() *cobra.Command {
@@ -108,8 +126,9 @@ func confLsCmd() *cobra.Command {
 }
 
 func confGetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "get",
+	var showDeps bool
+	cmd := &cobra.Command{
+		Use:   "get <config-name>",
 		Short: "Export a WIM configuration",
 		Long: undent.Undent(`
 			Get a WIM (Workload Identity Manager, formerly Firefly) configuration
@@ -117,7 +136,8 @@ func confGetCmd() *cobra.Command {
 			to stdout in YAML format.
 		`),
 		Example: undent.Undent(`
-			vcpctl get <config-name>
+			vcpctl conf get <config-name>
+			vcpctl conf get <config-name> --deps
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -148,9 +168,32 @@ func confGetCmd() *cobra.Command {
 
 			issuingTemplates, err := api.GetIssuingTemplates(context.Background(), apiClient)
 
-			yamlData, err := renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
-			if err != nil {
-				return err
+			var yamlData []byte
+			if showDeps {
+				// Show all dependencies (old behavior)
+				yamlData, err = renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
+				if err != nil {
+					return err
+				}
+			} else {
+				// Only show WIMConfiguration
+				wimConfig, _, _, _, err := renderToManifests(saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
+				if err != nil {
+					return fmt.Errorf("while rendering to manifests: %w", err)
+				}
+
+				configManifest := configurationManifest{
+					Kind:             kindConfiguration,
+					WIMConfiguration: wimConfig,
+				}
+
+				var buf bytes.Buffer
+				enc := yaml.NewEncoder(&buf)
+				err = enc.Encode(configManifest)
+				if err != nil {
+					return fmt.Errorf("while encoding WIMConfiguration to YAML: %w", err)
+				}
+				yamlData = buf.Bytes()
 			}
 
 			schemaFile, err := api.SaveSchemaToWellKnownPath()
@@ -165,6 +208,8 @@ func confGetCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&showDeps, "deps", false, "Include dependencies (service accounts, policies, and Sub CA)")
+	return cmd
 }
 
 func confRmCmd() *cobra.Command {
@@ -177,8 +222,8 @@ func confRmCmd() *cobra.Command {
 			Manager, SaaS.
 		`),
 		Example: undent.Undent(`
-			vcpctl rm my-config
-			vcpctl rm 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
+			vcpctl conf rm my-config
+			vcpctl conf rm 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -211,6 +256,57 @@ func confRmCmd() *cobra.Command {
 			}
 			logutil.Debugf("Workload Identity Manager configuration '%s' removed successfully.", nameOrID)
 			return nil
+		},
+	}
+	return cmd
+}
+
+// Deprecated commands for backward compatibility
+
+func deprecatedLsCmd() *cobra.Command {
+	var showSaIDs bool
+	cmd := &cobra.Command{
+		Use:           "ls",
+		Short:         "List WIM configurations (deprecated: use 'vcpctl conf ls')",
+		Hidden:        false,
+		Deprecated:    "use 'vcpctl conf ls' instead",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return confLsCmd().RunE(cmd, args)
+		},
+	}
+	cmd.Flags().BoolVar(&showSaIDs, "show-sa-ids", false, "Show service account IDs even when names are unique")
+	return cmd
+}
+
+func deprecatedGetCmd() *cobra.Command {
+	var showDeps bool
+	cmd := &cobra.Command{
+		Use:           "get <config-name>",
+		Short:         "Export a WIM configuration (deprecated: use 'vcpctl conf get')",
+		Hidden:        false,
+		Deprecated:    "use 'vcpctl conf get' instead",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return confGetCmd().RunE(cmd, args)
+		},
+	}
+	cmd.Flags().BoolVar(&showDeps, "deps", false, "Include dependencies (service accounts, policies, and Sub CA)")
+	return cmd
+}
+
+func deprecatedRmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "rm <config-name>",
+		Short:         "Remove a WIM configuration (deprecated: use 'vcpctl conf rm')",
+		Hidden:        false,
+		Deprecated:    "use 'vcpctl conf rm' instead",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return confRmCmd().RunE(cmd, args)
 		},
 	}
 	return cmd

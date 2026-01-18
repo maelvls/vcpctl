@@ -16,7 +16,7 @@ Then you can use the `vcpctl` command to manage your Workload Identity Manager c
 You can list Workload Identity Manager configurations and the related service accounts with:
 
 ```bash
-vcpctl ls
+vcpctl conf ls
 ```
 
 You can edit the configuration in your `$EDITOR` with the command:
@@ -25,10 +25,16 @@ You can edit the configuration in your `$EDITOR` with the command:
 vcpctl edit test
 ```
 
-You can export a Workload Identity Manager configuration along with its associated Sub CA, policies, and service account with:
+You can export a Workload Identity Manager configuration with:
 
 ```bash
-vcpctl get test
+vcpctl conf get test
+```
+
+To also export the associated Sub CA, policies, and service accounts, use the `--deps` flag:
+
+```bash
+vcpctl conf get test --deps
 ```
 
 You can create (and update) a Workload Identity Manager configuration with:

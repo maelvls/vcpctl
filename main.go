@@ -33,11 +33,11 @@ func main() {
             VEN_API_URL environment variable to override the default API URL.
         `),
 		Example: undent.Undent(`
-			vcpctl ls
+			vcpctl conf ls
 			vcpctl apply -f config.yaml
 			vcpctl delete -f config.yaml
 			vcpctl edit <config-name>
-			vcpctl get <config-name> > config.yaml
+			vcpctl conf get <config-name> > config.yaml
 			vcpctl attach-sa <config-name> --sa <sa-name>
 			vcpctl sa ls
 			vcpctl sa rm <sa-name>
@@ -66,14 +66,15 @@ func main() {
 		apiurlCmd(),
 		authCmd(),
 		apiCmd(),
-		confLsCmd(),
+		confCmd(),
 		editCmd(),
 		attachSaCmd(),
 		applyCmd(),
 		deleteCmd(),
 		deprecatedPutCmd(),
-		confRmCmd(),
-		confGetCmd(),
+		deprecatedLsCmd(),
+		deprecatedGetCmd(),
+		deprecatedRmCmd(),
 		saCmd(),
 		subcaCmd(),
 		policyCmd(),
