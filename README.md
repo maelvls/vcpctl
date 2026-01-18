@@ -37,6 +37,18 @@ To also export the associated Sub CA, policies, and service accounts, use the `-
 vcpctl conf get test --deps
 ```
 
+You can delete a Workload Identity Manager configuration with:
+
+```bash
+vcpctl conf rm test
+```
+
+To also delete the associated Sub CA, policies, and service accounts, use the `--deps` flag:
+
+```bash
+vcpctl conf rm test --deps
+```
+
 You can create (and update) a Workload Identity Manager configuration with:
 
 ```bash

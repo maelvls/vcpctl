@@ -706,7 +706,7 @@ func saRmCmd() *cobra.Command {
 				// Use a simple prompt to select the service account to remove.
 				selected := rmInteractive(svcaccts)
 				for _, saID := range selected {
-					err = api.RemoveServiceAccount(context.Background(), apiClient, saID)
+					err = api.DeleteServiceAccount(context.Background(), apiClient, saID)
 					if err != nil {
 						return fmt.Errorf("while removing service account '%s': %w", saID, err)
 					}
@@ -729,7 +729,7 @@ func saRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = api.RemoveServiceAccount(context.Background(), apiClient, saName)
+			err = api.DeleteServiceAccount(context.Background(), apiClient, saName)
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}

@@ -154,7 +154,7 @@ func PatchPolicy(ctx context.Context, cl *Client, id string, patch PolicyUpdateR
 	}
 }
 
-func RemovePolicy(ctx context.Context, cl *Client, policyName string) error {
+func DeletePolicy(ctx context.Context, cl *Client, policyName string) error {
 	// Find the policy by name.
 	policy, err := GetPolicy(ctx, cl, policyName)
 	if err != nil {

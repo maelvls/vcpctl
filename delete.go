@@ -14,13 +14,13 @@ import (
 // deleteManifests walks through the provided manifests in reverse order and deletes each
 // resource from CyberArk Certificate Manager, SaaS. Note that the manifests order
 // matters.
-func deleteManifests(cl *api.Client, manifests []manifest.Manifest, ignoreNotFound bool) error {
+func deleteManifests(ctx context.Context, cl *api.Client, manifests []manifest.Manifest, ignoreNotFound bool) error {
 	if err := validateManifests(manifests); err != nil {
 		return fmt.Errorf("pre-flight validation failed: %w", err)
 	}
 	lastErr := error(nil)
 
-	deleteCtx := newManifestDeleteContext(context.Background(), cl, ignoreNotFound)
+	deleteCtx := newManifestDeleteContext(ctx, cl, ignoreNotFound)
 
 	for i := len(manifests) - 1; i >= 0; i-- {
 		item := manifests[i]
@@ -68,7 +68,7 @@ func (ctx *manifestDeleteContext) deleteServiceAccount(in manifest.ServiceAccoun
 		return fmt.Errorf("ServiceAccount: name must be set")
 	}
 
-	err := api.RemoveServiceAccount(context.Background(), ctx.client, in.Name)
+	err := api.DeleteServiceAccount(context.Background(), ctx.client, in.Name)
 	switch {
 	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
 		return nil
@@ -87,7 +87,7 @@ func (ctx *manifestDeleteContext) deletePolicy(in manifest.Policy) error {
 		return fmt.Errorf("WIMIssuerPolicy: name must be set")
 	}
 
-	err := api.RemovePolicy(context.Background(), ctx.client, in.Name)
+	err := api.DeletePolicy(context.Background(), ctx.client, in.Name)
 	switch {
 	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
 		return nil
@@ -106,7 +106,7 @@ func (ctx *manifestDeleteContext) deleteSubCa(in manifest.SubCa) error {
 		return fmt.Errorf("WIMSubCAProvider: name must be set")
 	}
 
-	err := api.RemoveSubCaProvider(context.Background(), ctx.client, in.Name)
+	err := api.DeleteSubCaProvider(context.Background(), ctx.client, in.Name)
 	switch {
 	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
 		return nil

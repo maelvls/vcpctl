@@ -206,7 +206,7 @@ func PatchServiceAccount(ctx context.Context, cl *Client, id string, patch Patch
 	return nil
 }
 
-func RemoveServiceAccount(ctx context.Context, cl *Client, nameOrID string) error {
+func DeleteServiceAccount(ctx context.Context, cl *Client, nameOrID string) error {
 	var id string
 	if looksLikeAnID(nameOrID) {
 		id = nameOrID

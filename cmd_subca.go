@@ -192,7 +192,7 @@ func subcaRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = api.RemoveSubCaProvider(context.Background(), apiClient, providerNameOrID)
+			err = api.DeleteSubCaProvider(context.Background(), apiClient, providerNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}

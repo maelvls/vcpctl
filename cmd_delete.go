@@ -82,7 +82,7 @@ func runDelete(cmd *cobra.Command, filePath string, args []string, ignoreNotFoun
 	if err != nil {
 		return fmt.Errorf("%s: while creating API client: %w", cmdName, err)
 	}
-	if err := deleteManifests(apiClient, manifests, ignoreNotFound); err != nil {
+	if err := deleteManifests(cmd.Context(), apiClient, manifests, ignoreNotFound); err != nil {
 		return err
 	}
 

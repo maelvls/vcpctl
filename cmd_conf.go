@@ -227,6 +227,7 @@ func confGetCmd() *cobra.Command {
 }
 
 func confRmCmd() *cobra.Command {
+	var deleteDeps bool
 	cmd := &cobra.Command{
 		Use:   "rm <config-name>",
 		Short: "Remove a WIM configuration",
@@ -238,6 +239,7 @@ func confRmCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl conf rm my-config
 			vcpctl conf rm 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
+			vcpctl conf rm my-config --deps
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -256,22 +258,67 @@ func confRmCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 			// Get the configuration by name or ID.
-			c, err := api.GetConfig(context.Background(), apiClient, nameOrID)
+			c, err := api.GetConfig(cmd.Context(), apiClient, nameOrID)
 			if err != nil {
 				if errors.As(err, &errutil.NotFound{}) {
 					return fmt.Errorf("Workload Identity Manager configuration '%s' not found", nameOrID)
 				}
 				return fmt.Errorf("while getting Workload Identity Manager configuration by name or ID '%s': %w", nameOrID, err)
 			}
+
 			// Remove the configuration.
 			err = api.RemoveConfig(context.Background(), apiClient, c.Id.String())
-			if err != nil {
+			switch {
+			case errutil.ErrIsNotFound(err):
+				logutil.Infof("Workload Identity Manager configuration '%s' does not exist or has already been deleted.", nameOrID)
+			case err != nil:
 				return fmt.Errorf("while removing Workload Identity Manager configuration '%s': %w", nameOrID, err)
+			case err == nil:
+				logutil.Infof("Workload Identity Manager configuration '%s' removed successfully.", nameOrID)
 			}
-			logutil.Debugf("Workload Identity Manager configuration '%s' removed successfully.", nameOrID)
+
+			if deleteDeps {
+				for _, saID := range c.ServiceAccountIds {
+					err := api.DeleteServiceAccount(cmd.Context(), apiClient, saID.String())
+					switch {
+					case errutil.ErrIsNotFound(err):
+						logutil.Infof("ServiceAccount '%s' already deleted.", saID.String())
+						continue
+					case err != nil:
+						return fmt.Errorf("while deleting dependencies of the WIMConfiguration '%s': ServiceAccount '%s': %w", c.Id.String(), saID.String(), err)
+					case err == nil:
+						logutil.Infof("ServiceAccount '%s' removed successfully.", saID.String())
+					}
+				}
+
+				for _, policyID := range c.PolicyIds {
+					err := api.DeletePolicy(cmd.Context(), apiClient, policyID.String())
+					switch {
+					case errutil.ErrIsNotFound(err):
+						logutil.Infof("WIMIssuerPolicy '%s' already deleted.", policyID.String())
+						continue
+					case err != nil:
+						return fmt.Errorf("while deleting dependencies of the WIMConfiguration '%s': WIMIssuerPolicy '%s': %w", c.Id.String(), policyID.String(), err)
+					case err == nil:
+						logutil.Infof("WIMIssuerPolicy '%s' removed successfully.", policyID.String())
+					}
+				}
+
+				err := api.DeleteSubCaProvider(cmd.Context(), apiClient, c.SubCaProvider.Id.String())
+				switch {
+				case errutil.ErrIsNotFound(err):
+					logutil.Infof("WIMSubCAProvider '%s' already deleted.", c.SubCaProvider.Id.String())
+				case err != nil:
+					return fmt.Errorf("while deleting dependencies of the WIMConfiguration '%s': WIMSubCAProvider '%s': %w", c.Id.String(), c.SubCaProvider.Id.String(), err)
+				case err == nil:
+					logutil.Infof("WIMSubCAProvider '%s' removed successfully.", c.SubCaProvider.Id.String())
+				}
+			}
+
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&deleteDeps, "deps", false, "Delete dependencies (service accounts, policies, and Sub CA)")
 	return cmd
 }
 
@@ -312,6 +359,7 @@ func deprecatedGetCmd() *cobra.Command {
 }
 
 func deprecatedRmCmd() *cobra.Command {
+	var deleteDeps bool
 	cmd := &cobra.Command{
 		Use:           "rm <config-name>",
 		Short:         "Remove a WIM configuration (deprecated: use 'vcpctl conf rm')",
@@ -323,5 +371,6 @@ func deprecatedRmCmd() *cobra.Command {
 			return confRmCmd().RunE(cmd, args)
 		},
 	}
+	cmd.Flags().BoolVar(&deleteDeps, "deps", false, "Delete dependencies (service accounts, policies, and Sub CA)")
 	return cmd
 }

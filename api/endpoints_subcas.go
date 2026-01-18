@@ -172,7 +172,7 @@ func PatchSubCAProvider(ctx context.Context, cl *Client, id string, patch SubCaP
 	}
 }
 
-func RemoveSubCaProvider(ctx context.Context, cl *Client, nameOrID string) error {
+func DeleteSubCaProvider(ctx context.Context, cl *Client, nameOrID string) error {
 	if looksLikeAnID(nameOrID) {
 		return RemoveSubCaProviderByID(ctx, cl, nameOrID)
 	}

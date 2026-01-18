@@ -183,7 +183,7 @@ func policyRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = api.RemovePolicy(context.Background(), apiClient, policyNameOrID)
+			err = api.DeletePolicy(context.Background(), apiClient, policyNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
