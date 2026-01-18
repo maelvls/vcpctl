@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/fang"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/logutil"
@@ -28,9 +29,10 @@ func main() {
 			vcpctl is a CLI tool for managing WIM (Workload Identity Manager,
 			formerly Firefly) configurations in CyberArk Certificate Manager, SaaS
 			(formerly known as Venafi Control Plane and Venafi Cloud).
-            To configure it, set the VEN_API_KEY environment variable to your
-            CyberArk Certificate Manager, SaaS API key. You can also set the
-            VEN_API_URL environment variable to override the default API URL.
+
+			To get started, run:
+
+				vcpctl login
         `),
 		Example: undent.Undent(`
 			vcpctl conf ls
@@ -50,7 +52,7 @@ func main() {
 			vcpctl policy rm <policy-name>
 		`),
 		SilenceErrors: true,
-		SilenceUsage:  false,
+		SilenceUsage:  true,
 	}
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set VEN_API_URL. Flag takes precedence. When using this flag, the configuration file is not used.")
@@ -83,7 +85,7 @@ func main() {
 	rootCmd.AddCommand(ophis.Command(nil))
 
 	ctx := context.Background()
-	err := rootCmd.ExecuteContext(ctx)
+	err := fang.Execute(ctx, rootCmd)
 	switch {
 	case errors.Is(err, api.APIKeyInvalid):
 		logutil.Errorf("API key is invalid, try logging in again with:\n  vcpctl auth login\n")

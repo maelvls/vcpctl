@@ -178,8 +178,8 @@ func loginCmd() *cobra.Command {
 			tenant URL, or use --api-url and --api-key together to bypass the automatic API URL
 			discovery.
 
-			You can also use environment variables:
-			    VEN_API_URL and VEN_API_KEY
+			Alternatively, you can use the environment variables VEN_API_URL and VEN_API_KEY to
+			provide the API URL and API key.
 		`),
 		Example: undent.Undent(`
 			# Provide tenant URL, will prompt for API key:
