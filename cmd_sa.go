@@ -195,7 +195,7 @@ func saGenkeypairCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa gen keypair: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			saName := args[0]
@@ -216,30 +216,35 @@ func saGenkeypairCmd() *cobra.Command {
 			case err == nil:
 				// Exists, we will be updating it.
 			default:
-				return fmt.Errorf("sa gen keypair: while checking if service account exists: %w", err)
+				return fmt.Errorf("while checking if service account exists: %w", err)
+			}
+
+			// Check that it is an 'rsaKey' service account.
+			if existingSA.AuthenticationType != "rsaKey" {
+				return fmt.Errorf("service account '%s' has authentication type '%s', expected 'rsaKey'. You can only generate a key pair for 'rsaKey' service accounts.", saName, existingSA.AuthenticationType)
 			}
 
 			ecKey, ecPub, err := genECKeyPair()
 			if err != nil {
-				return fmt.Errorf("sa gen keypair: while generating EC key pair: %w", err)
+				return fmt.Errorf("while generating EC key pair: %w", err)
 			}
 
 			desiredSA := existingSA
 			desiredSA.PublicKey = ecPub
 			patch, _, err := api.DiffToPatchServiceAccount(existingSA, desiredSA)
 			if err != nil {
-				return fmt.Errorf("sa gen keypair: while creating service account patch: %w", err)
+				return fmt.Errorf("while creating service account patch: %w", err)
 			}
 
 			err = api.PatchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
 			if err != nil {
-				return fmt.Errorf("sa gen keypair: while patching service account: %w", err)
+				return fmt.Errorf("while patching service account: %w", err)
 			}
 
 			if logutil.EnableDebug {
 				updatedSA, err := api.GetServiceAccountByID(context.Background(), apiClient, existingSA.Id.String())
 				if err != nil {
-					return fmt.Errorf("sa gen keypair: while retrieving updated service account: %w", err)
+					return fmt.Errorf("while retrieving updated service account: %w", err)
 				}
 				d := api.ANSIDiff(existingSA, updatedSA)
 				logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
@@ -255,7 +260,7 @@ func saGenkeypairCmd() *cobra.Command {
 					PrivateKey string `json:"private_key"`
 				}{ClientID: existingSA.Id.String(), PrivateKey: ecKey}, "", "  ")
 				if err != nil {
-					return fmt.Errorf("sa gen keypair: while marshaling JSON: %w", err)
+					return fmt.Errorf("while marshaling JSON: %w", err)
 				}
 				fmt.Println(string(bytes))
 			}
