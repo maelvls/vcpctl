@@ -11,7 +11,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -157,10 +156,10 @@ func loginWithWIF(ctx context.Context, args []string, p wifLoginParams) error {
 		// pick the first one that comes up.
 		teams, err := api.GetTeams(ctx, cl)
 		if err != nil {
-			return fmt.Errorf("sa put wif: while retrieving available teams: %w", err)
+			return fmt.Errorf("while retrieving available teams: %w", err)
 		}
 		if len(teams) == 0 {
-			return fmt.Errorf("sa put wif: no owner team provided and no team available in the account")
+			return fmt.Errorf("no owner team provided and no team available in the account")
 		}
 		owner := teams[0].Id
 		logutil.Debugf("Using the first team found as an owner: %s (%s)", teams[0].Name, teams[0].Id.String())
@@ -252,12 +251,14 @@ func loginWithWIF(ctx context.Context, args []string, p wifLoginParams) error {
 	}
 
 	current := Auth{
-		URL:           tenantURL,
-		APIURL:        apiURL,
-		APIKey:        apiKey,
-		AccessToken:   accessToken,
-		WIFPrivateKey: privKeyPEM,
-		TenantID:      selfCheck.Company.Id.String(),
+		URL:                tenantURL,
+		APIURL:             apiURL,
+		AuthenticationType: "rsaKeyFederated",
+		APIKey:             apiKey,
+		ClientID:           saID,
+		AccessToken:        accessToken,
+		WIFPrivateKey:      privKeyPEM,
+		TenantID:           selfCheck.Company.Id.String(),
 	}
 
 	if err := saveCurrentTenant(current); err != nil {
@@ -280,7 +281,7 @@ func resolveLoginAPIURL(args []string, flagAPIURL string) (string, string, error
 		switch {
 		case err == nil:
 			return apiURLFromTenant, tenantURL, nil
-		case errors.As(err, &errutil.NotFound{}):
+		case errutil.ErrIsNotFound(err):
 			return "", "", fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
 		default:
 			return "", "", fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
@@ -292,7 +293,7 @@ func resolveLoginAPIURL(args []string, flagAPIURL string) (string, string, error
 		apiURL = os.Getenv("VEN_API_URL")
 	}
 	if apiURL == "" {
-		return "", "", errutil.Fixable(fmt.Errorf("--api-url (or VEN_API_URL) is required for --wif when no tenant URL is provided"))
+		return "", "", errutil.Fixable(fmt.Errorf("--api-url (or VEN_API_URL) is required for --sa-wif when no tenant URL is provided"))
 	}
 	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
 		apiURL = "https://" + apiURL

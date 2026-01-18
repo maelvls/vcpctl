@@ -9,7 +9,8 @@ import (
 	"github.com/maelvls/vcpctl/errutil"
 )
 
-// Get the API URL for the given tenant URL.
+// Get the API URL for the given tenant URL. May return errutil.NotFound if the
+// tenant does not exist.
 func GetAPIURLFromTenantURL(cl http.Client, tenantURL string) (string, error) {
 	url := fmt.Sprintf("%s/single-spa-root-config/baseEnvironment.json", tenantURL)
 	resp, err := cl.Get(url)

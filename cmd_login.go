@@ -30,12 +30,15 @@ type FileConf struct {
 }
 
 type Auth struct {
-	URL           string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
-	APIURL        string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
-	APIKey        string `json:"apiKey"`
-	AccessToken   string `json:"accessToken"`
-	WIFPrivateKey string `json:"wifPrivateKey"`
-	TenantID      string `json:"tenantID"` // The tenant ID (company ID)
+	URL                string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	APIURL             string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	AuthenticationType string `json:"authenticationType"`
+	APIKey             string `json:"apiKey"`
+	ClientID           string `json:"clientID"`
+	PrivateKey         string `json:"privateKey"`
+	AccessToken        string `json:"accessToken"`
+	WIFPrivateKey      string `json:"wifPrivateKey"`
+	TenantID           string `json:"tenantID"` // The tenant ID (company ID)
 }
 
 // Styles for prompts.
@@ -161,6 +164,7 @@ func loginCmd() *cobra.Command {
 	var apiURL, apiKey string
 	var wifServiceAccount string
 	var wifScopes []string
+	var saKeyPath string
 	cmd := &cobra.Command{
 		Use:           "login [url]",
 		SilenceErrors: true,
@@ -197,8 +201,20 @@ func loginCmd() *cobra.Command {
 
 			# WIF login (creates/updates service account, uploads JWKS to 0x0.st, and stores access token):
 			vcpctl login --wif my-sa --api-url https://api.venafi.cloud --api-key <key>
+
+			# Service account keypair login (JSON from stdin):
+			vcpctl sa gen keypair my-sa -ojson | vcpctl login --sa-key -
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if saKeyPath != "" {
+				if wifServiceAccount != "" {
+					return errutil.Fixable(fmt.Errorf("--sa-key and --wif are mutually exclusive"))
+				}
+				if apiKey != "" {
+					return errutil.Fixable(fmt.Errorf("--sa-key does not use --api-key"))
+				}
+				return loginWithServiceAccountKey(cmd.Context(), args, saKeyPath, apiURL)
+			}
 			if wifServiceAccount != "" {
 				return loginWithWIF(cmd.Context(), args, wifLoginParams{
 					ServiceAccount: wifServiceAccount,
@@ -261,10 +277,11 @@ func loginCmd() *cobra.Command {
 				}
 
 				current := Auth{
-					APIURL:   apiURL,
-					APIKey:   apiKey,
-					URL:      tenantURL,
-					TenantID: resp.Company.Id.String(),
+					APIURL:             apiURL,
+					AuthenticationType: "apiKey",
+					APIKey:             apiKey,
+					URL:                tenantURL,
+					TenantID:           resp.Company.Id.String(),
 				}
 
 				err = saveCurrentTenant(current)
@@ -300,8 +317,9 @@ func loginCmd() *cobra.Command {
 				}
 
 				current := Auth{
-					URL:    tenantURL,
-					APIURL: apiURLFromTenant,
+					URL:                tenantURL,
+					APIURL:             apiURLFromTenant,
+					AuthenticationType: "apiKey",
 				}
 
 				// If --api-key was provided, use it; otherwise prompt for it.
@@ -478,6 +496,7 @@ func loginCmd() *cobra.Command {
 				return err
 			}
 			current.APIKey = apiKeyInput
+			current.AuthenticationType = "apiKey"
 
 			logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.URL+"'."))
 
@@ -492,8 +511,9 @@ func loginCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
-	cmd.Flags().StringVar(&wifServiceAccount, "wif", "", "Login using Workload Identity Federation with the given service account name")
+	cmd.Flags().StringVar(&wifServiceAccount, "sa-wif", "", "Login using Workload Identity Federation with the given service account name")
 	cmd.Flags().StringArrayVar(&wifScopes, "scope", []string{}, "Scopes for the WIF service account (can be specified multiple times)")
+	cmd.Flags().StringVar(&saKeyPath, "sa-key", "", "Login using a service account keypair JSON (use '-' for stdin)")
 
 	return cmd
 }
@@ -710,12 +730,15 @@ func saveCurrentTenant(auth Auth) error {
 	// If it doesn't exist, add it.
 	conf.CurrentURL = auth.URL
 	newAuth := Auth{
-		URL:           auth.URL,
-		APIURL:        auth.APIURL,
-		APIKey:        auth.APIKey,
-		AccessToken:   auth.AccessToken,
-		WIFPrivateKey: auth.WIFPrivateKey,
-		TenantID:      auth.TenantID,
+		URL:                auth.URL,
+		APIURL:             auth.APIURL,
+		AuthenticationType: auth.AuthenticationType,
+		APIKey:             auth.APIKey,
+		ClientID:           auth.ClientID,
+		PrivateKey:         auth.PrivateKey,
+		AccessToken:        auth.AccessToken,
+		WIFPrivateKey:      auth.WIFPrivateKey,
+		TenantID:           auth.TenantID,
 	}
 	conf.Auths = append(conf.Auths, newAuth)
 
