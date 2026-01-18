@@ -264,7 +264,18 @@ func saGenkeypairCmd() *cobra.Command {
 					ClientID   string `json:"client_id"`
 					PrivateKey string `json:"private_key"`
 					APIURL     string `json:"api_url"`
-				}{Type: "rsaKey", ClientID: existingSA.Id.String(), PrivateKey: ecKey, APIURL: conf.APIURL}, "", "  ")
+					Sub        string `json:"sub"`
+					Aud        string `json:"aud"`
+					Iss        string `json:"iss"`
+				}{
+					Type:       "rsaKey",
+					ClientID:   existingSA.Id.String(),
+					PrivateKey: ecKey,
+					APIURL:     conf.APIURL,
+					Sub:        existingSA.Subject,
+					Aud:        existingSA.Audience,
+					Iss:        existingSA.IssuerURL,
+				}, "", "  ")
 				if err != nil {
 					return fmt.Errorf("while marshaling JSON: %w", err)
 				}
@@ -315,7 +326,7 @@ func saGenWifCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa gen wif: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			saName := args[0]
@@ -340,7 +351,7 @@ func saGenWifCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			// Set defaults
+			// Set defaults.
 			if subject == "" {
 				subject = fmt.Sprintf("system:serviceaccount:default:%s", saName)
 			}
@@ -357,7 +368,7 @@ func saGenWifCmd() *cobra.Command {
 				appUUID := openapi_types.UUID{}
 				err := appUUID.UnmarshalText([]byte(app))
 				if err != nil {
-					return fmt.Errorf("sa gen wif: invalid application UUID '%s': %w", app, err)
+					return fmt.Errorf("invalid application UUID '%s': %w", app, err)
 				}
 				applications[i] = appUUID
 			}
@@ -366,21 +377,21 @@ func saGenWifCmd() *cobra.Command {
 			if len(applications) == 0 {
 				availableApps, err := api.GetApplications(context.Background(), apiClient)
 				if err != nil {
-					return fmt.Errorf("sa gen wif: while retrieving available applications: %w", err)
+					return fmt.Errorf("while retrieving available applications: %w", err)
 				}
 				if len(availableApps) == 0 {
-					return fmt.Errorf("sa gen wif: no application provided and no application available in the account")
+					return fmt.Errorf("no application provided and no application available in the account")
 				}
 				applications = []api.Application{availableApps[0].Id}
 				logutil.Debugf("No application provided, using the first available one: %s (%s)", availableApps[0].Name, availableApps[0].Id.String())
 			}
 
 			// Parse owner team (UUID) if provided.
-			ownerUUID := openapi_types.UUID{}
+			owner := openapi_types.UUID{}
 			if ownerTeam != "" {
-				err := ownerUUID.UnmarshalText([]byte(ownerTeam))
+				err := owner.UnmarshalText([]byte(ownerTeam))
 				if err != nil {
-					return fmt.Errorf("sa gen wif: invalid owner team UUID '%s': %w", ownerTeam, err)
+					return fmt.Errorf("invalid owner team UUID '%s': %w", ownerTeam, err)
 				}
 			}
 
@@ -388,12 +399,12 @@ func saGenWifCmd() *cobra.Command {
 			if ownerTeam == "" {
 				teams, err := api.GetTeams(context.Background(), apiClient)
 				if err != nil {
-					return fmt.Errorf("sa gen wif: while retrieving available teams: %w", err)
+					return fmt.Errorf("while retrieving available teams: %w", err)
 				}
 				if len(teams) == 0 {
-					return fmt.Errorf("sa gen wif: no owner team provided and no team available in the account")
+					return fmt.Errorf("no owner team provided and no team available in the account")
 				}
-				ownerUUID = teams[0].Id
+				owner = teams[0].Id
 				logutil.Debugf("No owner team provided, using the first available one: %s (%s)", teams[0].Name, teams[0].Id.String())
 			}
 
@@ -401,24 +412,24 @@ func saGenWifCmd() *cobra.Command {
 			existingSA, err := api.GetServiceAccount(context.Background(), apiClient, saName)
 			var clientID string
 			switch {
-			case errors.As(err, &errutil.NotFound{}):
-				// Doesn't exist yet, create it
+			case errutil.ErrIsNotFound(err):
+				// Doesn't exist yet, create it.
 				resp, err := api.CreateServiceAccount(context.Background(), apiClient, api.ServiceAccountDetails{
 					Name:               saName,
 					AuthenticationType: "rsaKeyFederated",
-					CredentialLifetime: 365, // days
 					Scopes:             scopes,
 					Subject:            subject,
 					Audience:           audience,
 					IssuerURL:          issuerURL,
 					JwksURI:            jwksURL,
 					Applications:       applications,
-					Owner:              ownerUUID,
+					Owner:              owner,
 				})
 				if err != nil {
-					return fmt.Errorf("sa gen wif: while creating service account: %w", err)
+					return fmt.Errorf("while creating service account: %w", err)
 				}
 				clientID = resp.Id.String()
+
 				logutil.Debugf("Service Account '%s' created with JWKS URI: %s", saName, jwksURL)
 			case err == nil:
 				// Exists, update it
@@ -436,20 +447,20 @@ func saGenWifCmd() *cobra.Command {
 
 				patch, smthChanged, err := api.DiffToPatchServiceAccount(existingSA, desiredSA)
 				if err != nil {
-					return fmt.Errorf("sa gen wif: while creating service account patch: %w", err)
+					return fmt.Errorf("while creating service account patch: %w", err)
 				}
 				if !smthChanged {
 					logutil.Debugf("Service Account '%s' is already up to date.", saName)
 				} else {
 					err = api.PatchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
 					if err != nil {
-						return fmt.Errorf("sa gen wif: while patching service account: %w", err)
+						return fmt.Errorf("while patching service account: %w", err)
 					}
 					logutil.Debugf("Service Account '%s' updated.", saName)
 				}
 				clientID = existingSA.Id.String()
 			default:
-				return fmt.Errorf("sa gen wif: while checking if service account exists: %w", err)
+				return fmt.Errorf("while checking if service account exists: %w", err)
 			}
 
 			switch outputFormat {
@@ -460,12 +471,18 @@ func saGenWifCmd() *cobra.Command {
 					PrivateKey string `json:"private_key"`
 					APIURL     string `json:"api_url"`
 					JWKSURL    string `json:"jwks_url"`
+					Iss        string `json:"iss"`
+					Aud        string `json:"aud"`
+					Sub        string `json:"sub"`
 				}{
 					Type:       "rsaKeyFederated",
 					ClientID:   clientID,
 					PrivateKey: privKeyPEM,
 					APIURL:     conf.APIURL,
 					JWKSURL:    jwksURL,
+					Iss:        issuerURL,
+					Aud:        audience,
+					Sub:        subject,
 				}
 
 				bytes, err := marshalIndent(output, "", "  ")

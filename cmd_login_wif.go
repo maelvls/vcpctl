@@ -257,26 +257,6 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) e
 		return fmt.Errorf("while parsing private key: %w", err)
 	}
 
-	// Get service account details to know the issuer, subject, and audience
-	apiClient, err := api.NewAPIKeyClient(apiURL, os.Getenv("VEN_API_KEY"))
-	if err != nil {
-		return fmt.Errorf("while creating API client: %w", err)
-	}
-
-	sa, err := api.GetServiceAccountByID(ctx, apiClient, input.ClientID)
-	if err != nil {
-		return fmt.Errorf("while getting service account: %w", err)
-	}
-
-	if sa.IssuerURL == "" {
-		return errutil.Fixable(fmt.Errorf("service account has no issuer URL configured"))
-	}
-	if sa.Subject == "" {
-		return errutil.Fixable(fmt.Errorf("service account has no subject configured"))
-	}
-	if sa.Audience == "" {
-		return errutil.Fixable(fmt.Errorf("service account has no audience configured"))
-	}
 
 	validity := 2 * time.Hour
 	jwtString, err := signWIFJWT(privKey, kid, sa.IssuerURL, sa.Subject, sa.Audience, validity)
