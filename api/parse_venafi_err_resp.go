@@ -3,32 +3,27 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
-
-	"github.com/maelvls/vcpctl/errutil"
 )
 
-// Use errors.Is(err, APIKeyInvalid{}) to check if the error is due to the API
-// key having a problem.
-var APIKeyInvalid = errors.New("API key is invalid")
-
-func ParseJSONErrorOrDumpBody(resp *http.Response) error {
-	body, _ := io.ReadAll(resp.Body)
+// Returns a VenafiError if it can be parsed from the JSON body, or a generic
+// error containing the raw body otherwise. err.Error() might be empty if the
+// body is empty!
+func ErrFromJSONBody(body io.Reader) error {
+	bodyBytes, _ := io.ReadAll(body)
 
 	// For some reason, CyberArk Certificate Manager, SaaS returns a plain text
 	// error message when the API key is invalid.
-	if resp.Header.Get("Content-Type") == "text/plain" && bytes.Equal(body, []byte("Invalid api key")) {
-		return errutil.Fixable(APIKeyInvalid)
+	if bytes.Equal(bodyBytes, []byte("Invalid api key")) {
+		return fmt.Errorf("%s", bodyBytes)
 	}
 
 	var v VenafiError
-	err := json.Unmarshal(body, &v)
+	err := json.Unmarshal(bodyBytes, &v)
 	if err != nil {
-		return fmt.Errorf("unexpected error: '%s'", string(body))
+		return fmt.Errorf("%s", string(bodyBytes))
 	}
 
 	return v

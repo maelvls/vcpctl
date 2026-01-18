@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	_ "embed"
-	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/fang"
+	"github.com/charmbracelet/x/term"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/logutil"
@@ -82,18 +83,53 @@ func main() {
 		policyCmd(),
 	)
 
-	rootCmd.AddCommand(ophis.Command(nil))
+	rootCmd.AddCommand(ophis.Command(&ophis.Config{}))
 
 	ctx := context.Background()
-	err := fang.Execute(ctx, rootCmd)
+	err := fang.Execute(
+		ctx,
+		rootCmd,
+		fang.WithErrorHandler(errHandler),
+		fang.WithNotifySignal(os.Interrupt, os.Kill),
+	)
 	switch {
-	case errors.Is(err, api.APIKeyInvalid):
-		logutil.Errorf("API key is invalid, try logging in again with:\n  vcpctl auth login\n")
-		os.Exit(1)
 	case err != nil:
-		logutil.Errorf("%v", err)
 		os.Exit(1)
 	}
+}
+
+func errHandler(w io.Writer, styles fang.Styles, err error) {
+	// If stderr is not a tty, simply print the error without any styling. That
+	// way, it is still possible to parse error messages in scripts.
+	if w, ok := w.(term.File); ok {
+		if !term.IsTerminal(w.Fd()) {
+			_, _ = fmt.Fprintln(w, err.Error())
+			return
+		}
+	}
+
+	// Handle multiline error messages by processing each line separately to
+	// preserve the transform while maintaining line breaks.
+	errStr := err.Error()
+	noTransform := styles.ErrorText.UnsetTransform()
+	var errMsgLines []string
+	for i, line := range strings.Split(errStr, "\n") {
+		if line == "" {
+			errMsgLines = append(errMsgLines, "")
+			continue
+		}
+		if i > 0 {
+			errMsgLines = append(errMsgLines, noTransform.Render(line))
+			continue
+		}
+		errMsgLines = append(errMsgLines, styles.ErrorText.Render(line))
+	}
+	errMsgRendered := strings.Join(errMsgLines, "\n")
+
+	styles.ErrorText.Inline(true).PaddingLeft(0)
+	_, _ = fmt.Fprintln(w, styles.ErrorHeader.String())
+	_, _ = fmt.Fprintln(w, errMsgRendered)
+	_, _ = fmt.Fprintln(w)
 }
 
 func saResolver(svcAccts []api.ServiceAccountDetails) func(id openapi_types.UUID) (api.ServiceAccountDetails, error) {

@@ -26,13 +26,13 @@ func attachSaCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("attach-sa: expected a single argument (the WIM configuration name), got %s", args)
+				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)
 			}
 			confName := args[0]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("attach-sa: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
@@ -40,7 +40,7 @@ func attachSaCmd() *cobra.Command {
 			}
 			err = api.AttachSAToConf(context.Background(), apiClient, confName, saName)
 			if err != nil {
-				return fmt.Errorf("attach-sa: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			return nil

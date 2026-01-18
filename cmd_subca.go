@@ -51,7 +51,7 @@ func subcaLsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("subca ls: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
@@ -59,7 +59,7 @@ func subcaLsCmd() *cobra.Command {
 			}
 			providers, err := api.GetSubCAProviders(context.Background(), apiClient)
 			if err != nil {
-				return fmt.Errorf("subca ls: while listing subCA providers: %w", err)
+				return fmt.Errorf("while listing subCA providers: %w", err)
 			}
 
 			var rows [][]string

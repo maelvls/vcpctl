@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -12,22 +13,45 @@ type HTTPError struct {
 
 	Status     string
 	StatusCode int
-	Body       string
+
+	Resp *http.Response
 }
 
-// Body must not have been read yet.
-func HTTPErrorf(resp *http.Response, format string, values ...any) error {
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("while reading response body: %w", err)
-	}
-
+// Body must not have been read yet. The return error looks like this:
+//
+// When the response body is empty, we just show the status:
+//
+//	HTTP 401 Unauthorized
+//
+// When the response body is JSON but can't be parsed as VenafiError:
+//
+//	HTTP 400 Bad Request: {"unexpected":"error message"}
+//
+// When the response body isn't JSON (e.g., because some middle proxy returned
+// some HTML instead), we just show it as is:
+//
+//	HTTP 500 Internal Server Error: <html>Gateway Error</html>
+func HTTPErrorFrom(resp *http.Response) error {
+	original := resp.Body
+	copy := &bytes.Buffer{}
+	resp.Body = io.NopCloser(copy)
 	return HTTPError{
-		Err:        fmt.Errorf(format, values...),
 		Status:     resp.Status,
 		StatusCode: resp.StatusCode,
-		Body:       string(body),
+		Err:        ErrFromJSONBody(io.TeeReader(original, copy)),
+		Resp:       resp,
 	}
+}
+
+func (e HTTPError) Error() string {
+	if e.Err.Error() == "" {
+		return fmt.Sprintf("HTTP %s", e.Status)
+	}
+	return fmt.Sprintf("HTTP %s: %s", e.Status, e.Err.Error())
+}
+
+func (e HTTPError) Unwrap() error {
+	return e.Err
 }
 
 func ErrIsHTTPBadRequest(err error) bool {
@@ -38,6 +62,10 @@ func ErrIsHTTPBadRequest(err error) bool {
 	return false
 }
 
-func (e HTTPError) Error() string {
-	return e.Err.Error()
+func ErrIsHTTPUnauthorized(err error) bool {
+	var httpErr HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusUnauthorized
+	}
+	return false
 }

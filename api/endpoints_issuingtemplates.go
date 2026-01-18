@@ -13,7 +13,7 @@ import (
 func GetIssuingTemplates(ctx context.Context, cl *Client) ([]CertificateIssuingTemplateInformation1, error) {
 	resp, err := cl.CertificateissuingtemplateGetAll(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("getIssuingTemplates: while making request: %w", err)
+		return nil, fmt.Errorf("while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -21,12 +21,12 @@ func GetIssuingTemplates(ctx context.Context, cl *Client) ([]CertificateIssuingT
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, HTTPErrorf(resp, "got http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("getIssuingTemplates: while reading response body: %w", err)
+		return nil, fmt.Errorf("while reading response body: %w", err)
 	}
 
 	var result struct {
@@ -34,7 +34,7 @@ func GetIssuingTemplates(ctx context.Context, cl *Client) ([]CertificateIssuingT
 	}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return nil, fmt.Errorf("getIssuingTemplates: while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
+		return nil, fmt.Errorf("while decoding %s response: %w, body was: %s", resp.Status, err, string(body))
 	}
 
 	return result.CertificateIssuingTemplates, nil

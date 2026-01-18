@@ -24,7 +24,7 @@ func GetPolicies(ctx context.Context, cl *Client) ([]ExtendedPolicyInformation, 
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, ParseJSONErrorOrDumpBody(resp)
+		return nil, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -88,7 +88,7 @@ func GetPolicyByID(ctx context.Context, cl *Client, id string) (ExtendedPolicyIn
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return ExtendedPolicyInformation{}, HTTPErrorf(resp, "GetPolicyByID: returned status code %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return ExtendedPolicyInformation{}, HTTPErrorFrom(resp)
 	}
 	var result ExtendedPolicyInformation
 	body, err := io.ReadAll(resp.Body)
@@ -113,7 +113,7 @@ func CreatePolicy(ctx context.Context, cl *Client, policy PolicyCreateRequest) (
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return ExtendedPolicyInformation{}, HTTPErrorf(resp, "CreatePolicy: returned status code %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return ExtendedPolicyInformation{}, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -150,7 +150,7 @@ func PatchPolicy(ctx context.Context, cl *Client, id string, patch PolicyUpdateR
 	case http.StatusNotFound:
 		return ExtendedPolicyInformation{}, fmt.Errorf("Workload Identity Manager policy: %w", errutil.NotFound{NameOrID: id})
 	default:
-		return ExtendedPolicyInformation{}, HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return ExtendedPolicyInformation{}, HTTPErrorFrom(resp)
 	}
 }
 
@@ -172,7 +172,7 @@ func RemovePolicy(ctx context.Context, cl *Client, policyName string) error {
 		// Successfully removed.
 		return nil
 	default:
-		return HTTPErrorf(resp, "RemovePolicy: http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return HTTPErrorFrom(resp)
 	}
 }
 

@@ -24,7 +24,7 @@ func GetAPIURLFromTenantURL(cl http.Client, tenantURL string) (string, error) {
 	case http.StatusNotFound:
 		return "", errutil.NotFound{NameOrID: tenantURL}
 	default:
-		return "", fmt.Errorf("unexpected status code %d while getting API URL for tenant '%s': %w", resp.StatusCode, tenantURL, ParseJSONErrorOrDumpBody(resp))
+		return "", HTTPErrorFrom(resp)
 	}
 
 	var respJSON struct {

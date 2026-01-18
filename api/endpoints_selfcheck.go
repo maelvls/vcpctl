@@ -19,11 +19,11 @@ func SelfCheck(ctx context.Context, cl *Client) (UserAccountResponse, error) {
 	case http.StatusOK:
 	// The request was successful, the token is valid. Continue below.
 	case http.StatusUnauthorized:
-		return UserAccountResponse{}, HTTPErrorf(resp, "please check your API key")
+		return UserAccountResponse{}, HTTPErrorFrom(resp)
 	case http.StatusForbidden:
-		return UserAccountResponse{}, HTTPErrorf(resp, "please check your API key and permissions")
+		return UserAccountResponse{}, HTTPErrorFrom(resp)
 	default:
-		return UserAccountResponse{}, HTTPErrorf(resp, "while checking API key, got unexpected http %s", resp.Status)
+		return UserAccountResponse{}, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)

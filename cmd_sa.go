@@ -537,11 +537,11 @@ func saGetCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa get: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			if len(args) != 1 {
-				return fmt.Errorf("sa get: expected a single argument (the service account name), got: %s", args)
+				return fmt.Errorf("expected a single argument (the service account name), got: %s", args)
 			}
 
 			saName := args[0]
@@ -553,20 +553,20 @@ func saGetCmd() *cobra.Command {
 			sa, err := api.GetServiceAccount(context.Background(), apiClient, saName)
 			if err != nil {
 				if errutil.ErrIsNotFound(err) {
-					return fmt.Errorf("sa get: service account '%s' not found", saName)
+					return fmt.Errorf("service account '%s' not found", saName)
 				}
-				return fmt.Errorf("sa get: while getting service account by name: %w", err)
+				return fmt.Errorf("while getting service account by name: %w", err)
 			}
 
 			if sa.Id.String() == "" {
-				return fmt.Errorf("sa get: service account '%s' has no client ID", saName)
+				return fmt.Errorf("service account '%s' has no client ID", saName)
 			}
 
 			switch format {
 			case "yaml":
 				bytes, err := yaml.Marshal(sa)
 				if err != nil {
-					return fmt.Errorf("sa get: while marshaling service account to YAML: %w", err)
+					return fmt.Errorf("while marshaling service account to YAML: %w", err)
 				}
 				coloredYAMLPrint(string(bytes) + "\n") // Not sure why '\n' is needed, but it is.
 				return nil
@@ -576,12 +576,12 @@ func saGetCmd() *cobra.Command {
 			case "json":
 				data, err := json.Marshal(sa)
 				if err != nil {
-					return fmt.Errorf("sa get: while marshaling service account to JSON: %w", err)
+					return fmt.Errorf("while marshaling service account to JSON: %w", err)
 				}
 				fmt.Println(string(data))
 				return nil
 			default:
-				return fmt.Errorf("sa get: unknown output format: %s", format)
+				return fmt.Errorf("unknown output format: %s", format)
 			}
 		},
 	}
@@ -670,13 +670,13 @@ func saRmCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if interactive {
 				if len(args) > 0 {
-					return fmt.Errorf("sa rm -i: expected no arguments when using --interactive, got %s", args)
+					return fmt.Errorf("expected no arguments when using --interactive, got %s", args)
 				}
 				// In interactive mode, we will list the service accounts and let the user
 				// select one to remove.
 				conf, err := getToolConfig(cmd)
 				if err != nil {
-					return fmt.Errorf("sa rm -i: %w", err)
+					return fmt.Errorf("%w", err)
 				}
 				apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 				if err != nil {
@@ -684,7 +684,7 @@ func saRmCmd() *cobra.Command {
 				}
 				svcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
 				if err != nil {
-					return fmt.Errorf("sa rm -i: while listing service accounts: %w", err)
+					return fmt.Errorf("while listing service accounts: %w", err)
 				}
 
 				// Use a simple prompt to select the service account to remove.
@@ -692,7 +692,7 @@ func saRmCmd() *cobra.Command {
 				for _, saID := range selected {
 					err = api.RemoveServiceAccount(context.Background(), apiClient, saID)
 					if err != nil {
-						return fmt.Errorf("sa rm -i: while removing service account '%s': %w", saID, err)
+						return fmt.Errorf("while removing service account '%s': %w", saID, err)
 					}
 				}
 

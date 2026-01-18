@@ -46,7 +46,7 @@ func confLsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("ls: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
@@ -55,12 +55,12 @@ func confLsCmd() *cobra.Command {
 			}
 			confs, err := api.GetConfigs(context.Background(), apiClient)
 			if err != nil {
-				return fmt.Errorf("ls: while listing configurations: %w", err)
+				return fmt.Errorf("while listing configurations: %w", err)
 			}
 
 			knownSvcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
 			if err != nil {
-				return fmt.Errorf("ls: fetching service accounts: %w", err)
+				return fmt.Errorf("fetching service accounts: %w", err)
 			}
 
 			saByID := make(map[string]api.ServiceAccountDetails)
@@ -143,27 +143,27 @@ func confGetCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("get: expected a single argument (the WIM configuration name), got %s", args)
+				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)
 			}
 			idOrName := args[0]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("get: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
-				return fmt.Errorf("get: while creating API client: %w", err)
+				return fmt.Errorf("while creating API client: %w", err)
 			}
 
 			knownSvcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
 			if err != nil {
-				return fmt.Errorf("get: while fetching service accounts: %w", err)
+				return fmt.Errorf("while fetching service accounts: %w", err)
 			}
 
 			config, err := api.GetConfig(context.Background(), apiClient, idOrName)
 			if err != nil {
-				return fmt.Errorf("get: while getting original Workload Identity Manager configuration: %w", err)
+				return fmt.Errorf("while getting original Workload Identity Manager configuration: %w", err)
 			}
 
 			issuingTemplates, err := api.GetIssuingTemplates(context.Background(), apiClient)
@@ -198,7 +198,7 @@ func confGetCmd() *cobra.Command {
 
 			schemaFile, err := api.SaveSchemaToWellKnownPath()
 			if err != nil {
-				return fmt.Errorf("get: while saving schema.json to disk so that YAML can reference it: %w", err)
+				return fmt.Errorf("while saving schema.json to disk so that YAML can reference it: %w", err)
 			}
 
 			yamlData = appendSchemaComment(yamlData, schemaFile)
@@ -229,30 +229,30 @@ func confRmCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected a single argument (the WIM configuration name or ID), got %s", args)
+				return fmt.Errorf("expected a single argument (the WIM configuration name or ID), got %s", args)
 			}
 			nameOrID := args[0]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("rm: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 			if err != nil {
-				return fmt.Errorf("rm: while creating API client: %w", err)
+				return fmt.Errorf("while creating API client: %w", err)
 			}
 			// Get the configuration by name or ID.
 			c, err := api.GetConfig(context.Background(), apiClient, nameOrID)
 			if err != nil {
 				if errors.As(err, &errutil.NotFound{}) {
-					return fmt.Errorf("rm: Workload Identity Manager configuration '%s' not found", nameOrID)
+					return fmt.Errorf("Workload Identity Manager configuration '%s' not found", nameOrID)
 				}
-				return fmt.Errorf("rm: while getting Workload Identity Manager configuration by name or ID '%s': %w", nameOrID, err)
+				return fmt.Errorf("while getting Workload Identity Manager configuration by name or ID '%s': %w", nameOrID, err)
 			}
 			// Remove the configuration.
 			err = api.RemoveConfig(context.Background(), apiClient, c.Id.String())
 			if err != nil {
-				return fmt.Errorf("rm: while removing Workload Identity Manager configuration '%s': %w", nameOrID, err)
+				return fmt.Errorf("while removing Workload Identity Manager configuration '%s': %w", nameOrID, err)
 			}
 			logutil.Debugf("Workload Identity Manager configuration '%s' removed successfully.", nameOrID)
 			return nil

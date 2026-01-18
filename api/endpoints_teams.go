@@ -10,7 +10,7 @@ import (
 func GetTeams(ctx context.Context, cl *Client) ([]TeamInformation, error) {
 	resp, err := cl.TeamsGetAll(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getTeams: while making request: %w", err)
+		return nil, fmt.Errorf("while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -18,14 +18,14 @@ func GetTeams(ctx context.Context, cl *Client) ([]TeamInformation, error) {
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, HTTPErrorf(resp, "getTeams: got http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorFrom(resp)
 	}
 
 	var result struct {
 		Teams []TeamInformation `json:"teams"`
 	}
 	if err := decodeJSON(resp.Body, &result); err != nil {
-		return nil, fmt.Errorf("getTeams: while decoding response: %w", err)
+		return nil, fmt.Errorf("while decoding response: %w", err)
 	}
 	return result.Teams, nil
 }

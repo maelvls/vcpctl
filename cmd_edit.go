@@ -221,17 +221,17 @@ var ErrPINRequired = errutil.Fixable(fmt.Errorf("subCaProvider.pkcs11.pin is req
 func genECKeyPair() (string, string, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", "", fmt.Errorf("genECKeyPair: while generating EC key pair: %w", err)
+		return "", "", fmt.Errorf("while generating EC key pair: %w", err)
 	}
 
 	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
-		return "", "", fmt.Errorf("genECKeyPair: while marshalling private key: %w", err)
+		return "", "", fmt.Errorf("while marshalling private key: %w", err)
 	}
 
 	pubBytes, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
 	if err != nil {
-		return "", "", fmt.Errorf("genECKeyPair: while marshalling public key: %w", err)
+		return "", "", fmt.Errorf("while marshalling public key: %w", err)
 	}
 
 	privPEM := pem.EncodeToMemory(&pem.Block{

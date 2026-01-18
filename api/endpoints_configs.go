@@ -27,7 +27,7 @@ func GetConfigs(ctx context.Context, cl *Client) ([]ExtendedConfigurationInforma
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return nil, HTTPErrorf(resp, "getConfigs: returned status code %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorFrom(resp)
 	}
 	var result struct {
 		Configurations []ExtendedConfigurationInformation `json:"configurations"`
@@ -90,7 +90,7 @@ func GetConfigByID(ctx context.Context, cl *Client, id string) (ExtendedConfigur
 	case http.StatusOK:
 		// Continue below.
 	default:
-		return ExtendedConfigurationInformation{}, HTTPErrorf(resp, "getConfig: returned status code %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return ExtendedConfigurationInformation{}, HTTPErrorFrom(resp)
 	}
 
 	var result ExtendedConfigurationInformation
@@ -113,7 +113,7 @@ func CreateConfig(ctx context.Context, cl *Client, config ConfigurationCreateReq
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return ExtendedConfigurationInformation{}, HTTPErrorf(resp, "createConfig: got http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return ExtendedConfigurationInformation{}, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -144,7 +144,7 @@ func PatchConfig(ctx context.Context, cl *Client, id string, patch Configuration
 	case http.StatusNotFound:
 		return ExtendedConfigurationInformation{}, fmt.Errorf("WIM configuration: %w", errutil.NotFound{NameOrID: id})
 	default:
-		return ExtendedConfigurationInformation{}, HTTPErrorf(resp, "patchConfig: unexpected http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return ExtendedConfigurationInformation{}, HTTPErrorFrom(resp)
 	}
 
 	body := new(bytes.Buffer)
@@ -185,7 +185,7 @@ func RemoveConfig(ctx context.Context, cl *Client, nameOrID string) error {
 	case http.StatusNotFound:
 		return &errutil.NotFound{NameOrID: nameOrID}
 	default:
-		return HTTPErrorf(resp, "removeConfig: returned status code %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return HTTPErrorFrom(resp)
 	}
 }
 

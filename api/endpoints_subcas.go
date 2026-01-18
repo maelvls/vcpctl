@@ -24,7 +24,7 @@ func GetSubCAProviders(ctx context.Context, cl *Client) ([]SubCaProviderInformat
 	case http.StatusOK:
 		// Continue.
 	default:
-		return nil, HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorFrom(resp)
 	}
 
 	var result struct {
@@ -50,7 +50,7 @@ func GetSubCAProvider(ctx context.Context, cl *Client, nameOrID string) (SubCaPr
 
 	resp, err := cl.SubcaproviderGetAll(ctx)
 	if err != nil {
-		return SubCaProviderInformation{}, fmt.Errorf("getSubCa: while making request: %w", err)
+		return SubCaProviderInformation{}, fmt.Errorf("while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -58,14 +58,14 @@ func GetSubCAProvider(ctx context.Context, cl *Client, nameOrID string) (SubCaPr
 	case http.StatusOK:
 		// Continue.
 	default:
-		return SubCaProviderInformation{}, HTTPErrorf(resp, "getSubCa: returned status code %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return SubCaProviderInformation{}, HTTPErrorFrom(resp)
 	}
 
 	var result struct {
 		SubCaProviders []SubCaProviderInformation `json:"subCaProviders"`
 	}
 	if err := decodeJSON(resp.Body, &result); err != nil {
-		return SubCaProviderInformation{}, fmt.Errorf("getSubCa: while decoding response: %w", err)
+		return SubCaProviderInformation{}, fmt.Errorf("while decoding response: %w", err)
 	}
 
 	// Error out if a duplicate name is found.
@@ -84,7 +84,7 @@ func GetSubCAProvider(ctx context.Context, cl *Client, nameOrID string) (SubCaPr
 			_, _ = b.WriteString(fmt.Sprintf("- %s (%s)\n", cur.Name, cur.Id.String()))
 		}
 		return SubCaProviderInformation{}, fmt.Errorf(undent.Undent(`
-			getSubCa: duplicate sub CAs found with name '%s':
+			duplicate sub CAs found with name '%s':
 			%s
 			Either use the subCA ID instead of the name, or remove one of the
 			subCAs first with:
@@ -105,7 +105,7 @@ func GetSubCAByID(ctx context.Context, cl *Client, id string) (SubCaProviderInfo
 	case http.StatusNotFound:
 		return SubCaProviderInformation{}, &errutil.NotFound{NameOrID: id}
 	default:
-		return SubCaProviderInformation{}, HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return SubCaProviderInformation{}, HTTPErrorFrom(resp)
 	}
 
 	var result SubCaProviderInformation
@@ -133,7 +133,7 @@ func CreateSubCAProvider(ctx context.Context, cl *Client, provider SubCaProvider
 	case http.StatusCreated, http.StatusOK:
 		// Continue below.
 	default:
-		return SubCaProviderInformation{}, HTTPErrorf(resp, "createSubCaProvider: returned status code %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return SubCaProviderInformation{}, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -168,7 +168,7 @@ func PatchSubCAProvider(ctx context.Context, cl *Client, id string, patch SubCaP
 	case http.StatusNotFound:
 		return SubCaProviderInformation{}, fmt.Errorf("WIMSubCAProvider: %w", errutil.NotFound{NameOrID: id})
 	default:
-		return SubCaProviderInformation{}, HTTPErrorf(resp, "patchSubCaProvider: http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return SubCaProviderInformation{}, HTTPErrorFrom(resp)
 	}
 }
 
@@ -199,7 +199,7 @@ func RemoveSubCaProviderByID(ctx context.Context, cl *Client, id string) error {
 		// Successfully removed.
 		return nil
 	default:
-		return HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return HTTPErrorFrom(resp)
 	}
 }
 

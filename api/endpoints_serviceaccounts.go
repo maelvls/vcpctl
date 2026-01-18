@@ -27,8 +27,12 @@ func GetServiceAccounts(ctx context.Context, cl *Client) ([]ServiceAccountDetail
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// The request was successful. Continue below to decode the response.
+	case http.StatusUnauthorized:
+		return nil, HTTPErrorFrom(resp)
+	case http.StatusForbidden:
+		return nil, HTTPErrorFrom(resp)
 	default:
-		return nil, HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorFrom(resp)
 	}
 
 	body := new(bytes.Buffer)
@@ -47,7 +51,7 @@ func GetServiceAccounts(ctx context.Context, cl *Client) ([]ServiceAccountDetail
 func GetServiceAccountScopes(ctx context.Context, cl *Client) ([]ScopeDetails, error) {
 	resp, err := cl.GetV1Serviceaccountscopes(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getServiceAccountScopes: while making request: %w", err)
+		return nil, fmt.Errorf("while making request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -55,17 +59,17 @@ func GetServiceAccountScopes(ctx context.Context, cl *Client) ([]ScopeDetails, e
 	case http.StatusOK:
 		// The request was successful. Continue below to decode the response.
 	default:
-		return nil, HTTPErrorf(resp, "getServiceAccountScopes: http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return nil, HTTPErrorFrom(resp)
 	}
 
 	body := new(bytes.Buffer)
 	if _, err := io.Copy(body, resp.Body); err != nil {
-		return nil, fmt.Errorf("getServiceAccountScopes: while reading response body: %w", err)
+		return nil, fmt.Errorf("while reading response body: %w", err)
 	}
 
 	var result []ScopeDetails
 	if err := json.Unmarshal(body.Bytes(), &result); err != nil {
-		return nil, fmt.Errorf("getServiceAccountScopes: while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
+		return nil, fmt.Errorf("while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
 	}
 
 	return result, nil
@@ -78,7 +82,7 @@ func GetServiceAccount(ctx context.Context, cl *Client, nameOrID string) (Servic
 
 	sas, err := GetServiceAccounts(ctx, cl)
 	if err != nil {
-		return ServiceAccountDetails{}, fmt.Errorf("getServiceAccount: while getting service accounts: %w", err)
+		return ServiceAccountDetails{}, fmt.Errorf("while getting service accounts: %w", err)
 	}
 
 	// Error out if a duplicate service account name is found.
@@ -103,7 +107,7 @@ func GetServiceAccount(ctx context.Context, cl *Client, nameOrID string) (Servic
 		_, _ = b.WriteString(fmt.Sprintf("  - %s (%s)\n", sa.Name, sa.Id))
 	}
 	return ServiceAccountDetails{}, fmt.Errorf(undent.Undent(`
-		getServiceAccount: duplicate service account name '%s' found.
+		duplicate service account name '%s' found.
 		The conflicting service accounts are:
 		%s
 		Please use a client ID (that's the same as the service account ID), or
@@ -127,7 +131,7 @@ func GetServiceAccountByID(ctx context.Context, cl *Client, id string) (ServiceA
 	case http.StatusOK:
 		// The request was successful. Continue below to decode the response.
 	default:
-		return ServiceAccountDetails{}, HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return ServiceAccountDetails{}, HTTPErrorFrom(resp)
 	}
 
 	var result ServiceAccountDetails
@@ -167,7 +171,7 @@ func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccoun
 	case http.StatusConflict:
 		return CreateServiceAccountResponseBody{}, fmt.Errorf("service account with the same name already exists, please choose a different name")
 	default:
-		return CreateServiceAccountResponseBody{}, HTTPErrorf(resp, "http %s: please check the Status account fields: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return CreateServiceAccountResponseBody{}, HTTPErrorFrom(resp)
 	}
 
 	var result CreateServiceAccountResponseBody
@@ -196,7 +200,7 @@ func PatchServiceAccount(ctx context.Context, cl *Client, id string, patch Patch
 	case http.StatusNotFound:
 		return fmt.Errorf("service account: %w", errutil.NotFound{NameOrID: id})
 	default:
-		return HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return HTTPErrorFrom(resp)
 	}
 
 	return nil
@@ -234,7 +238,7 @@ func RemoveServiceAccount(ctx context.Context, cl *Client, nameOrID string) erro
 		// The deletion was successful.
 		return nil
 	default:
-		return HTTPErrorf(resp, "http %s: %w", resp.Status, ParseJSONErrorOrDumpBody(resp))
+		return HTTPErrorFrom(resp)
 	}
 }
 
