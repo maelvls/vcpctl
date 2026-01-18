@@ -522,19 +522,26 @@ func saGetCmd() *cobra.Command {
 	var format string
 	var raw bool
 	cmd := &cobra.Command{
-		Use:   "get <sa-name>",
-		Short: "Get the information about an existing Service Account",
+		Use:   "get <sa-name-or-id>",
+		Short: "Get the information about an existing Service Account using its name or ID",
 		Long: undent.Undent(`
 			Get the Service Account's details. By default, displays the service
 			account as a manifest.ServiceAccount. Use --raw to display the raw
 			API response. You can use -o clientid to only display the client ID
 			of the Service Account.
+
+			Note that the 'client ID' of a service account is the same as its ID,
+			which means these two commands are equivalent:
+
+			  vcpctl sa get <sa-name> -oid
+			  vcpctl sa get <sa-name> -oclientid
 		`),
 		Example: undent.Undent(`
-			vcpctl sa get <sa-name>
-			vcpctl sa get <sa-name> --raw
-			vcpctl sa get <sa-name> -o json
-			vcpctl sa get <sa-name> -o clientid
+			vcpctl sa get <sa-name-or-id>
+			vcpctl sa get <sa-name-or-id> --raw
+			vcpctl sa get <sa-name-or-id> -o json
+			vcpctl sa get <sa-name-or-id> -o id
+			vcpctl sa get <sa-name-or-id> -o clientid
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -586,6 +593,9 @@ func saGetCmd() *cobra.Command {
 				coloredYAMLPrint(string(bytes) + "\n") // Not sure why '\n' is needed, but it is.
 				return nil
 			case "id":
+				fmt.Println(sa.Id.String())
+				return nil
+			case "clientid":
 				fmt.Println(sa.Id.String())
 				return nil
 			case "json":
