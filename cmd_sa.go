@@ -180,8 +180,10 @@ func saGenkeypairCmd() *cobra.Command {
 			JSON format in a venctl-compatible format that looks like this:
 
 			  {
-					"client_id": "123e4567-e89b-12d3-a456-426614174000",
-					"private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+			    "type": "rsaKey",
+			    "api_url": "https://api.venafi.cloud",
+			    "client_id": "123e4567-e89b-12d3-a456-426614174000",
+			    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 			  }
 		`),
 		Example: undent.Undent(`
@@ -258,9 +260,11 @@ func saGenkeypairCmd() *cobra.Command {
 				fmt.Println(ecKey)
 			case "json":
 				bytes, err := marshalIndent(struct {
+					Type       string `json:"type"`
 					ClientID   string `json:"client_id"`
 					PrivateKey string `json:"private_key"`
-				}{ClientID: existingSA.Id.String(), PrivateKey: ecKey}, "", "  ")
+					APIURL     string `json:"api_url"`
+				}{Type: "rsaKey", ClientID: existingSA.Id.String(), PrivateKey: ecKey, APIURL: conf.APIURL}, "", "  ")
 				if err != nil {
 					return fmt.Errorf("while marshaling JSON: %w", err)
 				}
@@ -295,9 +299,10 @@ func saGenWifCmd() *cobra.Command {
 			With '-ojson', the output looks like:
 
 			  {
+			    "type": "rsaKeyFederated",
 			    "client_id": "b4dd2b31-f473-11f0-aa2c-f69f144f25db",
 			    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-			    "api_url": "api.venafi.cloud"
+			    "api_url": "https://api.venafi.cloud"
 			  }
 		`),
 		Example: undent.Undent(`
@@ -450,13 +455,17 @@ func saGenWifCmd() *cobra.Command {
 			switch outputFormat {
 			case "json":
 				output := struct {
+					Type       string `json:"type"`
 					ClientID   string `json:"client_id"`
 					PrivateKey string `json:"private_key"`
 					APIURL     string `json:"api_url"`
+					JWKSURL    string `json:"jwks_url"`
 				}{
+					Type:       "rsaKeyFederated",
 					ClientID:   clientID,
 					PrivateKey: privKeyPEM,
-					APIURL:     strings.TrimPrefix(strings.TrimPrefix(conf.APIURL, "https://"), "http://"),
+					APIURL:     conf.APIURL,
+					JWKSURL:    jwksURL,
 				}
 
 				bytes, err := marshalIndent(output, "", "  ")

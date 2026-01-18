@@ -24,8 +24,10 @@ import (
 )
 
 type serviceAccountKeyInput struct {
+	Type       string `json:"type"`
 	ClientID   string `json:"client_id"`
 	PrivateKey string `json:"private_key"`
+	APIURL     string `json:"api_url"`
 }
 
 type serviceAccountTokenResponse struct {
@@ -136,6 +138,9 @@ func readServiceAccountKeyInput(path string) (serviceAccountKeyInput, error) {
 	}
 	if input.PrivateKey == "" {
 		return serviceAccountKeyInput{}, errutil.Fixable(fmt.Errorf("missing 'private_key'"))
+	}
+	if input.APIURL == "" {
+		return serviceAccountKeyInput{}, errutil.Fixable(fmt.Errorf("missing 'api_url'"))
 	}
 
 	return input, nil

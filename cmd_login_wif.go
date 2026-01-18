@@ -198,9 +198,11 @@ func uploadJWKS0x0(jwks []byte) (string, error) {
 }
 
 type wifJSONInput struct {
+	Type       string `json:"type"`
 	ClientID   string `json:"client_id"`
 	PrivateKey string `json:"private_key"`
 	APIURL     string `json:"api_url"`
+	JWKSURL    string `json:"jwks_url"`
 }
 
 func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) error {
