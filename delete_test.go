@@ -113,5 +113,5 @@ func runDeleteTest(t *testing.T, givenManifests string, mock []mocksrv.Interacti
 	cl, err := api.NewClient(srv.URL)
 	require.NoError(t, err)
 
-	return deleteManifests(cl, manifests, ignoreNotFound)
+	return deleteManifests(context.Background(), cl, manifests, ignoreNotFound)
 }

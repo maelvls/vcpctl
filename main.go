@@ -23,7 +23,7 @@ import (
 
 // Replace the old flag-based main() with cobra execution.
 func main() {
-	var apiURLFlag, apiKeyFlag, tenantFlag string
+	var apiURLFlag, apiKeyFlag, contextFlag string
 	rootCmd := &cobra.Command{
 		Use:   "vcpctl",
 		Short: "CLI tool for managing WIM (formerly Firefly) configs in CyberArk Certificate Manager, SaaS",
@@ -59,13 +59,14 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set VEN_API_URL. Flag takes precedence. When using this flag, the configuration file is not used.")
 	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given CyberArk Certificate Manager, SaaS API key. You can also set VEN_API_KEY. Flag takes precedence. When using this flag, the configuration file is not used.")
-	rootCmd.PersistentFlags().StringVar(&tenantFlag, "tenant", "", "Switch to the given tenant for this command. Accepts tenant ID (UUID), UI URL (domain or full URL). Overrides the current tenant in the config file.")
+	rootCmd.PersistentFlags().StringVar(&contextFlag, "context", "", "Switch to the given context for this command. Accepts context name, tenant ID (UUID), UI URL (domain or full URL). Overrides the current context in the config file.")
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebugHTTP, "debug-http", false, "Enable HTTP request/response logging (set to 'true' to enable)")
 	rootCmd.AddCommand(
 		loginCmd(),
-		switchCmd(),
+		useContextCmd(),
+		switchCmd(), // deprecated alias for use-context
 		tenantidCmd(),
 		apikeyCmd(),
 		apiurlCmd(),

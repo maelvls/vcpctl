@@ -24,28 +24,34 @@ import (
 // This CLI stores its authentication information in ~/.config/vcpctl.yaml.
 const configPath = ".config/vcpctl.yaml"
 
+// FileConf is inspired by kubectl's ~/.kube/config structure
 type FileConf struct {
-	CurrentURL string `json:"currentURL"` // Corresponds to the UI URL of the current tenant.
-	Auths      []Auth `json:"auths"`
+	CurrentContext string        `yaml:"current-context"`
+	ToolContexts   []ToolContext `yaml:"contexts"`
 }
 
-type Auth struct {
-	TenantURL          string `json:"url,omitzero"`                // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
-	TenantID           string `json:"tenantID,omitzero"`           // The tenant ID (company ID).
-	APIURL             string `json:"apiURL,omitzero"`             // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+type ToolContext struct {
+	Name string `yaml:"name"` // Derived from tenant URL domain with numeric suffix
+
+	TenantID  string `json:"tenantID,omitzero"` // The tenant ID (company ID).
+	TenantURL string `yaml:"url"`               // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	APIURL    string `json:"apiURL,omitzero"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+
 	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey"
 
-	// Type "apiKey"
+	// For the type "apiKey".
 	APIKey string `json:"apiKey,omitzero"`
 
-	// Type "rsaKeyFederated" and "rsaKey"
-	ClientID    string `json:"clientID,omitzero"`    // For sa-wif and sa-keypair.
-	PrivateKey  string `json:"privateKey,omitzero"`  // For sa-wif and sa-keypair.
-	AccessToken string `json:"accessToken,omitzero"` // For sa-wif and sa-keypair.
+	// For the types "rsaKeyFederated" and "rsaKey".
+	AccessToken string `json:"accessToken,omitzero"`
+	PrivateKey  string `json:"privateKey,omitzero"`
 
-	// Type "rsaKeyFederated" only
-	WIFPrivateKey string `json:"wifPrivateKey,omitzero"` // For sa-wif.
+	// For the type "rsaKeyFederated".
+	ClientID string `json:"clientID,omitzero"`
 }
+
+// Legacy type for backward compatibility during migration (not used in new code)
+type Auth = ToolContext
 
 // Styles for prompts.
 var (
@@ -590,10 +596,10 @@ func tenantidCmd() *cobra.Command {
 			envAPIKey := os.Getenv("VEN_API_KEY")
 			flagAPIURL, _ := cmd.Flags().GetString("api-url")
 			flagAPIKey, _ := cmd.Flags().GetString("api-key")
-			flagTenant, _ := cmd.Flags().GetString("tenant")
+			flagContext, _ := cmd.Flags().GetString("context")
 
-			if envAPIKey != "" || flagAPIKey != "" || envAPIURL != "" || flagAPIURL != "" || flagTenant != "" {
-				logutil.Debugf("$VEN_API_URL, $VEN_API_KEY, --api-url, --api-key, or --tenant has been passed but will be ignored. This command only prints the tenant ID from the configuration file at %s", configPath)
+			if envAPIKey != "" || flagAPIKey != "" || envAPIURL != "" || flagAPIURL != "" || flagContext != "" {
+				logutil.Debugf("$VEN_API_URL, $VEN_API_KEY, --api-url, --api-key, or --context has been passed but will be ignored. This command only prints the tenant ID from the configuration file at %s", configPath)
 			}
 
 			conf, err := loadFileConf()
@@ -601,28 +607,28 @@ func tenantidCmd() *cobra.Command {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
 
-			auth, ok := currentFrom(conf)
+			ctx, ok := currentFrom(conf)
 			if !ok {
 				return fmt.Errorf("not logged in. Log in with:\n    vcpctl login\n")
 			}
 
-			if auth.TenantID == "" {
+			if ctx.TenantID == "" {
 				logutil.Debugf("Tenant ID not found in config. This might be an older config file. Please re-login with 'vcpctl login'.")
 				return fmt.Errorf("tenant ID not available")
 			}
 
-			fmt.Println(auth.TenantID)
+			fmt.Println(ctx.TenantID)
 			return nil
 		},
 	}
 	return cmd
 }
-func switchCmd() *cobra.Command {
+func useContextCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "switch [tenant-url]",
-		Short: "Switch to a different CyberArk Certificate Manager, SaaS tenant.",
+		Use:   "use-context [context-name]",
+		Short: "Switch to a different CyberArk Certificate Manager, SaaS context.",
 		Long: undent.Undent(`
-			Switch to a different CyberArk Certificate Manager, SaaS tenant. If the tenant is not specified,
+			Switch to a different CyberArk Certificate Manager, SaaS context. If the context is not specified,
 				you will be prompted to select one.
 		`),
 		SilenceErrors: true,
@@ -632,32 +638,32 @@ func switchCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
-			if len(conf.Auths) == 0 {
-				return fmt.Errorf("no tenants found in configuration. Please run:\n    vcpctl login")
+			if len(conf.ToolContexts) == 0 {
+				return fmt.Errorf("no contexts found in configuration. Please run:\n    vcpctl login")
 			}
 
 			if len(args) > 0 {
-				// If a tenant URL is provided, we try to find it in the configuration.
-				tenantURL := args[0]
-				for _, auth := range conf.Auths {
-					if auth.TenantURL == tenantURL {
-						return saveCurrentTenant(auth)
-					}
+				// If a context name/URL is provided, we try to find it in the configuration.
+				contextInput := args[0]
+				ctx, ok := resolveContext(conf, contextInput)
+				if !ok {
+					return errutil.Fixable(fmt.Errorf("context '%s' not found in configuration. Please run `vcpctl login` to add it.", contextInput))
 				}
-				return errutil.Fixable(fmt.Errorf("tenant '%s' not found in configuration. Please run `vcpctl login` to add it.", tenantURL))
+				conf.CurrentContext = ctx.Name
+				return saveFileConf(conf)
 			}
 
-			// If no tenant URL is provided, we prompt the user to select one.
+			// If no context is provided, we prompt the user to select one.
 			current, ok := currentFrom(conf)
 			if !ok {
-				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl login` to add one.")
+				return fmt.Errorf("no current context found in configuration. Please run `vcpctl login` to add one.")
 			}
 
-			var opts []huh.Option[Auth]
-			for _, auth := range conf.Auths {
-				opts = append(opts, huh.Option[Auth]{
-					Value: auth,
-					Key:   auth.TenantURL,
+			var opts []huh.Option[ToolContext]
+			for _, toolctx := range conf.ToolContexts {
+				opts = append(opts, huh.Option[ToolContext]{
+					Value: toolctx,
+					Key:   fmt.Sprintf("%s (%s)", toolctx.Name, toolctx.TenantURL),
 				})
 			}
 
@@ -667,20 +673,28 @@ func switchCmd() *cobra.Command {
 					Description("⚠️  WARNING: the env var VEN_API_URL or VEN_API_KEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
 				)
 			}
-			fields = append(fields, huh.NewSelect[Auth]().
+			fields = append(fields, huh.NewSelect[ToolContext]().
 				Options(opts...).
-				Description("Select the tenant you want to switch to.").
+				Description("Select the context you want to switch to.").
 				Value(&current),
 			)
 			err = huh.NewForm(huh.NewGroup(fields...)).Run()
 			if err != nil {
-				return fmt.Errorf("selecting tenant: %w", err)
+				return fmt.Errorf("selecting context: %w", err)
 			}
-			conf.CurrentURL = current.TenantURL
+			conf.CurrentContext = current.Name
 			return saveFileConf(conf)
 		},
 	}
 
+	return cmd
+}
+
+// switchCmd is a deprecated alias for useContextCmd (backward compatibility)
+func switchCmd() *cobra.Command {
+	cmd := useContextCmd()
+	cmd.Use = "switch [context-name]"
+	cmd.Deprecated = "use 'vcpctl use-context' instead; 'vcpctl switch' will be removed in a future release"
 	return cmd
 }
 
@@ -692,57 +706,104 @@ func authSwitchCmd() *cobra.Command {
 }
 
 // Meant for the `auth login` command.
-func saveCurrentTenant(auth Auth) error {
+func saveCurrentContext(toolctx ToolContext) error {
 	conf, err := loadFileConf()
 	if err != nil {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Check if the tenant already exists in the configuration.
-	for i := range conf.Auths {
-		if conf.Auths[i].TenantURL == auth.TenantURL {
-			conf.CurrentURL = auth.TenantURL
-			conf.Auths[i] = auth
+	// Derive context name if not set
+	if toolctx.Name == "" {
+		toolctx.Name = deriveContextName(toolctx.TenantURL, conf.ToolContexts)
+	}
+
+	// Check if a context with this URL already exists in the configuration.
+	for i := range conf.ToolContexts {
+		if conf.ToolContexts[i].TenantURL == toolctx.TenantURL {
+			conf.CurrentContext = toolctx.Name
+			// Update the existing context but preserve its name if it was already set
+			if conf.ToolContexts[i].Name != "" {
+				toolctx.Name = conf.ToolContexts[i].Name
+			}
+			conf.ToolContexts[i] = toolctx
 			return saveFileConf(conf)
 		}
 	}
 
 	// If it doesn't exist, add it.
-	conf.CurrentURL = auth.TenantURL
-	newAuth := Auth{
-		TenantURL:          auth.TenantURL,
-		APIURL:             auth.APIURL,
-		AuthenticationType: auth.AuthenticationType,
-		APIKey:             auth.APIKey,
-		ClientID:           auth.ClientID,
-		PrivateKey:         auth.PrivateKey,
-		AccessToken:        auth.AccessToken,
-		WIFPrivateKey:      auth.WIFPrivateKey,
-		TenantID:           auth.TenantID,
-	}
-	conf.Auths = append(conf.Auths, newAuth)
+	conf.CurrentContext = toolctx.Name
+	conf.ToolContexts = append(conf.ToolContexts, toolctx)
 
 	return saveFileConf(conf)
 }
 
-// resolveTenant resolves a tenant identifier (ID, domain, or URL) to an Auth entry
-// from the configuration. Returns the matching Auth and true if found.
-func resolveTenant(conf FileConf, tenantInput string) (Auth, bool) {
+// Backwards compatibility alias
+func saveCurrentTenant(ctx ToolContext) error {
+	return saveCurrentContext(ctx)
+}
+
+// deriveContextName derives a context name from the tenant URL domain
+// with a numeric suffix if there are conflicts
+func deriveContextName(url string, existingContexts []ToolContext) string {
+	// Extract domain from URL
+	// Examples:
+	// https://ven-cert-manager-uk.venafi.cloud -> ven-cert-manager-uk
+	// https://ui-stack-dev210.qa.venafi.io -> ui-stack-dev210
+	url = strings.TrimPrefix(url, "https://")
+	url = strings.TrimPrefix(url, "http://")
+	domain := strings.Split(url, ".")[0]
+
+	// Check if this name already exists
+	baseName := domain
+	nameExists := func(name string) bool {
+		for _, ctx := range existingContexts {
+			if ctx.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !nameExists(baseName) {
+		return baseName
+	}
+
+	// Find next available numeric suffix
+	suffix := 2
+	for {
+		name := fmt.Sprintf("%s-%d", baseName, suffix)
+		if !nameExists(name) {
+			return name
+		}
+		suffix++
+	}
+}
+
+// resolveContext resolves a context identifier (name, ID, domain, or URL) to a Context entry
+// from the configuration. Returns the matching Context and true if found.
+func resolveContext(conf FileConf, contextInput string) (ToolContext, bool) {
 	// Normalize the input
-	normalized := strings.TrimSpace(tenantInput)
+	normalized := strings.TrimSpace(contextInput)
 	normalized = strings.TrimSuffix(normalized, "/")
 
-	// First, try exact match by tenant ID
-	for _, auth := range conf.Auths {
-		if auth.TenantID == normalized {
-			return auth, true
+	// First, try exact match by context name
+	for _, ctx := range conf.ToolContexts {
+		if ctx.Name == normalized {
+			return ctx, true
+		}
+	}
+
+	// Try exact match by tenant ID
+	for _, ctx := range conf.ToolContexts {
+		if ctx.TenantID == normalized {
+			return ctx, true
 		}
 	}
 
 	// Try exact URL match
-	for _, auth := range conf.Auths {
-		if auth.TenantURL == normalized {
-			return auth, true
+	for _, ctx := range conf.ToolContexts {
+		if ctx.TenantURL == normalized {
+			return ctx, true
 		}
 	}
 
@@ -750,20 +811,21 @@ func resolveTenant(conf FileConf, tenantInput string) (Auth, bool) {
 	if !strings.HasPrefix(normalized, "https://") {
 		normalized = "https://" + normalized
 	}
-	for _, auth := range conf.Auths {
-		if auth.TenantURL == normalized {
-			return auth, true
+	for _, ctx := range conf.ToolContexts {
+		if ctx.TenantURL == normalized {
+			return ctx, true
 		}
 	}
 
-	// Try domain substring match (e.g., "ui-stack-dev210.qa.venafi.io" should match "https://ui-stack-dev210.qa.venafi.io")
-	for _, auth := range conf.Auths {
-		if strings.Contains(auth.TenantURL, tenantInput) {
-			return auth, true
+	// Try domain substring match (e.g., "ui-stack-dev210.qa.venafi.io" should
+	// match "https://ui-stack-dev210.qa.venafi.io")
+	for _, toolctx := range conf.ToolContexts {
+		if strings.Contains(toolctx.TenantURL, contextInput) {
+			return toolctx, true
 		}
 	}
 
-	return Auth{}, false
+	return ToolContext{}, false
 }
 
 // For now we aren't yet using ~/.config/vcpctl.yml.
@@ -799,16 +861,16 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	envAPIKey := os.Getenv("VEN_API_KEY")
 	flagAPIURL, _ := cmd.Flags().GetString("api-url")
 	flagAPIKey, _ := cmd.Flags().GetString("api-key")
-	flagTenant, _ := cmd.Flags().GetString("tenant")
+	flagContext, _ := cmd.Flags().GetString("context")
 
 	// If any of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set, we
 	// don't use the configuration file.
 	if flagAPIKey != "" || envAPIKey != "" || flagAPIURL != "" || envAPIURL != "" {
 		logutil.Debugf("one of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
 
-		// --tenant flag is ignored when --api-key or --api-url is used
-		if flagTenant != "" {
-			logutil.Debugf("--tenant flag is ignored when --api-key or --api-url is provided")
+		// --context flag is ignored when --api-key or --api-url is used
+		if flagContext != "" {
+			logutil.Debugf("--context flag is ignored when --api-key or --api-url is provided")
 		}
 
 		// Priority: $APIURL > --api-url.
@@ -844,18 +906,18 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		return ToolConf{}, fmt.Errorf("loading configuration: %w", err)
 	}
 
-	var current Auth
+	var current ToolContext
 	var ok bool
 
-	// If --tenant flag is provided, use it to override the current tenant
-	if flagTenant != "" {
-		current, ok = resolveTenant(conf, flagTenant)
+	// If --context flag is provided, use it to override the current context
+	if flagContext != "" {
+		current, ok = resolveContext(conf, flagContext)
 		if !ok {
-			return ToolConf{}, fmt.Errorf("tenant '%s' not found in configuration. Available tenants can be listed with 'vcpctl switch'. Log in to a new tenant with 'vcpctl login'.", flagTenant)
+			return ToolConf{}, fmt.Errorf("context '%s' not found in configuration. Available contexts can be listed with 'vcpctl use-context'. Log in to a new tenant with 'vcpctl login'.", flagContext)
 		}
-		logutil.Debugf("Using tenant '%s' (ID: %s) from --tenant flag", current.TenantURL, current.TenantID)
+		logutil.Debugf("Using context '%s' (tenant URL: %s, ID: %s) from --context flag", current.Name, current.TenantURL, current.TenantID)
 	} else {
-		// Find the current tenant from config
+		// Find the current context from config
 		current, ok = currentFrom(conf)
 		if !ok {
 			return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl login")
@@ -919,14 +981,14 @@ func saveFileConf(conf FileConf) error {
 }
 
 // Only meant to be used by the `auth login` command.
-func currentFrom(conf FileConf) (Auth, bool) {
-	if conf.CurrentURL != "" {
-		for _, auth := range conf.Auths {
-			if auth.TenantURL == conf.CurrentURL {
-				return auth, true
+func currentFrom(conf FileConf) (ToolContext, bool) {
+	if conf.CurrentContext != "" {
+		for _, ctx := range conf.ToolContexts {
+			if ctx.Name == conf.CurrentContext {
+				return ctx, true
 			}
 		}
 	}
 
-	return Auth{}, false
+	return ToolContext{}, false
 }

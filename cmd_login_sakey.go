@@ -44,7 +44,7 @@ func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, a
 		return err
 	}
 
-	// Determine the API URL
+	// Determine the API URL.
 	var apiURL string
 	if apiURLFlag != "" {
 		apiURL = apiURLFlag
