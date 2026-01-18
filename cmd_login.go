@@ -197,21 +197,21 @@ func loginCmd() *cobra.Command {
 			vcpctl login https://ui-stack-dev130.qa.venafi.io --api-key <key>
 
 			# Bypass tenant URL to API URL conversion (for advanced use):
-			vcpctl login --api-url https://api.venafi.cloud --api-key <key>
+			vcpctl login https://glow-in-the-dark.venafi.cloud --api-key <key>
 
 			# WIF login (creates/updates service account, uploads JWKS to 0x0.st, and stores access token):
-			vcpctl login --wif my-sa --api-url https://api.venafi.cloud --api-key <key>
+			vcpctl sa gen wif my-sa -ojson | vcpctl login --sa-wif -
 
 			# Service account keypair login (JSON from stdin):
-			vcpctl sa gen keypair my-sa -ojson | vcpctl login --sa-key -
+			vcpctl sa gen keypair my-sa -ojson | vcpctl login --sa-keypair -
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if saKeyPath != "" {
 				if wifServiceAccount != "" {
-					return errutil.Fixable(fmt.Errorf("--sa-key and --wif are mutually exclusive"))
+					return errutil.Fixable(fmt.Errorf("--sa-keypair and --wif are mutually exclusive"))
 				}
 				if apiKey != "" {
-					return errutil.Fixable(fmt.Errorf("--sa-key does not use --api-key"))
+					return errutil.Fixable(fmt.Errorf("--sa-keypair does not use --api-key"))
 				}
 				return loginWithServiceAccountKey(cmd.Context(), args, saKeyPath, apiURL)
 			}
@@ -306,7 +306,7 @@ func loginCmd() *cobra.Command {
 
 				// Convert tenant URL to API URL.
 				httpCl := http.Client{Transport: api.LogTransport}
-				apiURLFromTenant, err := api.GetAPIURLFromTenantURL(httpCl, tenantURL)
+				info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
 				switch {
 				case err == nil:
 					// Success, continue below.
@@ -318,7 +318,7 @@ func loginCmd() *cobra.Command {
 
 				current := Auth{
 					URL:                tenantURL,
-					APIURL:             apiURLFromTenant,
+					APIURL:             info.APIURL,
 					AuthenticationType: "apiKey",
 				}
 
@@ -443,11 +443,11 @@ func loginCmd() *cobra.Command {
 					}
 
 					httpCl := http.Client{Transport: api.LogTransport}
-					apiURL, err := api.GetAPIURLFromTenantURL(httpCl, input)
+					info, err := api.GetTenantInfoFromTenantURL(httpCl, input)
 					switch {
 					case err == nil:
 						current.URL = input
-						current.APIURL = apiURL
+						current.APIURL = info.APIURL
 						return nil
 					case errors.As(err, &errutil.NotFound{}):
 						return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", input)
@@ -513,7 +513,7 @@ func loginCmd() *cobra.Command {
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&wifServiceAccount, "sa-wif", "", "Login using Workload Identity Federation with the given service account name")
 	cmd.Flags().StringArrayVar(&wifScopes, "scope", []string{}, "Scopes for the WIF service account (can be specified multiple times)")
-	cmd.Flags().StringVar(&saKeyPath, "sa-key", "", "Login using a service account keypair JSON (use '-' for stdin)")
+	cmd.Flags().StringVar(&saKeyPath, "sa-keypair", "", "Login using a service account keypair JSON (use '-' for stdin)")
 
 	return cmd
 }

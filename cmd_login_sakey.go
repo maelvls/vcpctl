@@ -34,15 +34,15 @@ type serviceAccountTokenResponse struct {
 
 func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, apiURLFlag string) error {
 	if saKeyPath == "" {
-		return errutil.Fixable(fmt.Errorf("--sa-key requires a JSON file path or '-' for stdin"))
+		return errutil.Fixable(fmt.Errorf("--sa-keypair requires a JSON file path or '-' for stdin"))
 	}
 
-	apiURL, tenantURL, err := resolveLoginAPIURL(args, apiURLFlag)
+	info, err := resolveLoginAPIURL(args, apiURLFlag)
 	if err != nil {
 		return err
 	}
-	apiURL = strings.TrimRight(apiURL, "/")
 
+	apiURL = strings.TrimRight(info.APIURL, "/")
 	saKey, err := readServiceAccountKeyInput(saKeyPath)
 	if err != nil {
 		return err
@@ -63,13 +63,8 @@ func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, a
 		return fmt.Errorf("while creating access-token client: %w", err)
 	}
 
-	selfCheck, err := api.SelfCheck(ctx, cl)
-	if err != nil {
-		return fmt.Errorf("while validating access token: %w", err)
-	}
-
 	if tenantURL == "" {
-		tenantURL = fmt.Sprintf("%s.venafi.cloud", selfCheck.Company.UrlPrefix)
+		tenantURL = fmt.Sprintf("%s.venafi.cloud", info.Te)
 		if tenantURL == "stack" {
 			tenantURL = apiURL
 			tenantURL = strings.Replace(tenantURL, "api-", "ui-stack-", 1)
@@ -138,8 +133,10 @@ func signServiceAccountJWT(clientID, privateKeyPEM, apiURL string, validity time
 	if apiURL == "" {
 		return "", fmt.Errorf("API URL is required to sign the JWT")
 	}
+	logutil.Debugf("Signing JWT for API URL: %s", apiURL)
 
-	audience := fmt.Sprintf("%s/v1/oauth/token/serviceaccount", strings.TrimLeft("https://", strings.TrimRight(apiURL, "/")))
+	audience := fmt.Sprintf("%s/v1/oauth/token/serviceaccount", strings.TrimPrefix(strings.TrimSuffix(apiURL, "/"), "https://"))
+	logutil.Debugf("Using audience: %s", audience)
 	claims := jwt.MapClaims{
 		"iss": clientID,
 		"sub": clientID,

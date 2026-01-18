@@ -63,9 +63,31 @@ func loginWithWIF(ctx context.Context, args []string, p wifLoginParams) error {
 		return errutil.Fixable(fmt.Errorf("--wif requires a service account name that will be created or updated"))
 	}
 
-	apiURL, tenantURL, err := resolveLoginAPIURL(args, p.APIURL)
-	if err != nil {
-		return err
+	tenantURL := strings.TrimRight(args[0], "/")
+	if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
+		tenantURL = "https://" + tenantURL
+	}
+	httpCl := http.Client{Transport: api.LogTransport}
+	info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
+	switch {
+	case err == nil:
+		return info, nil
+	case errutil.ErrIsNotFound(err):
+		return api.TenantInfo{}, fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
+	default:
+		return api.TenantInfo{}, fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
+	}
+
+	apiURL := flagAPIURL
+	if apiURL == "" {
+		apiURL = os.Getenv("VEN_API_URL")
+	}
+
+	if apiURL == "" {
+		return api.TenantInfo{}, errutil.Fixable(fmt.Errorf("--api-url (or VEN_API_URL) is required for --sa-wif when no tenant URL is provided"))
+	}
+	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
+		apiURL = "https://" + apiURL
 	}
 
 	apiKey := p.APIKey
@@ -136,8 +158,6 @@ func loginWithWIF(ctx context.Context, args []string, p wifLoginParams) error {
 		if !errutil.ErrIsNotFound(err) {
 			return fmt.Errorf("while getting service account: %w", err)
 		}
-
-		// Defaults already applied when values are empty.
 
 		// For some reason, the service account requires at least one
 		// application. Let's pick the first available one.
@@ -268,37 +288,6 @@ func loginWithWIF(ctx context.Context, args []string, p wifLoginParams) error {
 	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
 	logutil.Debugf("Service Account ID: %s", saID)
 	return nil
-}
-
-func resolveLoginAPIURL(args []string, flagAPIURL string) (string, string, error) {
-	if len(args) > 0 {
-		tenantURL := strings.TrimRight(args[0], "/")
-		if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
-			tenantURL = "https://" + tenantURL
-		}
-		httpCl := http.Client{Transport: api.LogTransport}
-		apiURLFromTenant, err := api.GetAPIURLFromTenantURL(httpCl, tenantURL)
-		switch {
-		case err == nil:
-			return apiURLFromTenant, tenantURL, nil
-		case errutil.ErrIsNotFound(err):
-			return "", "", fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
-		default:
-			return "", "", fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
-		}
-	}
-
-	apiURL := flagAPIURL
-	if apiURL == "" {
-		apiURL = os.Getenv("VEN_API_URL")
-	}
-	if apiURL == "" {
-		return "", "", errutil.Fixable(fmt.Errorf("--api-url (or VEN_API_URL) is required for --sa-wif when no tenant URL is provided"))
-	}
-	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
-		apiURL = "https://" + apiURL
-	}
-	return apiURL, "", nil
 }
 
 func generateWIFKeyPairAndJWKS() (*ecdsa.PrivateKey, string, string, []byte, error) {
