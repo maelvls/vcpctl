@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	EnableDebug = false
+	EnableDebug     = false
+	EnableDebugHTTP = false
 
 	Yel   = ansi.ColorFunc("yellow")
 	Green = ansi.ColorFunc("green")

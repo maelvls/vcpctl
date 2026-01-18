@@ -61,6 +61,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&tenantFlag, "tenant", "", "Switch to the given tenant for this command. Accepts tenant ID (UUID), UI URL (domain or full URL). Overrides the current tenant in the config file.")
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
+	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebugHTTP, "debug-http", false, "Enable HTTP request/response logging (set to 'true' to enable)")
 	rootCmd.AddCommand(
 		loginCmd(),
 		switchCmd(),

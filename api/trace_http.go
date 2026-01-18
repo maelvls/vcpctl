@@ -60,7 +60,7 @@ func redactJSONField(body string, field string) string {
 }
 
 func LogRequest(req *http.Request) {
-	if !logutil.EnableDebug {
+	if !logutil.EnableDebugHTTP {
 		return
 	}
 
@@ -101,7 +101,7 @@ func LogRequest(req *http.Request) {
 }
 
 func LogResponse(resp *http.Response) {
-	if !logutil.EnableDebug {
+	if !logutil.EnableDebugHTTP {
 		return
 	}
 
