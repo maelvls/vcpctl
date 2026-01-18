@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
@@ -598,14 +599,13 @@ func tenantidCmd() *cobra.Command {
 	}
 	return cmd
 }
-
 func switchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch [tenant-url]",
 		Short: "Switch to a different CyberArk Certificate Manager, SaaS tenant.",
 		Long: undent.Undent(`
 			Switch to a different CyberArk Certificate Manager, SaaS tenant. If the tenant is not specified,
-			you will be prompted to select one.
+				you will be prompted to select one.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -635,29 +635,30 @@ func switchCmd() *cobra.Command {
 				return fmt.Errorf("no current tenant found in configuration. Please run `vcpctl login` to add one.")
 			}
 
+			var opts []huh.Option[Auth]
+			for _, auth := range conf.Auths {
+				opts = append(opts, huh.Option[Auth]{
+					Value: auth,
+					Key:   auth.URL,
+				})
+			}
+
+			var fields []huh.Field
 			if os.Getenv("VEN_API_URL") != "" || os.Getenv("VEN_API_KEY") != "" {
-				fmt.Println(errorStyle.Render("⚠  WARNING: the env var VEN_API_URL or VEN_API_KEY is set."))
-				fmt.Println(errorStyle.Render("⚠  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."))
-				fmt.Println()
+				fields = append(fields, huh.NewNote().
+					Description("⚠️  WARNING: the env var VEN_API_URL or VEN_API_KEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
+				)
 			}
-
-			// Build list of tenant URLs with current one marked
-			items := make([]string, len(conf.Auths))
-			for i, auth := range conf.Auths {
-				marker := " "
-				if auth.URL == current.URL {
-					marker = successStyle.Render("*")
-				}
-				items[i] = fmt.Sprintf("%s %s", marker, auth.URL)
-			}
-
-			selectedIdx, err := promptSelect("Select the tenant you want to switch to:", items)
+			fields = append(fields, huh.NewSelect[Auth]().
+				Options(opts...).
+				Description("Select the tenant you want to switch to.").
+				Value(&current),
+			)
+			err = huh.NewForm(huh.NewGroup(fields...)).Run()
 			if err != nil {
 				return fmt.Errorf("selecting tenant: %w", err)
 			}
-
-			selectedAuth := conf.Auths[selectedIdx]
-			conf.CurrentURL = selectedAuth.URL
+			conf.CurrentURL = current.URL
 			return saveFileConf(conf)
 		},
 	}
