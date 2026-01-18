@@ -37,15 +37,33 @@ func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, a
 		return errutil.Fixable(fmt.Errorf("--sa-keypair requires a JSON file path or '-' for stdin"))
 	}
 
-	info, err := resolveLoginAPIURL(args, apiURLFlag)
+	saKey, err := readServiceAccountKeyInput(saKeyPath)
 	if err != nil {
 		return err
 	}
 
-	apiURL = strings.TrimRight(info.APIURL, "/")
-	saKey, err := readServiceAccountKeyInput(saKeyPath)
-	if err != nil {
-		return err
+	// Determine the API URL
+	var apiURL string
+	if apiURLFlag != "" {
+		apiURL = apiURLFlag
+	} else if len(args) > 0 {
+		tenantURL := args[0]
+		if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
+			tenantURL = "https://" + tenantURL
+		}
+		httpCl := http.Client{Transport: api.LogTransport}
+		info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
+		if err != nil {
+			return fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
+		}
+		apiURL = info.APIURL
+	} else {
+		return errutil.Fixable(fmt.Errorf("--api-url or tenant URL is required for --sa-keypair"))
+	}
+
+	apiURL = strings.TrimRight(apiURL, "/")
+	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
+		apiURL = "https://" + apiURL
 	}
 
 	signedJWT, err := signServiceAccountJWT(saKey.ClientID, saKey.PrivateKey, apiURL, 30*time.Minute)
@@ -63,12 +81,14 @@ func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, a
 		return fmt.Errorf("while creating access-token client: %w", err)
 	}
 
-	if tenantURL == "" {
-		tenantURL = fmt.Sprintf("%s.venafi.cloud", info.Te)
-		if tenantURL == "stack" {
-			tenantURL = apiURL
-			tenantURL = strings.Replace(tenantURL, "api-", "ui-stack-", 1)
-		}
+	selfCheck, err := api.SelfCheck(ctx, cl)
+	if err != nil {
+		return fmt.Errorf("while checking the access token's validity: %w", err)
+	}
+
+	tenantURL := fmt.Sprintf("https://%s.venafi.cloud", selfCheck.Company.UrlPrefix)
+	if selfCheck.Company.UrlPrefix == "stack" {
+		tenantURL = strings.Replace(apiURL, "api-", "ui-stack-", 1)
 	}
 
 	current := Auth{

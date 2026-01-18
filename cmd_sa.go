@@ -127,11 +127,13 @@ func saGenCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl sa gen keypair <sa-name>
 			vcpctl sa gen keypair <sa-name> -ojson
+			vcpctl sa gen wif <sa-name> -ojson
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
 	cmd.AddCommand(saGenkeypairCmd())
+	cmd.AddCommand(saGenWifCmd())
 	return cmd
 }
 
@@ -269,6 +271,213 @@ func saGenkeypairCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pem", "Output format (pem, json)")
+	return cmd
+}
+
+func saGenWifCmd() *cobra.Command {
+	var outputFormat string
+	var scopes []string
+	var subject string
+	var audience string
+	var issuerURL string
+	var apps []string
+	var ownerTeam string
+	cmd := &cobra.Command{
+		Use:   "wif <sa-name>",
+		Short: "Generates an EC private key, creates JWKS, uploads it to 0x0.st, and creates/updates a WIF Service Account",
+		Long: undent.Undent(`
+			Generates an EC private key, creates a JWKS (JSON Web Key Set), uploads
+			it to 0x0.st, and creates or updates a Workload Identity Federation Service Account.
+
+			This command is useful for setting up Workload Identity Federation authentication.
+			The output can be piped directly to 'vcpctl login --sa-wif'.
+
+			With '-ojson', the output looks like:
+
+			  {
+			    "client_id": "b4dd2b31-f473-11f0-aa2c-f69f144f25db",
+			    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+			    "api_url": "api.venafi.cloud"
+			  }
+		`),
+		Example: undent.Undent(`
+			vcpctl sa gen wif my-sa -ojson
+			vcpctl sa gen wif my-sa -ojson | vcpctl login --sa-wif -
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("sa gen wif: %w", err)
+			}
+
+			saName := args[0]
+
+			privKey, privKeyPEM, kid, jwksPayload, err := generateWIFKeyPairAndJWKS()
+			if err != nil {
+				return fmt.Errorf("while generating key pair: %w", err)
+			}
+
+			jwksURL, err := uploadJWKS0x0(jwksPayload)
+			if err != nil {
+				return fmt.Errorf("while uploading JWKS to 0x0.st: %w", err)
+			}
+			logutil.Debugf("JWKS uploaded to: %s", jwksURL)
+
+			// Suppress unused variable warnings for now
+			_ = privKey
+			_ = kid
+
+			apiClient, err := newAPIClient(conf)
+			if err != nil {
+				return fmt.Errorf("while creating API client: %w", err)
+			}
+
+			// Set defaults
+			if subject == "" {
+				subject = fmt.Sprintf("system:serviceaccount:default:%s", saName)
+			}
+			if audience == "" {
+				audience = "venafi-cloud"
+			}
+			if issuerURL == "" {
+				issuerURL = jwksURL
+			}
+
+			// Parse applications (UUIDs).
+			applications := make([]api.Application, len(apps))
+			for i, app := range apps {
+				appUUID := openapi_types.UUID{}
+				err := appUUID.UnmarshalText([]byte(app))
+				if err != nil {
+					return fmt.Errorf("sa gen wif: invalid application UUID '%s': %w", app, err)
+				}
+				applications[i] = appUUID
+			}
+
+			// If no application is provided, let's pick the first one available.
+			if len(applications) == 0 {
+				availableApps, err := api.GetApplications(context.Background(), apiClient)
+				if err != nil {
+					return fmt.Errorf("sa gen wif: while retrieving available applications: %w", err)
+				}
+				if len(availableApps) == 0 {
+					return fmt.Errorf("sa gen wif: no application provided and no application available in the account")
+				}
+				applications = []api.Application{availableApps[0].Id}
+				logutil.Debugf("No application provided, using the first available one: %s (%s)", availableApps[0].Name, availableApps[0].Id.String())
+			}
+
+			// Parse owner team (UUID) if provided.
+			ownerUUID := openapi_types.UUID{}
+			if ownerTeam != "" {
+				err := ownerUUID.UnmarshalText([]byte(ownerTeam))
+				if err != nil {
+					return fmt.Errorf("sa gen wif: invalid owner team UUID '%s': %w", ownerTeam, err)
+				}
+			}
+
+			// If no owner team is provided, let's pick the first one available.
+			if ownerTeam == "" {
+				teams, err := api.GetTeams(context.Background(), apiClient)
+				if err != nil {
+					return fmt.Errorf("sa gen wif: while retrieving available teams: %w", err)
+				}
+				if len(teams) == 0 {
+					return fmt.Errorf("sa gen wif: no owner team provided and no team available in the account")
+				}
+				ownerUUID = teams[0].Id
+				logutil.Debugf("No owner team provided, using the first available one: %s (%s)", teams[0].Name, teams[0].Id.String())
+			}
+
+			// Check if service account exists
+			existingSA, err := api.GetServiceAccount(context.Background(), apiClient, saName)
+			var clientID string
+			switch {
+			case errors.As(err, &errutil.NotFound{}):
+				// Doesn't exist yet, create it
+				resp, err := api.CreateServiceAccount(context.Background(), apiClient, api.ServiceAccountDetails{
+					Name:               saName,
+					AuthenticationType: "rsaKeyFederated",
+					CredentialLifetime: 365, // days
+					Scopes:             scopes,
+					Subject:            subject,
+					Audience:           audience,
+					IssuerURL:          issuerURL,
+					JwksURI:            jwksURL,
+					Applications:       applications,
+					Owner:              ownerUUID,
+				})
+				if err != nil {
+					return fmt.Errorf("sa gen wif: while creating service account: %w", err)
+				}
+				clientID = resp.Id.String()
+				logutil.Debugf("Service Account '%s' created with JWKS URI: %s", saName, jwksURL)
+			case err == nil:
+				// Exists, update it
+				desiredSA := existingSA
+				desiredSA.Subject = subject
+				desiredSA.Audience = audience
+				desiredSA.IssuerURL = issuerURL
+				desiredSA.JwksURI = jwksURL
+				if len(scopes) > 0 {
+					desiredSA.Scopes = scopes
+				}
+				if len(applications) > 0 {
+					desiredSA.Applications = applications
+				}
+
+				patch, smthChanged, err := api.DiffToPatchServiceAccount(existingSA, desiredSA)
+				if err != nil {
+					return fmt.Errorf("sa gen wif: while creating service account patch: %w", err)
+				}
+				if !smthChanged {
+					logutil.Debugf("Service Account '%s' is already up to date.", saName)
+				} else {
+					err = api.PatchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
+					if err != nil {
+						return fmt.Errorf("sa gen wif: while patching service account: %w", err)
+					}
+					logutil.Debugf("Service Account '%s' updated.", saName)
+				}
+				clientID = existingSA.Id.String()
+			default:
+				return fmt.Errorf("sa gen wif: while checking if service account exists: %w", err)
+			}
+
+			switch outputFormat {
+			case "json":
+				output := struct {
+					ClientID   string `json:"client_id"`
+					PrivateKey string `json:"private_key"`
+					APIURL     string `json:"api_url"`
+				}{
+					ClientID:   clientID,
+					PrivateKey: privKeyPEM,
+					APIURL:     strings.TrimPrefix(strings.TrimPrefix(conf.APIURL, "https://"), "http://"),
+				}
+
+				bytes, err := marshalIndent(output, "", "  ")
+				if err != nil {
+					return fmt.Errorf("while marshaling JSON: %w", err)
+				}
+				fmt.Println(string(bytes))
+			default:
+				return errutil.Fixable(fmt.Errorf("invalid output format: %s (only 'json' is supported)", outputFormat))
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (only 'json' is supported)")
+	cmd.Flags().StringArrayVar(&scopes, "scope", []string{}, "Scopes for the Service Account (can be specified multiple times)")
+	cmd.Flags().StringVar(&subject, "subject", "", "The subject of the entity (defaults to 'system:serviceaccount:default:<sa-name>')")
+	cmd.Flags().StringVar(&audience, "audience", "", "The intended audience (defaults to 'venafi-cloud')")
+	cmd.Flags().StringVar(&issuerURL, "issuer-url", "", "The issuer URL (defaults to the JWKS URL)")
+	cmd.Flags().StringArrayVar(&apps, "app", []string{}, "Application UUID (can be specified multiple times, defaults to first available)")
+	cmd.Flags().StringVar(&ownerTeam, "owner-team", "", "Owner team UUID (defaults to first available)")
 	return cmd
 }
 

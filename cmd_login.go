@@ -208,7 +208,7 @@ func loginCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if saKeyPath != "" {
 				if wifServiceAccount != "" {
-					return errutil.Fixable(fmt.Errorf("--sa-keypair and --wif are mutually exclusive"))
+					return errutil.Fixable(fmt.Errorf("--sa-keypair and --sa-wif are mutually exclusive"))
 				}
 				if apiKey != "" {
 					return errutil.Fixable(fmt.Errorf("--sa-keypair does not use --api-key"))
@@ -216,12 +216,7 @@ func loginCmd() *cobra.Command {
 				return loginWithServiceAccountKey(cmd.Context(), args, saKeyPath, apiURL)
 			}
 			if wifServiceAccount != "" {
-				return loginWithWIF(cmd.Context(), args, wifLoginParams{
-					ServiceAccount: wifServiceAccount,
-					Scopes:         wifScopes,
-					APIURL:         apiURL,
-					APIKey:         apiKey,
-				})
+				return loginWithWIFJSON(cmd.Context(), wifServiceAccount, apiURL)
 			}
 			// Check for conflicts between positional URL argument and --api-url
 			// flag or env vars.
@@ -511,8 +506,8 @@ func loginCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
-	cmd.Flags().StringVar(&wifServiceAccount, "sa-wif", "", "Login using Workload Identity Federation with the given service account name")
-	cmd.Flags().StringArrayVar(&wifScopes, "scope", []string{}, "Scopes for the WIF service account (can be specified multiple times)")
+	cmd.Flags().StringVar(&wifServiceAccount, "sa-wif", "", "Login using Workload Identity Federation JSON from 'vcpctl sa gen wif' (use '-' for stdin)")
+	cmd.Flags().StringArrayVar(&wifScopes, "scope", []string{}, "(Deprecated) Scopes for the WIF service account")
 	cmd.Flags().StringVar(&saKeyPath, "sa-keypair", "", "Login using a service account keypair JSON (use '-' for stdin)")
 
 	return cmd

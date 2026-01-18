@@ -20,20 +20,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
 
 	"github.com/golang-jwt/jwt/v5"
 )
-
-type wifLoginParams struct {
-	ServiceAccount string
-	Scopes         []string
-	APIURL         string
-	APIKey         string
-}
 
 const (
 	defaultWIFAudience = "venafi-cloud"
@@ -56,238 +48,6 @@ type jwksSet struct {
 
 type oauthTokenResponse struct {
 	AccessToken string `json:"access_token"`
-}
-
-func loginWithWIF(ctx context.Context, args []string, p wifLoginParams) error {
-	if p.ServiceAccount == "" {
-		return errutil.Fixable(fmt.Errorf("--wif requires a service account name that will be created or updated"))
-	}
-
-	tenantURL := strings.TrimRight(args[0], "/")
-	if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
-		tenantURL = "https://" + tenantURL
-	}
-	httpCl := http.Client{Transport: api.LogTransport}
-	info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
-	switch {
-	case err == nil:
-		return info, nil
-	case errutil.ErrIsNotFound(err):
-		return api.TenantInfo{}, fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
-	default:
-		return api.TenantInfo{}, fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
-	}
-
-	apiURL := flagAPIURL
-	if apiURL == "" {
-		apiURL = os.Getenv("VEN_API_URL")
-	}
-
-	if apiURL == "" {
-		return api.TenantInfo{}, errutil.Fixable(fmt.Errorf("--api-url (or VEN_API_URL) is required for --sa-wif when no tenant URL is provided"))
-	}
-	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
-		apiURL = "https://" + apiURL
-	}
-
-	apiKey := p.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv("VEN_API_KEY")
-	}
-	if apiKey == "" {
-		key, err := promptString("API Key: ", func(input string) error {
-			if strings.TrimSpace(input) == "" {
-				return fmt.Errorf("API key cannot be empty")
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		apiKey = key
-	}
-
-	apiURL = strings.TrimRight(apiURL, "/")
-	cl, err := api.NewAPIKeyClient(apiURL, apiKey)
-	if err != nil {
-		return fmt.Errorf("while creating API client: %w", err)
-	}
-
-	selfCheck, err := api.SelfCheck(ctx, cl)
-	if err != nil {
-		return fmt.Errorf("while checking the API key's validity: %w", err)
-	}
-
-	if tenantURL == "" {
-		tenantURL = fmt.Sprintf("%s.venafi.cloud", selfCheck.Company.UrlPrefix)
-		if tenantURL == "stack" {
-			tenantURL = apiURL
-			tenantURL = strings.Replace(tenantURL, "api-", "ui-stack-", 1)
-		}
-	}
-
-	privKey, privKeyPEM, kid, jwksPayload, err := generateWIFKeyPairAndJWKS()
-	if err != nil {
-		return fmt.Errorf("while generating key pair: %w", err)
-	}
-
-	jwksURL, err := uploadJWKS0x0(jwksPayload)
-	if err != nil {
-		return fmt.Errorf("while uploading JWKS to 0x0.st: %w", err)
-	}
-	logutil.Debugf("JWKS uploaded to: %s", jwksURL)
-
-	saName := p.ServiceAccount
-	subjectValue := ""
-	audienceValue := ""
-	issuerURL := ""
-	saID := ""
-
-	if subjectValue == "" {
-		subjectValue = fmt.Sprintf("system:serviceaccount:default:%s", saName)
-	}
-	if audienceValue == "" {
-		audienceValue = defaultWIFAudience
-	}
-	if issuerURL == "" {
-		issuerURL = defaultWIFIssuer
-	}
-
-	existingSA, err := api.GetServiceAccount(ctx, cl, saName)
-	if err != nil {
-		if !errutil.ErrIsNotFound(err) {
-			return fmt.Errorf("while getting service account: %w", err)
-		}
-
-		// For some reason, the service account requires at least one
-		// application. Let's pick the first available one.
-		var app api.ApplicationInformation
-		availableApps, err := api.GetApplications(ctx, cl)
-		if err != nil {
-			return fmt.Errorf("while retrieving available applications: %w", err)
-		}
-		if len(availableApps) == 0 {
-			return fmt.Errorf("no application provided and no application available in the account")
-		}
-		app = availableApps[0]
-		logutil.Debugf("Using the first application found: %s (%s)", app.Name, app.Id.String())
-
-		// For some reason, the service account requires an owner team. Let's
-		// pick the first one that comes up.
-		teams, err := api.GetTeams(ctx, cl)
-		if err != nil {
-			return fmt.Errorf("while retrieving available teams: %w", err)
-		}
-		if len(teams) == 0 {
-			return fmt.Errorf("no owner team provided and no team available in the account")
-		}
-		owner := teams[0].Id
-		logutil.Debugf("Using the first team found as an owner: %s (%s)", teams[0].Name, teams[0].Id.String())
-
-		resp, err := api.CreateServiceAccount(ctx, cl, api.ServiceAccountDetails{
-			Name:               saName,
-			AuthenticationType: "rsaKeyFederated",
-			Scopes:             p.Scopes,
-			Subject:            subjectValue,
-			Audience:           audienceValue,
-			IssuerURL:          issuerURL,
-			JwksURI:            jwksURL,
-			Applications:       []uuid.UUID{app.Id},
-			Owner:              owner,
-		})
-		if err != nil {
-			return fmt.Errorf("while creating service account: %w", err)
-		}
-		saID = resp.Id.String()
-		logutil.Debugf("Service Account '%s' created with JWKS URI: %s", saName, jwksURL)
-	} else {
-		if existingSA.AuthenticationType != "rsaKeyFederated" {
-			return errutil.Fixable(fmt.Errorf("service account '%s' must be authenticationType 'rsaKeyFederated' for WIF", saName))
-		}
-		if existingSA.Subject == "" {
-			return errutil.Fixable(fmt.Errorf("service account '%s' has an empty subject; set it with 'vcpctl sa put wif %s'", saName, saName))
-		}
-		if existingSA.Audience == "" {
-			return errutil.Fixable(fmt.Errorf("service account '%s' has an empty audience; set it with 'vcpctl sa put wif %s'", saName, saName))
-		}
-
-		subjectValue = existingSA.Subject
-		audienceValue = existingSA.Audience
-		if issuerURL == "" {
-			issuerURL = existingSA.IssuerURL
-		}
-		if issuerURL == "" {
-			issuerURL = defaultWIFIssuer
-		}
-
-		desiredSA := existingSA
-		desiredSA.JwksURI = jwksURL
-		desiredSA.IssuerURL = issuerURL
-
-		patch, smthChanged, err := api.DiffToPatchServiceAccount(existingSA, desiredSA)
-		if err != nil {
-			return fmt.Errorf("while creating service account patch: %w", err)
-		}
-		if smthChanged {
-			err = api.PatchServiceAccount(ctx, cl, existingSA.Id.String(), patch)
-			if err != nil {
-				return fmt.Errorf("while patching service account: %w", err)
-			}
-		} else {
-			logutil.Debugf("Service Account '%s' is already up to date.", saName)
-		}
-		saID = existingSA.Id.String()
-	}
-
-	// I found this to be the maximum accepted by Venafi Cloud.
-	validity := 2 * time.Hour
-	jwtString, err := signWIFJWT(privKey, kid, issuerURL, subjectValue, audienceValue, validity)
-	if err != nil {
-		return fmt.Errorf("while signing JWT: %w", err)
-	}
-
-	tenantID := selfCheck.Company.Id.String()
-
-	// Try for 5 minutes to get the access token, in case the SA creation
-	// or update hasn't fully propagated yet.
-	var accessToken string
-	retryDeadline := time.Now().Add(5 * time.Minute)
-	for {
-		accessToken, err = exchangeJWTForAccessToken(ctx, apiURL, tenantID, jwtString)
-		if err == nil {
-			break
-		}
-		logutil.Debugf("While exchanging JWT for access token: %v", err)
-		if time.Now().After(retryDeadline) {
-			return fmt.Errorf("while exchanging JWT for access token: %w", err)
-		}
-		logutil.Infof("Waiting for service account to be ready... Retrying in 5 seconds.")
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(5 * time.Second):
-		}
-	}
-
-	current := Auth{
-		URL:                tenantURL,
-		APIURL:             apiURL,
-		AuthenticationType: "rsaKeyFederated",
-		APIKey:             apiKey,
-		ClientID:           saID,
-		AccessToken:        accessToken,
-		WIFPrivateKey:      privKeyPEM,
-		TenantID:           selfCheck.Company.Id.String(),
-	}
-
-	if err := saveCurrentTenant(current); err != nil {
-		return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
-	}
-
-	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
-	logutil.Debugf("Service Account ID: %s", saID)
-	return nil
 }
 
 func generateWIFKeyPairAndJWKS() (*ecdsa.PrivateKey, string, string, []byte, error) {
@@ -435,4 +195,212 @@ func uploadJWKS0x0(jwks []byte) (string, error) {
 		return "", fmt.Errorf("0x0.st returned an empty URL")
 	}
 	return url, nil
+}
+
+type wifJSONInput struct {
+	ClientID   string `json:"client_id"`
+	PrivateKey string `json:"private_key"`
+	APIURL     string `json:"api_url"`
+}
+
+func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) error {
+	if wifJSONPath == "" {
+		return errutil.Fixable(fmt.Errorf("--sa-wif requires a JSON file path or '-' for stdin"))
+	}
+
+	var raw []byte
+	var err error
+	if wifJSONPath == "-" {
+		raw, err = io.ReadAll(os.Stdin)
+	} else {
+		raw, err = os.ReadFile(wifJSONPath)
+	}
+	if err != nil {
+		return fmt.Errorf("while reading %s: %w", wifJSONPath, err)
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		return errutil.Fixable(fmt.Errorf("empty WIF JSON"))
+	}
+
+	var input wifJSONInput
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return fmt.Errorf("while parsing JSON: %w", err)
+	}
+
+	input.ClientID = strings.TrimSpace(input.ClientID)
+	input.PrivateKey = strings.TrimSpace(input.PrivateKey)
+	input.APIURL = strings.TrimSpace(input.APIURL)
+
+	if input.PrivateKey == "" {
+		return errutil.Fixable(fmt.Errorf("missing 'private_key' in JSON"))
+	}
+	if input.ClientID == "" {
+		return errutil.Fixable(fmt.Errorf("missing 'client_id' in JSON"))
+	}
+	if input.APIURL == "" {
+		return errutil.Fixable(fmt.Errorf("missing 'api_url' in JSON"))
+	}
+
+	apiURL := input.APIURL
+	if apiURLOverride != "" {
+		apiURL = apiURLOverride
+	}
+
+	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
+		apiURL = "https://" + apiURL
+	}
+
+	privKey, kid, err := parseWIFPrivateKey(input.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("while parsing private key: %w", err)
+	}
+
+	// Get service account details to know the issuer, subject, and audience
+	apiClient, err := api.NewAPIKeyClient(apiURL, os.Getenv("VEN_API_KEY"))
+	if err != nil {
+		return fmt.Errorf("while creating API client: %w", err)
+	}
+
+	sa, err := api.GetServiceAccountByID(ctx, apiClient, input.ClientID)
+	if err != nil {
+		return fmt.Errorf("while getting service account: %w", err)
+	}
+
+	if sa.IssuerURL == "" {
+		return errutil.Fixable(fmt.Errorf("service account has no issuer URL configured"))
+	}
+	if sa.Subject == "" {
+		return errutil.Fixable(fmt.Errorf("service account has no subject configured"))
+	}
+	if sa.Audience == "" {
+		return errutil.Fixable(fmt.Errorf("service account has no audience configured"))
+	}
+
+	validity := 2 * time.Hour
+	jwtString, err := signWIFJWT(privKey, kid, sa.IssuerURL, sa.Subject, sa.Audience, validity)
+	if err != nil {
+		return fmt.Errorf("while signing JWT: %w", err)
+	}
+
+	tenantID := sa.CompanyId.String()
+	if tenantID == "" {
+		cl := &http.Client{Timeout: 30 * time.Second}
+		tenantID, err = getTenantIDFromAPIURL(cl, apiURL)
+		if err != nil {
+			return fmt.Errorf("while getting tenant ID: %w", err)
+		}
+	}
+
+	var accessToken string
+	retryDeadline := time.Now().Add(5 * time.Minute)
+	for {
+		accessToken, err = exchangeJWTForAccessToken(ctx, apiURL, tenantID, jwtString)
+		if err == nil {
+			break
+		}
+		logutil.Debugf("While exchanging JWT for access token: %v", err)
+		if time.Now().After(retryDeadline) {
+			return fmt.Errorf("while exchanging JWT for access token: %w", err)
+		}
+		logutil.Infof("Waiting for WIF setup to be ready... Retrying in 5 seconds.")
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+
+	tenantURL := deriveUIURL(apiURL)
+
+	current := Auth{
+		URL:                tenantURL,
+		APIURL:             apiURL,
+		AuthenticationType: "rsaKeyFederated",
+		ClientID:           input.ClientID,
+		AccessToken:        accessToken,
+		WIFPrivateKey:      input.PrivateKey,
+		TenantID:           tenantID,
+	}
+
+	if err := saveCurrentTenant(current); err != nil {
+		return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
+	}
+
+	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
+	return nil
+}
+
+func parseWIFPrivateKey(privateKeyPEM string) (*ecdsa.PrivateKey, string, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return nil, "", errutil.Fixable(fmt.Errorf("no PEM block found in private key"))
+	}
+
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("while parsing PKCS8 private key: %w", err)
+	}
+
+	ecKey, ok := key.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, "", fmt.Errorf("private key is not an ECDSA key")
+	}
+
+	kid := jwkThumbprintEC(&ecKey.PublicKey)
+	return ecKey, kid, nil
+}
+
+func getTenantIDFromAPIURL(cl *http.Client, apiURL string) (string, error) {
+	apiURL = strings.TrimRight(apiURL, "/")
+	endpoint := fmt.Sprintf("%s/v1/useraccounts/self", apiURL)
+
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("while creating request: %w", err)
+	}
+
+	resp, err := cl.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("while sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("while reading response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("API returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Company struct {
+			ID string `json:"id"`
+		} `json:"company"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("while parsing response: %w", err)
+	}
+	if result.Company.ID == "" {
+		return "", fmt.Errorf("no company ID in response")
+	}
+	return result.Company.ID, nil
+}
+
+func deriveUIURL(apiURL string) string {
+	apiURL = strings.TrimRight(apiURL, "/")
+	apiURL = strings.TrimPrefix(apiURL, "https://")
+	apiURL = strings.TrimPrefix(apiURL, "http://")
+
+	if strings.HasPrefix(apiURL, "api-") {
+		return "https://" + strings.Replace(apiURL, "api-", "ui-stack-", 1)
+	}
+	if strings.HasPrefix(apiURL, "api.") {
+		parts := strings.Split(apiURL, ".")
+		if len(parts) > 1 {
+			return "https://" + strings.Join(parts[1:], ".")
+		}
+	}
+	return "https://" + apiURL
 }
