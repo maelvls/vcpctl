@@ -127,17 +127,21 @@ func confLsCmd() *cobra.Command {
 
 func confGetCmd() *cobra.Command {
 	var showDeps bool
+	var raw bool
 	cmd := &cobra.Command{
 		Use:   "get <config-name>",
 		Short: "Export a WIM configuration",
 		Long: undent.Undent(`
 			Get a WIM (Workload Identity Manager, formerly Firefly) configuration
-			from CyberArk Certificate Manager, SaaS. The configuration is written
-			to stdout in YAML format.
+			from CyberArk Certificate Manager, SaaS. By default, displays the
+			configuration as a manifest.WIMConfiguration. Use --raw to display
+			the raw API response. The configuration is written to stdout in YAML
+			format.
 		`),
 		Example: undent.Undent(`
 			vcpctl conf get <config-name>
 			vcpctl conf get <config-name> --deps
+			vcpctl conf get <config-name> --raw
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -169,7 +173,16 @@ func confGetCmd() *cobra.Command {
 			issuingTemplates, err := api.GetIssuingTemplates(context.Background(), apiClient)
 
 			var yamlData []byte
-			if showDeps {
+			if raw {
+				// Display raw API response
+				var buf bytes.Buffer
+				enc := yaml.NewEncoder(&buf)
+				err = enc.Encode(config)
+				if err != nil {
+					return fmt.Errorf("while encoding raw config to YAML: %w", err)
+				}
+				yamlData = buf.Bytes()
+			} else if showDeps {
 				// Show all dependencies (old behavior)
 				yamlData, err = renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
 				if err != nil {
@@ -209,6 +222,7 @@ func confGetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&showDeps, "deps", false, "Include dependencies (service accounts, policies, and Sub CA)")
+	cmd.Flags().BoolVar(&raw, "raw", false, "Display raw API response instead of manifest format")
 	return cmd
 }
 

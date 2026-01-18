@@ -520,15 +520,19 @@ func saPutWifCmd() *cobra.Command {
 
 func saGetCmd() *cobra.Command {
 	var format string
+	var raw bool
 	cmd := &cobra.Command{
 		Use:   "get <sa-name>",
 		Short: "Get the information about an existing Service Account",
 		Long: undent.Undent(`
-			Get the Service Account's details. You can use -o clientid to only
-			display the client ID of the Service Account.
+			Get the Service Account's details. By default, displays the service
+			account as a manifest.ServiceAccount. Use --raw to display the raw
+			API response. You can use -o clientid to only display the client ID
+			of the Service Account.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa get <sa-name>
+			vcpctl sa get <sa-name> --raw
 			vcpctl sa get <sa-name> -o json
 			vcpctl sa get <sa-name> -o clientid
 		`),
@@ -562,9 +566,20 @@ func saGetCmd() *cobra.Command {
 				return fmt.Errorf("service account '%s' has no client ID", saName)
 			}
 
+			// Convert to manifest unless --raw is specified
+			var outputData interface{}
+			if raw {
+				outputData = sa
+			} else {
+				outputData = serviceAccountManifest{
+					Kind:           kindServiceAccount,
+					ServiceAccount: apiToManifestServiceAccount(sa),
+				}
+			}
+
 			switch format {
 			case "yaml":
-				bytes, err := yaml.Marshal(sa)
+				bytes, err := yaml.Marshal(outputData)
 				if err != nil {
 					return fmt.Errorf("while marshaling service account to YAML: %w", err)
 				}
@@ -574,7 +589,7 @@ func saGetCmd() *cobra.Command {
 				fmt.Println(sa.Id.String())
 				return nil
 			case "json":
-				data, err := json.Marshal(sa)
+				data, err := json.Marshal(outputData)
 				if err != nil {
 					return fmt.Errorf("while marshaling service account to JSON: %w", err)
 				}
@@ -586,6 +601,7 @@ func saGetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&format, "output", "o", "yaml", "Output format (id, json, yaml). The 'id' is the service account's client ID.")
+	cmd.Flags().BoolVar(&raw, "raw", false, "Display raw API response instead of manifest format")
 	return cmd
 }
 

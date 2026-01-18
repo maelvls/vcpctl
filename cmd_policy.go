@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/logutil"
@@ -22,6 +24,7 @@ func policyCmd() *cobra.Command {
 		`),
 		Example: undent.Undent(`
 			vcpctl policy ls
+			vcpctl policy get <policy-name>
 			vcpctl policy rm <policy-name>
 		`),
 		SilenceErrors: true,
@@ -29,6 +32,7 @@ func policyCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		policyLsCmd(),
+		policyGetCmd(),
 		policyRmCmd(),
 	)
 	return cmd
@@ -75,6 +79,78 @@ func policyLsCmd() *cobra.Command {
 			return nil
 		},
 	}
+	return cmd
+}
+
+func policyGetCmd() *cobra.Command {
+	var format string
+	var raw bool
+	cmd := &cobra.Command{
+		Use:   "get <policy-name-or-id>",
+		Short: "Get a Policy",
+		Long: undent.Undent(`
+			Get a policy's details. By default, displays the policy as a
+			manifest.WIMIssuerPolicy. Use --raw to display the raw API response.
+		`),
+		Example: undent.Undent(`
+			vcpctl policy get <policy-name>
+			vcpctl policy get <policy-name> --raw
+			vcpctl policy get <policy-name> -o json
+		`),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("expected a single argument (the policy name or ID), got %s", args)
+			}
+			nameOrID := args[0]
+
+			conf, err := getToolConfig(cmd)
+			if err != nil {
+				return fmt.Errorf("%w", err)
+			}
+			apiClient, err := api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+			if err != nil {
+				return fmt.Errorf("while creating API client: %w", err)
+			}
+
+			policy, err := api.GetPolicy(context.Background(), apiClient, nameOrID)
+			if err != nil {
+				return fmt.Errorf("while getting policy: %w", err)
+			}
+
+			var outputData interface{}
+			if raw {
+				outputData = policy
+			} else {
+				outputData = policyManifest{
+					Kind:   kindIssuerPolicy,
+					Policy: apiToManifestExtendedPolicyInformation(policy),
+				}
+			}
+
+			switch format {
+			case "yaml":
+				bytes, err := yaml.Marshal(outputData)
+				if err != nil {
+					return fmt.Errorf("while marshaling policy to YAML: %w", err)
+				}
+				coloredYAMLPrint(string(bytes) + "\n")
+				return nil
+			case "json":
+				data, err := json.Marshal(outputData)
+				if err != nil {
+					return fmt.Errorf("while marshaling policy to JSON: %w", err)
+				}
+				fmt.Println(string(data))
+				return nil
+			default:
+				return fmt.Errorf("unknown output format: %s", format)
+			}
+		},
+	}
+	cmd.Flags().StringVarP(&format, "output", "o", "yaml", "Output format (json, yaml)")
+	cmd.Flags().BoolVar(&raw, "raw", false, "Display raw API response instead of manifest format")
 	return cmd
 }
 
