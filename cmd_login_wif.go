@@ -197,15 +197,18 @@ func uploadJWKS0x0(jwks []byte) (string, error) {
 	return url, nil
 }
 
-type wifJSONInput struct {
+type wifJSON struct {
 	Type       string `json:"type"`
 	ClientID   string `json:"client_id"`
 	PrivateKey string `json:"private_key"`
-	APIURL     string `json:"api_url"`
+	TenantURL  string `json:"tenant_url"`
 	JWKSURL    string `json:"jwks_url"`
+	Iss        string `json:"iss"`
+	Aud        string `json:"aud"`
+	Sub        string `json:"sub"`
 }
 
-func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) error {
+func loginWithWIFJSON(ctx context.Context, wifJSONPath string) error {
 	if wifJSONPath == "" {
 		return errutil.Fixable(fmt.Errorf("--sa-wif requires a JSON file path or '-' for stdin"))
 	}
@@ -224,14 +227,14 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) e
 		return errutil.Fixable(fmt.Errorf("empty WIF JSON"))
 	}
 
-	var input wifJSONInput
+	var input wifJSON
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return fmt.Errorf("while parsing JSON: %w", err)
 	}
 
 	input.ClientID = strings.TrimSpace(input.ClientID)
 	input.PrivateKey = strings.TrimSpace(input.PrivateKey)
-	input.APIURL = strings.TrimSpace(input.APIURL)
+	input.TenantURL = strings.TrimSpace(input.TenantURL)
 
 	if input.PrivateKey == "" {
 		return errutil.Fixable(fmt.Errorf("missing 'private_key' in JSON"))
@@ -239,17 +242,11 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) e
 	if input.ClientID == "" {
 		return errutil.Fixable(fmt.Errorf("missing 'client_id' in JSON"))
 	}
-	if input.APIURL == "" {
-		return errutil.Fixable(fmt.Errorf("missing 'api_url' in JSON"))
+	if input.TenantURL == "" {
+		return errutil.Fixable(fmt.Errorf("missing 'tenant_url' in JSON"))
 	}
-
-	apiURL := input.APIURL
-	if apiURLOverride != "" {
-		apiURL = apiURLOverride
-	}
-
-	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
-		apiURL = "https://" + apiURL
+	if !strings.HasPrefix(input.TenantURL, "https://") && !strings.HasPrefix(input.TenantURL, "http://") {
+		input.TenantURL = "https://" + input.TenantURL
 	}
 
 	privKey, kid, err := parseWIFPrivateKey(input.PrivateKey)
@@ -257,26 +254,24 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) e
 		return fmt.Errorf("while parsing private key: %w", err)
 	}
 
-
 	validity := 2 * time.Hour
-	jwtString, err := signWIFJWT(privKey, kid, sa.IssuerURL, sa.Subject, sa.Audience, validity)
+	jwtString, err := signWIFJWT(privKey, kid, input.Iss, input.Sub, input.Aud, validity)
 	if err != nil {
 		return fmt.Errorf("while signing JWT: %w", err)
 	}
 
-	tenantID := sa.CompanyId.String()
-	if tenantID == "" {
-		cl := &http.Client{Timeout: 30 * time.Second}
-		tenantID, err = getTenantIDFromAPIURL(cl, apiURL)
-		if err != nil {
-			return fmt.Errorf("while getting tenant ID: %w", err)
-		}
+	cl := http.Client{Transport: api.LogTransport}
+	info, err := api.GetTenantInfoFromTenantURL(cl, input.TenantURL)
+	if err != nil {
+		return fmt.Errorf("while getting tenant info: %w", err)
 	}
 
+	// TODO: This logic should be run anytime a 401 is received, for for now,
+	// let's just do it once.
 	var accessToken string
 	retryDeadline := time.Now().Add(5 * time.Minute)
 	for {
-		accessToken, err = exchangeJWTForAccessToken(ctx, apiURL, tenantID, jwtString)
+		accessToken, err = exchangeJWTForAccessToken(ctx, info.APIURL, info.TenantID, jwtString)
 		if err == nil {
 			break
 		}
@@ -293,23 +288,21 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath, apiURLOverride string) e
 		}
 	}
 
-	tenantURL := deriveUIURL(apiURL)
-
 	current := Auth{
-		URL:                tenantURL,
-		APIURL:             apiURL,
+		TenantURL:          input.TenantURL,
+		APIURL:             info.APIURL,
 		AuthenticationType: "rsaKeyFederated",
 		ClientID:           input.ClientID,
 		AccessToken:        accessToken,
 		WIFPrivateKey:      input.PrivateKey,
-		TenantID:           tenantID,
+		TenantID:           info.TenantID,
 	}
 
 	if err := saveCurrentTenant(current); err != nil {
-		return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
+		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 
-	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
+	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
 	return nil
 }
 
@@ -331,43 +324,6 @@ func parseWIFPrivateKey(privateKeyPEM string) (*ecdsa.PrivateKey, string, error)
 
 	kid := jwkThumbprintEC(&ecKey.PublicKey)
 	return ecKey, kid, nil
-}
-
-func getTenantIDFromAPIURL(cl *http.Client, apiURL string) (string, error) {
-	apiURL = strings.TrimRight(apiURL, "/")
-	endpoint := fmt.Sprintf("%s/v1/useraccounts/self", apiURL)
-
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", fmt.Errorf("while creating request: %w", err)
-	}
-
-	resp, err := cl.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("while sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("while reading response: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("API returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
-
-	var result struct {
-		Company struct {
-			ID string `json:"id"`
-		} `json:"company"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("while parsing response: %w", err)
-	}
-	if result.Company.ID == "" {
-		return "", fmt.Errorf("no company ID in response")
-	}
-	return result.Company.ID, nil
 }
 
 func deriveUIURL(apiURL string) string {

@@ -31,6 +31,16 @@ func NewAccessTokenClient(apiURL, accessToken string, opts ...ClientOption) (*Cl
 	return NewClient(apiURL, opts...)
 }
 
+// Useful for /v1/companies/{urlPrefix}/loginconfig which does not require
+// authentication.
+func NewUnauthenticatedClient(apiURL string, opts ...ClientOption) (*Client, error) {
+	opts = append(opts,
+		WithHTTPClient(&http.Client{Transport: LogTransport}),
+		withUserAgent(),
+	)
+	return NewClient(apiURL, opts...)
+}
+
 // withTpplAPIKey returns a copy of the provided http.Client that adds the
 // header "tppl-api-key" with the provided token.
 func withTpplAPIKey(token string) ClientOption {

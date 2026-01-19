@@ -30,15 +30,21 @@ type FileConf struct {
 }
 
 type Auth struct {
-	URL                string `json:"url"`    // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
-	APIURL             string `json:"apiURL"` // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
-	AuthenticationType string `json:"authenticationType"`
-	APIKey             string `json:"apiKey"`
-	ClientID           string `json:"clientID"`
-	PrivateKey         string `json:"privateKey"`
-	AccessToken        string `json:"accessToken"`
-	WIFPrivateKey      string `json:"wifPrivateKey"`
-	TenantID           string `json:"tenantID"` // The tenant ID (company ID)
+	TenantURL          string `json:"url,omitzero"`                // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	TenantID           string `json:"tenantID,omitzero"`           // The tenant ID (company ID).
+	APIURL             string `json:"apiURL,omitzero"`             // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey"
+
+	// Type "apiKey"
+	APIKey string `json:"apiKey,omitzero"`
+
+	// Type "rsaKeyFederated" and "rsaKey"
+	ClientID    string `json:"clientID,omitzero"`    // For sa-wif and sa-keypair.
+	PrivateKey  string `json:"privateKey,omitzero"`  // For sa-wif and sa-keypair.
+	AccessToken string `json:"accessToken,omitzero"` // For sa-wif and sa-keypair.
+
+	// Type "rsaKeyFederated" only
+	WIFPrivateKey string `json:"wifPrivateKey,omitzero"` // For sa-wif.
 }
 
 // Styles for prompts.
@@ -150,16 +156,6 @@ func authCmd() *cobra.Command {
 	return cmd
 }
 
-// https://docs.venafi.cloud/vsatellite/r-VSatellite-deployNew-network-connections
-var venafiRegions = []string{
-	"https://api.venafi.cloud",
-	"https://api.eu.venafi.cloud",
-	"https://api.uk.venafi.cloud",
-	"https://api.au.venafi.cloud",
-	"https://api.ca.venafi.cloud",
-	"https://api.sg.venafi.cloud",
-}
-
 func loginCmd() *cobra.Command {
 	var apiURL, apiKey string
 	var wifServiceAccount string
@@ -216,7 +212,7 @@ func loginCmd() *cobra.Command {
 				return loginWithServiceAccountKey(cmd.Context(), args, saKeyPath, apiURL)
 			}
 			if wifServiceAccount != "" {
-				return loginWithWIFJSON(cmd.Context(), wifServiceAccount, apiURL)
+				return loginWithWIFJSON(cmd.Context(), wifServiceAccount)
 			}
 			// Check for conflicts between positional URL argument and --api-url
 			// flag or env vars.
@@ -251,40 +247,25 @@ func loginCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				resp, err := api.SelfCheck(context.Background(), cl)
+				resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
-				}
-
-				// Workaround the fact that all devstacks are created with the
-				// URL prefix "stack" instead of "ui-stack-devXXX". For now,
-				// let's just use the API URL, which looks like this:
-				//   https://api-dev210.qa.venafi.io
-				// and turn it into the tenant URL, like this:
-				//   https://ui-stack-dev210.qa.venafi.io
-				//
-				// See:
-				// https://gitlab.com/venafi/vaas/test-enablement/vaas-auto/-/merge_requests/738/diffs#note_2579353788
-				tenantURL := fmt.Sprintf("%s.venafi.cloud", resp.Company.UrlPrefix)
-				if tenantURL == "stack" {
-					tenantURL = apiURL
-					tenantURL = strings.Replace(tenantURL, "api-", "ui-stack-", 1)
 				}
 
 				current := Auth{
 					APIURL:             apiURL,
 					AuthenticationType: "apiKey",
 					APIKey:             apiKey,
-					URL:                tenantURL,
+					TenantURL:          tenantURL,
 					TenantID:           resp.Company.Id.String(),
 				}
 
 				err = saveCurrentTenant(current)
 				if err != nil {
-					return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
+					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
 
-				logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
+				logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
 				return nil
 			}
 
@@ -312,7 +293,7 @@ func loginCmd() *cobra.Command {
 				}
 
 				current := Auth{
-					URL:                tenantURL,
+					TenantURL:          tenantURL,
 					APIURL:             info.APIURL,
 					AuthenticationType: "apiKey",
 				}
@@ -326,13 +307,15 @@ func loginCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("while creating API client: %w", err)
 					}
-					_, err = api.SelfCheck(context.Background(), cl)
+					_, tenantURL, err := api.SelfCheck(context.Background(), cl)
 					if err != nil {
 						return fmt.Errorf("while checking the API key's validity: %w", err)
 					}
+
+					logutil.Debugf("API key's tenant URL is %s", tenantURL)
 				} else {
 					// Prompt for API key.
-					fmt.Println(subtleStyle.Render("To get the API key, open: " + strings.TrimRight(current.URL, "/") + "/platform-settings/user-preferences?key=api-keys"))
+					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
 					fmt.Println()
 
 					apiKeyInput, err := promptString("API Key: ", func(input string) error {
@@ -353,11 +336,12 @@ func loginCmd() *cobra.Command {
 							return fmt.Errorf("while creating API client: %w", err)
 						}
 
-						resp, err := api.SelfCheck(context.Background(), cl)
+						resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
 						if err != nil {
 							return err
 						}
 						current.TenantID = resp.Company.Id.String()
+						current.TenantURL = tenantURL
 						return nil
 					})
 					if err != nil {
@@ -368,10 +352,10 @@ func loginCmd() *cobra.Command {
 
 				err = saveCurrentTenant(current)
 				if err != nil {
-					return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
+					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
 
-				logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.URL+"'."))
+				logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.TenantURL+"'."))
 				return nil
 			}
 
@@ -384,14 +368,14 @@ func loginCmd() *cobra.Command {
 
 			// Let the user know if they are already authenticated.
 			skipTenantPrompt := false
-			if current.URL != "" {
+			if current.TenantURL != "" {
 				cl, err := api.NewAPIKeyClient(current.APIURL, current.APIKey)
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				_, err = api.SelfCheck(context.Background(), cl)
+				_, tenantURL, err := api.SelfCheck(context.Background(), cl)
 				if err == nil {
-					fmt.Printf("\n%s\n\n", successStyle.Render("✓ You are already logged in to "+current.URL))
+					fmt.Printf("\n%s\n\n", successStyle.Render("✓ You are already logged in to "+tenantURL))
 
 					// Ask if they want to add a new tenant or re-login to existing one
 					addNew, err := promptYesNo("Do you want to add a new tenant?")
@@ -400,7 +384,7 @@ func loginCmd() *cobra.Command {
 					}
 
 					if !addNew {
-						relogin, err := promptYesNo("Do you want to re-login to " + current.URL + "?")
+						relogin, err := promptYesNo("Do you want to re-login to " + tenantURL + "?")
 						if err != nil {
 							return fmt.Errorf("prompt cancelled: %w", err)
 						}
@@ -441,7 +425,7 @@ func loginCmd() *cobra.Command {
 					info, err := api.GetTenantInfoFromTenantURL(httpCl, input)
 					switch {
 					case err == nil:
-						current.URL = input
+						current.TenantURL = input
 						current.APIURL = info.APIURL
 						return nil
 					case errors.As(err, &errutil.NotFound{}):
@@ -453,12 +437,12 @@ func loginCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				current.URL = tenantURL
+				current.TenantURL = tenantURL
 				fmt.Println()
 			}
 
 			// Prompt for API Key.
-			fmt.Println(subtleStyle.Render("To get the API key, open: " + strings.TrimRight(current.URL, "/") + "/platform-settings/user-preferences?key=api-keys"))
+			fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
 			fmt.Println()
 
 			apiKeyInput, err := promptString("API Key: ", func(input string) error {
@@ -479,11 +463,12 @@ func loginCmd() *cobra.Command {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
 
-				resp, err := api.SelfCheck(context.Background(), cl)
+				resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
 				if err != nil {
 					return err
 				}
 				current.TenantID = resp.Company.Id.String()
+				current.TenantURL = tenantURL
 
 				return nil
 			})
@@ -493,12 +478,12 @@ func loginCmd() *cobra.Command {
 			current.APIKey = apiKeyInput
 			current.AuthenticationType = "apiKey"
 
-			logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.URL+"'."))
+			logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.TenantURL+"'."))
 
 			// Save the configuration to ~/.config/vcpctl.yaml
 			err = saveCurrentTenant(current)
 			if err != nil {
-				return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
+				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 			}
 
 			return nil
@@ -655,7 +640,7 @@ func switchCmd() *cobra.Command {
 				// If a tenant URL is provided, we try to find it in the configuration.
 				tenantURL := args[0]
 				for _, auth := range conf.Auths {
-					if auth.URL == tenantURL {
+					if auth.TenantURL == tenantURL {
 						return saveCurrentTenant(auth)
 					}
 				}
@@ -672,7 +657,7 @@ func switchCmd() *cobra.Command {
 			for _, auth := range conf.Auths {
 				opts = append(opts, huh.Option[Auth]{
 					Value: auth,
-					Key:   auth.URL,
+					Key:   auth.TenantURL,
 				})
 			}
 
@@ -691,7 +676,7 @@ func switchCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("selecting tenant: %w", err)
 			}
-			conf.CurrentURL = current.URL
+			conf.CurrentURL = current.TenantURL
 			return saveFileConf(conf)
 		},
 	}
@@ -715,17 +700,17 @@ func saveCurrentTenant(auth Auth) error {
 
 	// Check if the tenant already exists in the configuration.
 	for i := range conf.Auths {
-		if conf.Auths[i].URL == auth.URL {
-			conf.CurrentURL = auth.URL
+		if conf.Auths[i].TenantURL == auth.TenantURL {
+			conf.CurrentURL = auth.TenantURL
 			conf.Auths[i] = auth
 			return saveFileConf(conf)
 		}
 	}
 
 	// If it doesn't exist, add it.
-	conf.CurrentURL = auth.URL
+	conf.CurrentURL = auth.TenantURL
 	newAuth := Auth{
-		URL:                auth.URL,
+		TenantURL:          auth.TenantURL,
 		APIURL:             auth.APIURL,
 		AuthenticationType: auth.AuthenticationType,
 		APIKey:             auth.APIKey,
@@ -738,35 +723,6 @@ func saveCurrentTenant(auth Auth) error {
 	conf.Auths = append(conf.Auths, newAuth)
 
 	return saveFileConf(conf)
-}
-
-// Tenant name is the first segment of the URL used when a customer opens the
-// UI. E.g., with the UI at URL:
-//
-//	https://ven-cert-manager-uk.venafi.cloud
-//	        <-- tenantName --->
-func toTenantID(cl http.Client, tenantName string) (apiURL, tenantID string, _ error) {
-	for _, apiURL := range venafiRegions {
-		url := fmt.Sprintf("%s/v1/companies/%s/loginconfig", apiURL, tenantName)
-		resp, err := cl.Get(url)
-		if err != nil {
-			continue
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			continue
-		}
-		var respJSON struct {
-			CompanyID string `json:"companyId"`
-		}
-		if err := decodeJSON(resp.Body, &resp); err != nil {
-			continue
-		}
-
-		return apiURL, respJSON.CompanyID, nil
-	}
-
-	return "", "", errutil.NotFound{NameOrID: tenantName}
 }
 
 // resolveTenant resolves a tenant identifier (ID, domain, or URL) to an Auth entry
@@ -785,7 +741,7 @@ func resolveTenant(conf FileConf, tenantInput string) (Auth, bool) {
 
 	// Try exact URL match
 	for _, auth := range conf.Auths {
-		if auth.URL == normalized {
+		if auth.TenantURL == normalized {
 			return auth, true
 		}
 	}
@@ -795,14 +751,14 @@ func resolveTenant(conf FileConf, tenantInput string) (Auth, bool) {
 		normalized = "https://" + normalized
 	}
 	for _, auth := range conf.Auths {
-		if auth.URL == normalized {
+		if auth.TenantURL == normalized {
 			return auth, true
 		}
 	}
 
 	// Try domain substring match (e.g., "ui-stack-dev210.qa.venafi.io" should match "https://ui-stack-dev210.qa.venafi.io")
 	for _, auth := range conf.Auths {
-		if strings.Contains(auth.URL, tenantInput) {
+		if strings.Contains(auth.TenantURL, tenantInput) {
 			return auth, true
 		}
 	}
@@ -817,16 +773,36 @@ type ToolConf struct {
 	AccessToken string `json:"accessToken"`
 }
 
+func newAPIClient(conf ToolConf) (*api.Client, error) {
+	if conf.AccessToken != "" {
+		return api.NewAccessTokenClient(conf.APIURL, conf.AccessToken)
+	}
+	if conf.APIKey == "" {
+		return nil, fmt.Errorf("missing authentication credentials (no access token or API key)")
+	}
+	return api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+}
+
 // This must be used by all other commands to get the API key and API URL.
 func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
+	// This CLI used to support the APIKEY and APIURL env vars, but it no longer
+	// does since VEN_API_KEY and VEN_API_URL are the standard in other tools
+	// such as venctl. Let's give a warning if the old ones are used.
+	if os.Getenv("APIKEY") != "" {
+		logutil.Infof("⚠️  Warning: the env var APIKEY is set but it is no longer read by this tool. Please use VEN_API_KEY instead.")
+	}
+	if os.Getenv("APIURL") != "" {
+		logutil.Infof("⚠️  Warning: the env var APIURL is set but it is no longer read by this tool. Please use VEN_API_URL instead.")
+	}
+
 	envAPIURL := os.Getenv("VEN_API_URL")
 	envAPIKey := os.Getenv("VEN_API_KEY")
 	flagAPIURL, _ := cmd.Flags().GetString("api-url")
 	flagAPIKey, _ := cmd.Flags().GetString("api-key")
 	flagTenant, _ := cmd.Flags().GetString("tenant")
 
-	// If any of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set, we don't use
-	// the configuration file.
+	// If any of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set, we
+	// don't use the configuration file.
 	if flagAPIKey != "" || envAPIKey != "" || flagAPIURL != "" || envAPIURL != "" {
 		logutil.Debugf("one of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set. The configuration file at ~/%s won't be loaded", configPath)
 
@@ -856,6 +832,8 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		return ToolConf{
 			APIURL: apiURL,
 			APIKey: apiKey,
+
+			AccessToken: "",
 		}, nil
 	}
 
@@ -875,7 +853,7 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		if !ok {
 			return ToolConf{}, fmt.Errorf("tenant '%s' not found in configuration. Available tenants can be listed with 'vcpctl switch'. Log in to a new tenant with 'vcpctl login'.", flagTenant)
 		}
-		logutil.Debugf("Using tenant '%s' (ID: %s) from --tenant flag", current.URL, current.TenantID)
+		logutil.Debugf("Using tenant '%s' (ID: %s) from --tenant flag", current.TenantURL, current.TenantID)
 	} else {
 		// Find the current tenant from config
 		current, ok = currentFrom(conf)
@@ -944,7 +922,7 @@ func saveFileConf(conf FileConf) error {
 func currentFrom(conf FileConf) (Auth, bool) {
 	if conf.CurrentURL != "" {
 		for _, auth := range conf.Auths {
-			if auth.URL == conf.CurrentURL {
+			if auth.TenantURL == conf.CurrentURL {
 				return auth, true
 			}
 		}

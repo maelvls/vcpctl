@@ -83,31 +83,26 @@ func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, a
 		return fmt.Errorf("while creating access-token client: %w", err)
 	}
 
-	selfCheck, err := api.SelfCheck(ctx, cl)
+	self, tenantURL, err := api.SelfCheck(ctx, cl)
 	if err != nil {
 		return fmt.Errorf("while checking the access token's validity: %w", err)
 	}
 
-	tenantURL := fmt.Sprintf("https://%s.venafi.cloud", selfCheck.Company.UrlPrefix)
-	if selfCheck.Company.UrlPrefix == "stack" {
-		tenantURL = strings.Replace(apiURL, "api-", "ui-stack-", 1)
-	}
-
 	current := Auth{
-		URL:                tenantURL,
+		TenantURL:          tenantURL,
 		APIURL:             apiURL,
 		AuthenticationType: "rsaKey",
 		ClientID:           saKey.ClientID,
 		PrivateKey:         saKey.PrivateKey,
 		AccessToken:        accessToken,
-		TenantID:           selfCheck.Company.Id.String(),
+		TenantID:           self.Company.Id.String(),
 	}
 
 	if err := saveCurrentTenant(current); err != nil {
-		return fmt.Errorf("saving configuration for %s: %w", current.URL, err)
+		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 
-	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.URL)
+	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
 	return nil
 }
 

@@ -1671,6 +1671,13 @@ type CompanyInformation struct {
 	UrlPrefix           string                          `json:"urlPrefix,omitempty,omitzero"`
 }
 
+// CompanyLoginConfigResponse defines model for CompanyLoginConfigResponse.
+type CompanyLoginConfigResponse struct {
+	CompanyId        openapi_types.UUID `json:"companyId,omitempty,omitzero"`
+	NewConfigEnabled bool               `json:"newConfigEnabled,omitempty,omitzero"`
+	SsoLogin         bool               `json:"ssoLogin,omitempty,omitzero"`
+}
+
 // CompanyType defines model for CompanyType.
 type CompanyType string
 
@@ -3826,6 +3833,18 @@ type ClientInterface interface {
 
 	CertificateissuingtemplateUpdate(ctx context.Context, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CompaniesGetById request
+	CompaniesGetById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetV1CompaniesByIdUrlPrefix request
+	GetV1CompaniesByIdUrlPrefix(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetV1CompaniesByUrlPrefixBaseenv request
+	GetV1CompaniesByUrlPrefixBaseenv(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetV1CompaniesByUrlPrefixLoginconfig request
+	GetV1CompaniesByUrlPrefixLoginconfig(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ConfigurationsGetAll request
 	ConfigurationsGetAll(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4251,6 +4270,54 @@ func (c *Client) CertificateissuingtemplateUpdateWithBody(ctx context.Context, i
 
 func (c *Client) CertificateissuingtemplateUpdate(ctx context.Context, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCertificateissuingtemplateUpdateRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CompaniesGetById(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCompaniesGetByIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetV1CompaniesByIdUrlPrefix(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1CompaniesByIdUrlPrefixRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetV1CompaniesByUrlPrefixBaseenv(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1CompaniesByUrlPrefixBaseenvRequest(c.Server, urlPrefix)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetV1CompaniesByUrlPrefixLoginconfig(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1CompaniesByUrlPrefixLoginconfigRequest(c.Server, urlPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -5673,6 +5740,142 @@ func NewCertificateissuingtemplateUpdateRequestWithBody(server string, id openap
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCompaniesGetByIdRequest generates requests for CompaniesGetById
+func NewCompaniesGetByIdRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/companies/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetV1CompaniesByIdUrlPrefixRequest generates requests for GetV1CompaniesByIdUrlPrefix
+func NewGetV1CompaniesByIdUrlPrefixRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/companies/%s/urlPrefix", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetV1CompaniesByUrlPrefixBaseenvRequest generates requests for GetV1CompaniesByUrlPrefixBaseenv
+func NewGetV1CompaniesByUrlPrefixBaseenvRequest(server string, urlPrefix string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "urlPrefix", runtime.ParamLocationPath, urlPrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/companies/%s/baseenv", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetV1CompaniesByUrlPrefixLoginconfigRequest generates requests for GetV1CompaniesByUrlPrefixLoginconfig
+func NewGetV1CompaniesByUrlPrefixLoginconfigRequest(server string, urlPrefix string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "urlPrefix", runtime.ParamLocationPath, urlPrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/companies/%s/loginconfig", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -7370,6 +7573,18 @@ type ClientWithResponsesInterface interface {
 
 	CertificateissuingtemplateUpdateWithResponse(ctx context.Context, id openapi_types.UUID, body CertificateissuingtemplateUpdateJSONRequestBody, reqEditors ...RequestEditorFn) (*CertificateissuingtemplateUpdateResponse, error)
 
+	// CompaniesGetByIdWithResponse request
+	CompaniesGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CompaniesGetByIdResponse, error)
+
+	// GetV1CompaniesByIdUrlPrefixWithResponse request
+	GetV1CompaniesByIdUrlPrefixWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetV1CompaniesByIdUrlPrefixResponse, error)
+
+	// GetV1CompaniesByUrlPrefixBaseenvWithResponse request
+	GetV1CompaniesByUrlPrefixBaseenvWithResponse(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*GetV1CompaniesByUrlPrefixBaseenvResponse, error)
+
+	// GetV1CompaniesByUrlPrefixLoginconfigWithResponse request
+	GetV1CompaniesByUrlPrefixLoginconfigWithResponse(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*GetV1CompaniesByUrlPrefixLoginconfigResponse, error)
+
 	// ConfigurationsGetAllWithResponse request
 	ConfigurationsGetAllWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ConfigurationsGetAllResponse, error)
 
@@ -7917,6 +8132,106 @@ func (r CertificateissuingtemplateUpdateResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CertificateissuingtemplateUpdateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CompaniesGetByIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CompanyInformation
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CompaniesGetByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CompaniesGetByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetV1CompaniesByIdUrlPrefixResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CompanyInformation
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetV1CompaniesByIdUrlPrefixResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetV1CompaniesByIdUrlPrefixResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetV1CompaniesByUrlPrefixBaseenvResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CompanyInformation
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetV1CompaniesByUrlPrefixBaseenvResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetV1CompaniesByUrlPrefixBaseenvResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetV1CompaniesByUrlPrefixLoginconfigResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CompanyLoginConfigResponse
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON412      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetV1CompaniesByUrlPrefixLoginconfigResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetV1CompaniesByUrlPrefixLoginconfigResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -9073,6 +9388,42 @@ func (c *ClientWithResponses) CertificateissuingtemplateUpdateWithResponse(ctx c
 		return nil, err
 	}
 	return ParseCertificateissuingtemplateUpdateResponse(rsp)
+}
+
+// CompaniesGetByIdWithResponse request returning *CompaniesGetByIdResponse
+func (c *ClientWithResponses) CompaniesGetByIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CompaniesGetByIdResponse, error) {
+	rsp, err := c.CompaniesGetById(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCompaniesGetByIdResponse(rsp)
+}
+
+// GetV1CompaniesByIdUrlPrefixWithResponse request returning *GetV1CompaniesByIdUrlPrefixResponse
+func (c *ClientWithResponses) GetV1CompaniesByIdUrlPrefixWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetV1CompaniesByIdUrlPrefixResponse, error) {
+	rsp, err := c.GetV1CompaniesByIdUrlPrefix(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetV1CompaniesByIdUrlPrefixResponse(rsp)
+}
+
+// GetV1CompaniesByUrlPrefixBaseenvWithResponse request returning *GetV1CompaniesByUrlPrefixBaseenvResponse
+func (c *ClientWithResponses) GetV1CompaniesByUrlPrefixBaseenvWithResponse(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*GetV1CompaniesByUrlPrefixBaseenvResponse, error) {
+	rsp, err := c.GetV1CompaniesByUrlPrefixBaseenv(ctx, urlPrefix, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetV1CompaniesByUrlPrefixBaseenvResponse(rsp)
+}
+
+// GetV1CompaniesByUrlPrefixLoginconfigWithResponse request returning *GetV1CompaniesByUrlPrefixLoginconfigResponse
+func (c *ClientWithResponses) GetV1CompaniesByUrlPrefixLoginconfigWithResponse(ctx context.Context, urlPrefix string, reqEditors ...RequestEditorFn) (*GetV1CompaniesByUrlPrefixLoginconfigResponse, error) {
+	rsp, err := c.GetV1CompaniesByUrlPrefixLoginconfig(ctx, urlPrefix, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetV1CompaniesByUrlPrefixLoginconfigResponse(rsp)
 }
 
 // ConfigurationsGetAllWithResponse request returning *ConfigurationsGetAllResponse
@@ -10287,6 +10638,194 @@ func ParseCertificateissuingtemplateUpdateResponse(rsp *http.Response) (*Certifi
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
 		var dest ErrorResponse7
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCompaniesGetByIdResponse parses an HTTP response from a CompaniesGetByIdWithResponse call
+func ParseCompaniesGetByIdResponse(rsp *http.Response) (*CompaniesGetByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CompaniesGetByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompanyInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetV1CompaniesByIdUrlPrefixResponse parses an HTTP response from a GetV1CompaniesByIdUrlPrefixWithResponse call
+func ParseGetV1CompaniesByIdUrlPrefixResponse(rsp *http.Response) (*GetV1CompaniesByIdUrlPrefixResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetV1CompaniesByIdUrlPrefixResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompanyInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetV1CompaniesByUrlPrefixBaseenvResponse parses an HTTP response from a GetV1CompaniesByUrlPrefixBaseenvWithResponse call
+func ParseGetV1CompaniesByUrlPrefixBaseenvResponse(rsp *http.Response) (*GetV1CompaniesByUrlPrefixBaseenvResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetV1CompaniesByUrlPrefixBaseenvResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompanyInformation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetV1CompaniesByUrlPrefixLoginconfigResponse parses an HTTP response from a GetV1CompaniesByUrlPrefixLoginconfigWithResponse call
+func ParseGetV1CompaniesByUrlPrefixLoginconfigResponse(rsp *http.Response) (*GetV1CompaniesByUrlPrefixLoginconfigResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetV1CompaniesByUrlPrefixLoginconfigResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompanyLoginConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

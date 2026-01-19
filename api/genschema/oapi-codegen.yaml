@@ -17,3 +17,4 @@ output-options:
     - User Accounts # Only for check API key.
     - Teams
     - Application
+    - Company # For /v1/companies/{urlPrefix}/loginconfig.
