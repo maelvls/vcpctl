@@ -303,7 +303,7 @@ func loginCmd() *cobra.Command {
 					}
 				} else {
 					// Prompt for API key.
-					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.URL + "/platform-settings/user-preferences?key=api-keys"))
+					fmt.Println(subtleStyle.Render("To get the API key, open: " + strings.TrimRight(current.URL, "/") + "/platform-settings/user-preferences?key=api-keys"))
 					fmt.Println()
 
 					apiKeyInput, err := promptString("API Key: ", func(input string) error {
@@ -429,7 +429,7 @@ func loginCmd() *cobra.Command {
 			}
 
 			// Prompt for API Key.
-			fmt.Println(subtleStyle.Render("To get the API key, open: " + current.URL + "/platform-settings/user-preferences?key=api-keys"))
+			fmt.Println(subtleStyle.Render("To get the API key, open: " + strings.TrimRight(current.URL, "/") + "/platform-settings/user-preferences?key=api-keys"))
 			fmt.Println()
 
 			apiKeyInput, err := promptString("API Key: ", func(input string) error {
