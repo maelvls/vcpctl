@@ -439,12 +439,17 @@ func DiffToPatchClientAuthentication(existing, desired ClientAuthenticationInfor
 		return patch, false, fmt.Errorf("diffToPatchClientAuthentication: while looking at the 'type' field under the existing 'clientAuthentication' field: %w", err)
 	}
 
+	// The clientAuthentication object has all of its fields set to 'required':
+	// when patching, we can't partially update it by omitting some fields, so
+	// we need to copy over all existing fields even when they didn't change as
+	// long one change happened in one of the fields.
 	switch desiredVal := desiredRaw.(type) {
 	case JwtJwksAuthenticationInformation:
 		switch existingVal := existingRaw.(type) {
 		case JwtJwksAuthenticationInformation:
-			var patchVal JwtJwksAuthenticationInformation
-			if desiredVal.Urls != nil && !slicesEqual(desiredVal.Urls, existingVal.Urls) {
+			patchVal := existingVal
+
+			if !slicesEqual(desiredVal.Urls, existingVal.Urls) {
 				patchVal.Urls = desiredVal.Urls
 				smthChanged = true
 			}
@@ -463,13 +468,14 @@ func DiffToPatchClientAuthentication(existing, desired ClientAuthenticationInfor
 	case JwtOidcAuthenticationInformation:
 		switch existingVal := existingRaw.(type) {
 		case JwtOidcAuthenticationInformation:
-			var patchVal JwtOidcAuthenticationInformation
-			if desiredVal.Audience != "" && desiredVal.Audience != existingVal.Audience {
+			patchVal := existingVal
+
+			if desiredVal.Audience != existingVal.Audience {
 				patchVal.Audience = desiredVal.Audience
 				smthChanged = true
 			}
 
-			if desiredVal.BaseUrl != "" && desiredVal.BaseUrl != existingVal.BaseUrl {
+			if desiredVal.BaseUrl != existingVal.BaseUrl {
 				patchVal.BaseUrl = desiredVal.BaseUrl
 				smthChanged = true
 			}

@@ -185,6 +185,25 @@ func TestDiffToPatchConfig_ImmutableFieldErrors(t *testing.T) {
 	}
 }
 
+func TestDiffToPatchConfig_RequiredFieldsAreCopied(t *testing.T) {
+	existing := baseConfig(t)
+	desired := existing
+
+	desired.Name = "new-name"
+
+	patch, changed, err := DiffToPatchConfig(existing, desired)
+	require.NoError(t, err)
+	require.True(t, changed)
+
+	assert.Equal(t, "new-name", patch.Name)
+
+	patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
+	require.NoError(t, err)
+	patchJwks, ok := patchAuth.(JwtJwksAuthenticationInformation)
+	require.True(t, ok)
+	assert.Equal(t, []string{"https://jwks.example.com"}, patchJwks.Urls)
+}
+
 func TestDiffToPatchConfig_ClientAuthenticationError(t *testing.T) {
 	existing := baseConfig(t)
 	desired := existing
