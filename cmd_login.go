@@ -41,12 +41,13 @@ type ToolContext struct {
 
 	// For the type "apiKey".
 	APIKey string `json:"apiKey,omitzero"`
+	Email  string `json:"email,omitzero"` // The user's email address (for API key auth)
 
 	// For the types "rsaKeyFederated" and "rsaKey".
 	AccessToken string `json:"accessToken,omitzero"`
 	PrivateKey  string `json:"privateKey,omitzero"`
 
-	// For the type "rsaKeyFederated".
+	// For the type "rsaKey".
 	ClientID string `json:"clientID,omitzero"`
 }
 
@@ -73,9 +74,10 @@ func promptYesNo(question string) (bool, error) {
 			return false, err
 		}
 		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "y" || input == "yes" {
+		switch input {
+		case "y", "yes":
 			return true, nil
-		} else if input == "n" || input == "no" {
+		case "n", "no":
 			return false, nil
 		}
 		fmt.Println(errorStyle.Render("✗ Please enter 'y' or 'n'"))
@@ -125,29 +127,6 @@ func promptString(prompt string, validate func(string) error) (string, error) {
 	}
 }
 
-func promptSelect(title string, items []string) (int, error) {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Println(title)
-	for i, item := range items {
-		fmt.Printf("  %d) %s\n", i+1, item)
-	}
-	for {
-		fmt.Printf("\nSelect (1-%d): ", len(items))
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return 0, err
-		}
-		input = strings.TrimSpace(input)
-		var choice int
-		_, err = fmt.Sscanf(input, "%d", &choice)
-		if err != nil || choice < 1 || choice > len(items) {
-			fmt.Println(errorStyle.Render(fmt.Sprintf("✗ Please enter a number between 1 and %d", len(items))))
-			continue
-		}
-		return choice - 1, nil
-	}
-}
-
 func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "auth",
@@ -164,17 +143,14 @@ func authCmd() *cobra.Command {
 
 func loginCmd() *cobra.Command {
 	var apiURL, apiKey string
-	var wifServiceAccount string
-	var wifScopes []string
-	var saKeyPath string
 	cmd := &cobra.Command{
 		Use:           "login [url]",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.MaximumNArgs(1),
-		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant.",
+		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant with an API key.",
 		Long: undent.Undent(`
-			Authenticate to a CyberArk Certificate Manager, SaaS tenant.
+			Authenticate to a CyberArk Certificate Manager, SaaS tenant using an API key.
 
 			You can provide the tenant UI URL (the URL you use to access the web interface in
 			your browser) as a positional argument. If no URL is provided, you will be prompted
@@ -190,6 +166,9 @@ func loginCmd() *cobra.Command {
 
 			Alternatively, you can use the environment variables VEN_API_URL and VEN_API_KEY to
 			provide the API URL and API key.
+
+			For WIF authentication, use 'vcpctl login-wif'.
+			For service account keypair authentication, use 'vcpctl login-keypair'.
 		`),
 		Example: undent.Undent(`
 			# Provide tenant URL, will prompt for API key:
@@ -200,26 +179,8 @@ func loginCmd() *cobra.Command {
 
 			# Bypass tenant URL to API URL conversion (for advanced use):
 			vcpctl login https://glow-in-the-dark.venafi.cloud --api-key <key>
-
-			# WIF login (creates/updates service account, uploads JWKS to 0x0.st, and stores access token):
-			vcpctl sa gen wif my-sa -ojson | vcpctl login --sa-wif -
-
-			# Service account keypair login (JSON from stdin):
-			vcpctl sa gen keypair my-sa -ojson | vcpctl login --sa-keypair -
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if saKeyPath != "" {
-				if wifServiceAccount != "" {
-					return errutil.Fixable(fmt.Errorf("--sa-keypair and --sa-wif are mutually exclusive"))
-				}
-				if apiKey != "" {
-					return errutil.Fixable(fmt.Errorf("--sa-keypair does not use --api-key"))
-				}
-				return loginWithServiceAccountKey(cmd.Context(), args, saKeyPath, apiURL)
-			}
-			if wifServiceAccount != "" {
-				return loginWithWIFJSON(cmd.Context(), wifServiceAccount)
-			}
 			// Check for conflicts between positional URL argument and --api-url
 			// flag or env vars.
 			if len(args) > 0 {
@@ -264,6 +225,7 @@ func loginCmd() *cobra.Command {
 					APIKey:             apiKey,
 					TenantURL:          tenantURL,
 					TenantID:           resp.Company.Id.String(),
+					Email:              resp.User.EmailAddress,
 				}
 
 				err = saveCurrentTenant(current)
@@ -313,11 +275,12 @@ func loginCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("while creating API client: %w", err)
 					}
-					_, tenantURL, err := api.SelfCheck(context.Background(), cl)
+					resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
 					if err != nil {
 						return fmt.Errorf("while checking the API key's validity: %w", err)
 					}
 
+					current.Email = resp.User.EmailAddress
 					logutil.Debugf("API key's tenant URL is %s", tenantURL)
 				} else {
 					// Prompt for API key.
@@ -348,6 +311,7 @@ func loginCmd() *cobra.Command {
 						}
 						current.TenantID = resp.Company.Id.String()
 						current.TenantURL = tenantURL
+						current.Email = resp.User.EmailAddress
 						return nil
 					})
 					if err != nil {
@@ -414,7 +378,7 @@ func loginCmd() *cobra.Command {
 				fmt.Println()
 			}
 
-			// Prompt for Tenant URL (skip if re-logging in)
+			// Prompt for Tenant URL (skip if re-logging in).
 			if !skipTenantPrompt {
 				fmt.Println(subtleStyle.Render("Enter the URL you use to log into CyberArk Certificate Manager, SaaS"))
 				fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
@@ -475,6 +439,7 @@ func loginCmd() *cobra.Command {
 				}
 				current.TenantID = resp.Company.Id.String()
 				current.TenantURL = tenantURL
+				current.Email = resp.User.EmailAddress
 
 				return nil
 			})
@@ -497,10 +462,61 @@ func loginCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
-	cmd.Flags().StringVar(&wifServiceAccount, "sa-wif", "", "Login using Workload Identity Federation JSON from 'vcpctl sa gen wif' (use '-' for stdin)")
-	cmd.Flags().StringArrayVar(&wifScopes, "scope", []string{}, "(Deprecated) Scopes for the WIF service account")
-	cmd.Flags().StringVar(&saKeyPath, "sa-keypair", "", "Login using a service account keypair JSON (use '-' for stdin)")
 
+	return cmd
+}
+
+func loginWifCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "login-wif <json-file>",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ExactArgs(1),
+		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant using WIF.",
+		Long: undent.Undent(`
+			Authenticate to a CyberArk Certificate Manager, SaaS tenant using Workload Identity Federation (WIF).
+
+			This command expects a JSON file containing the WIF credentials from 'vcpctl sa gen wif'.
+			Use '-' to read the JSON from stdin.
+		`),
+		Example: undent.Undent(`
+			# WIF login from file:
+			vcpctl login-wif wif-credentials.json
+
+			# WIF login from stdin:
+			vcpctl sa gen wif my-sa -ojson | vcpctl login-wif -
+		`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return loginWithWIFJSON(cmd.Context(), args[0])
+		},
+	}
+	return cmd
+}
+
+func loginKeypairCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "login-keypair <json-file>",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ExactArgs(1),
+		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant using a service account keypair.",
+		Long: undent.Undent(`
+			Authenticate to a CyberArk Certificate Manager, SaaS tenant using a service account keypair.
+
+			This command expects a JSON file containing the service account credentials from 'vcpctl sa gen keypair'.
+			Use '-' to read the JSON from stdin.
+		`),
+		Example: undent.Undent(`
+			# Keypair login from file:
+			vcpctl login-keypair sa-keypair.json
+
+			# Keypair login from stdin:
+			vcpctl sa gen keypair my-sa -ojson | vcpctl login-keypair -
+		`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return loginWithServiceAccountKey(cmd.Context(), []string{}, args[0], "")
+		},
+	}
 	return cmd
 }
 
@@ -643,7 +659,8 @@ func useContextCmd() *cobra.Command {
 			}
 
 			if len(args) > 0 {
-				// If a context name/URL is provided, we try to find it in the configuration.
+				// If a context name/URL is provided, we try to find it in the
+				// configuration.
 				contextInput := args[0]
 				ctx, ok := resolveContext(conf, contextInput)
 				if !ok {
@@ -712,19 +729,15 @@ func saveCurrentContext(toolctx ToolContext) error {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Derive context name if not set
+	// Derive context name if not set.
 	if toolctx.Name == "" {
-		toolctx.Name = deriveContextName(toolctx.TenantURL, conf.ToolContexts)
+		toolctx.Name = deriveContextName(toolctx, conf.ToolContexts)
 	}
 
-	// Check if a context with this URL already exists in the configuration.
+	// Check if a context with this name already exists; if so, update it.
 	for i := range conf.ToolContexts {
-		if conf.ToolContexts[i].TenantURL == toolctx.TenantURL {
+		if conf.ToolContexts[i].Name == toolctx.Name {
 			conf.CurrentContext = toolctx.Name
-			// Update the existing context but preserve its name if it was already set
-			if conf.ToolContexts[i].Name != "" {
-				toolctx.Name = conf.ToolContexts[i].Name
-			}
 			conf.ToolContexts[i] = toolctx
 			return saveFileConf(conf)
 		}
@@ -742,19 +755,37 @@ func saveCurrentTenant(ctx ToolContext) error {
 	return saveCurrentContext(ctx)
 }
 
-// deriveContextName derives a context name from the tenant URL domain
-// with a numeric suffix if there are conflicts
-func deriveContextName(url string, existingContexts []ToolContext) string {
-	// Extract domain from URL
-	// Examples:
-	// https://ven-cert-manager-uk.venafi.cloud -> ven-cert-manager-uk
-	// https://ui-stack-dev210.qa.venafi.io -> ui-stack-dev210
+// deriveContextName derives a context name from the tenant URL domain. For API
+// key type:
+//
+//	glow-in-the-dark.venafi.cloud-email@user.com
+//	<------tenant domain-------> <----email--->
+//
+// For service account (rsaKeyFederated or rsaKey):
+//
+//	glow-in-the-dark.venafi.cloud-a645a5e1-6155-46d0-982f-da2ab68e82a5
+//	 <------tenant domain------> <-------service account ID--------->
+func deriveContextName(toolctx ToolContext, existingContexts []ToolContext) string {
+	// Extract domain from URL.
+	url := toolctx.TenantURL
 	url = strings.TrimPrefix(url, "https://")
 	url = strings.TrimPrefix(url, "http://")
 	domain := strings.Split(url, ".")[0]
 
+	// Determine base name based on authentication type
+	var baseName string
+	if toolctx.AuthenticationType == "rsaKeyFederated" || toolctx.AuthenticationType == "rsaKey" {
+		// For service accounts, use domain + client ID
+		baseName = domain + "-" + toolctx.ClientID
+	} else if toolctx.AuthenticationType == "apiKey" {
+		// For API keys, use domain + email
+		baseName = domain + "-" + toolctx.Email
+	} else {
+		// Fallback: use domain only
+		baseName = domain
+	}
+
 	// Check if this name already exists
-	baseName := domain
 	nameExists := func(name string) bool {
 		for _, ctx := range existingContexts {
 			if ctx.Name == name {
@@ -779,49 +810,13 @@ func deriveContextName(url string, existingContexts []ToolContext) string {
 	}
 }
 
-// resolveContext resolves a context identifier (name, ID, domain, or URL) to a Context entry
-// from the configuration. Returns the matching Context and true if found.
+// resolveContext find a context by name.
 func resolveContext(conf FileConf, contextInput string) (ToolContext, bool) {
-	// Normalize the input
 	normalized := strings.TrimSpace(contextInput)
-	normalized = strings.TrimSuffix(normalized, "/")
 
-	// First, try exact match by context name
 	for _, ctx := range conf.ToolContexts {
 		if ctx.Name == normalized {
 			return ctx, true
-		}
-	}
-
-	// Try exact match by tenant ID
-	for _, ctx := range conf.ToolContexts {
-		if ctx.TenantID == normalized {
-			return ctx, true
-		}
-	}
-
-	// Try exact URL match
-	for _, ctx := range conf.ToolContexts {
-		if ctx.TenantURL == normalized {
-			return ctx, true
-		}
-	}
-
-	// Try URL match with https:// prefix
-	if !strings.HasPrefix(normalized, "https://") {
-		normalized = "https://" + normalized
-	}
-	for _, ctx := range conf.ToolContexts {
-		if ctx.TenantURL == normalized {
-			return ctx, true
-		}
-	}
-
-	// Try domain substring match (e.g., "ui-stack-dev210.qa.venafi.io" should
-	// match "https://ui-stack-dev210.qa.venafi.io")
-	for _, toolctx := range conf.ToolContexts {
-		if strings.Contains(toolctx.TenantURL, contextInput) {
-			return toolctx, true
 		}
 	}
 

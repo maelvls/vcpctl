@@ -72,7 +72,7 @@ func saLsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa ls: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
@@ -80,14 +80,14 @@ func saLsCmd() *cobra.Command {
 			}
 			svcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
 			if err != nil {
-				return fmt.Errorf("sa ls: while listing service accounts: %w", err)
+				return fmt.Errorf("while listing service accounts: %w", err)
 			}
 
 			switch outputFormat {
 			case "json":
 				b, err := marshalIndent(svcaccts, "", "  ")
 				if err != nil {
-					return fmt.Errorf("sa ls: while marshaling service accounts to JSON: %w", err)
+					return fmt.Errorf("while marshaling service accounts to JSON: %w", err)
 				}
 				fmt.Println(string(b))
 				return nil
@@ -108,7 +108,7 @@ func saLsCmd() *cobra.Command {
 				}
 				return nil
 			default:
-				return errutil.Fixable(fmt.Errorf("sa ls: invalid output format: %s", outputFormat))
+				return errutil.Fixable(fmt.Errorf("invalid output format: %s", outputFormat))
 			}
 		},
 	}

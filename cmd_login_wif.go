@@ -27,11 +27,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const (
-	defaultWIFAudience = "venafi-cloud"
-	defaultWIFIssuer   = "https://issuer.example.com"
-)
-
 type jwksKey struct {
 	Kty string `json:"kty"`
 	Crv string `json:"crv"`
@@ -294,7 +289,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string) error {
 		AuthenticationType: "rsaKeyFederated",
 		ClientID:           input.ClientID,
 		AccessToken:        accessToken,
-		WIFPrivateKey:      input.PrivateKey,
+		PrivateKey:         input.PrivateKey,
 		TenantID:           info.TenantID,
 	}
 

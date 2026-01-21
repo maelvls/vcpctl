@@ -65,6 +65,8 @@ func main() {
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebugHTTP, "debug-http", false, "Enable HTTP request/response logging (set to 'true' to enable)")
 	rootCmd.AddCommand(
 		loginCmd(),
+		loginWifCmd(),
+		loginKeypairCmd(),
 		useContextCmd(),
 		switchCmd(), // deprecated alias for use-context
 		tenantidCmd(),
