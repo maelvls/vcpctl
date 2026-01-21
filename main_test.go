@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
+	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/manifest"
@@ -297,8 +298,10 @@ func TestPatchConfig_HTTPError(t *testing.T) {
 	var httpErr api.HTTPError
 	require.ErrorAs(t, err, &httpErr)
 	require.Equal(t, http.StatusInternalServerError, httpErr.StatusCode)
-	assert.Contains(t, err.Error(), "patchConfig:")
-	assert.Contains(t, err.Error(), "http")
+	assert.Equal(t, undent.Undent(`
+			HTTP 500 Internal Server Error: 
+			* `,
+	), httpErr.Error())
 }
 
 func TestParseFireflyConfigManifests_MissingKind(t *testing.T) {

@@ -67,8 +67,7 @@ func main() {
 		loginCmd(),
 		loginWifCmd(),
 		loginKeypairCmd(),
-		useContextCmd(),
-		switchCmd(), // deprecated alias for use-context
+		switchCmd(),
 		tenantidCmd(),
 		apikeyCmd(),
 		apiurlCmd(),

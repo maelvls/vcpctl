@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -41,18 +43,17 @@ type ToolContext struct {
 
 	// For the type "apiKey".
 	APIKey string `json:"apiKey,omitzero"`
-	Email  string `json:"email,omitzero"` // The user's email address (for API key auth)
+	Email  string `json:"email,omitzero"`  // Not really used. Just there to help the user identify the context.
+	UserID string `json:"userID,omitzero"` // Only used to identify when two contexts are the "same".
 
 	// For the types "rsaKeyFederated" and "rsaKey".
 	AccessToken string `json:"accessToken,omitzero"`
 	PrivateKey  string `json:"privateKey,omitzero"`
 
-	// For the type "rsaKey".
+	// For the type "rsaKey" and "rsaKeyFederated". Not really needed for
+	// "rsaKeyFederated", but useful to know when two contexts are the "same".
 	ClientID string `json:"clientID,omitzero"`
 }
-
-// Legacy type for backward compatibility during migration (not used in new code)
-type Auth = ToolContext
 
 // Styles for prompts.
 var (
@@ -142,7 +143,7 @@ func authCmd() *cobra.Command {
 }
 
 func loginCmd() *cobra.Command {
-	var apiURL, apiKey string
+	var apiURL, apiKey, contextName string
 	cmd := &cobra.Command{
 		Use:           "login [url]",
 		SilenceErrors: true,
@@ -226,9 +227,10 @@ func loginCmd() *cobra.Command {
 					TenantURL:          tenantURL,
 					TenantID:           resp.Company.Id.String(),
 					Email:              resp.User.EmailAddress,
+					UserID:             resp.User.Id.String(),
 				}
 
-				err = saveCurrentTenant(current)
+				err = saveCurrentContext(current, contextName)
 				if err != nil {
 					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
@@ -281,6 +283,7 @@ func loginCmd() *cobra.Command {
 					}
 
 					current.Email = resp.User.EmailAddress
+					current.UserID = resp.User.Id.String()
 					logutil.Debugf("API key's tenant URL is %s", tenantURL)
 				} else {
 					// Prompt for API key.
@@ -312,6 +315,7 @@ func loginCmd() *cobra.Command {
 						current.TenantID = resp.Company.Id.String()
 						current.TenantURL = tenantURL
 						current.Email = resp.User.EmailAddress
+						current.UserID = resp.User.Id.String()
 						return nil
 					})
 					if err != nil {
@@ -320,7 +324,7 @@ func loginCmd() *cobra.Command {
 					current.APIKey = apiKeyInput
 				}
 
-				err = saveCurrentTenant(current)
+				err = saveCurrentContext(current, contextName)
 				if err != nil {
 					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
@@ -335,6 +339,20 @@ func loginCmd() *cobra.Command {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
 			current, _ := currentFrom(conf)
+
+			// If multiple contexts exist and no --context flag, inform the user
+			if len(conf.ToolContexts) > 1 && contextName == "" {
+				if current.Name != "" {
+					fmt.Printf("\n📝 Logging in using current context '%s'\n", current.Name)
+					fmt.Println("\nOther available contexts:")
+					for _, ctx := range conf.ToolContexts {
+						if ctx.Name != current.Name {
+							fmt.Printf("  - %s (%s)\n", ctx.Name, ctx.TenantURL)
+						}
+					}
+					fmt.Printf("\n💡 To log in to a different context, use: vcpctl login --context <name>\n\n")
+				}
+			}
 
 			// Let the user know if they are already authenticated.
 			skipTenantPrompt := false
@@ -440,6 +458,7 @@ func loginCmd() *cobra.Command {
 				current.TenantID = resp.Company.Id.String()
 				current.TenantURL = tenantURL
 				current.Email = resp.User.EmailAddress
+				current.UserID = resp.User.Id.String()
 
 				return nil
 			})
@@ -452,7 +471,7 @@ func loginCmd() *cobra.Command {
 			logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.TenantURL+"'."))
 
 			// Save the configuration to ~/.config/vcpctl.yaml
-			err = saveCurrentTenant(current)
+			err = saveCurrentContext(current, contextName)
 			if err != nil {
 				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 			}
@@ -462,11 +481,13 @@ func loginCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
+	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
 
 	return cmd
 }
 
 func loginWifCmd() *cobra.Command {
+	var contextName string
 	cmd := &cobra.Command{
 		Use:           "login-wif <json-file>",
 		SilenceErrors: true,
@@ -487,13 +508,15 @@ func loginWifCmd() *cobra.Command {
 			vcpctl sa gen wif my-sa -ojson | vcpctl login-wif -
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return loginWithWIFJSON(cmd.Context(), args[0])
+			return loginWithWIFJSON(cmd.Context(), args[0], contextName)
 		},
 	}
+	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
 	return cmd
 }
 
 func loginKeypairCmd() *cobra.Command {
+	var contextName string
 	cmd := &cobra.Command{
 		Use:           "login-keypair <json-file>",
 		SilenceErrors: true,
@@ -514,9 +537,10 @@ func loginKeypairCmd() *cobra.Command {
 			vcpctl sa gen keypair my-sa -ojson | vcpctl login-keypair -
 		`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return loginWithServiceAccountKey(cmd.Context(), []string{}, args[0], "")
+			return loginWithServiceAccountKey(cmd.Context(), []string{}, args[0], "", contextName)
 		},
 	}
+	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
 	return cmd
 }
 
@@ -639,9 +663,9 @@ func tenantidCmd() *cobra.Command {
 	}
 	return cmd
 }
-func useContextCmd() *cobra.Command {
+func switchCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "use-context [context-name]",
+		Use:   "switch [context-name]",
 		Short: "Switch to a different CyberArk Certificate Manager, SaaS context.",
 		Long: undent.Undent(`
 			Switch to a different CyberArk Certificate Manager, SaaS context. If the context is not specified,
@@ -707,14 +731,6 @@ func useContextCmd() *cobra.Command {
 	return cmd
 }
 
-// switchCmd is a deprecated alias for useContextCmd (backward compatibility)
-func switchCmd() *cobra.Command {
-	cmd := useContextCmd()
-	cmd.Use = "switch [context-name]"
-	cmd.Deprecated = "use 'vcpctl use-context' instead; 'vcpctl switch' will be removed in a future release"
-	return cmd
-}
-
 // authSwitchCmd is a deprecated alias for switchCmd
 func authSwitchCmd() *cobra.Command {
 	cmd := switchCmd()
@@ -722,70 +738,123 @@ func authSwitchCmd() *cobra.Command {
 	return cmd
 }
 
-// Meant for the `auth login` command.
-func saveCurrentContext(toolctx ToolContext) error {
+func sameContext(a, b ToolContext) bool {
+	switch {
+	case a.TenantURL != b.TenantURL:
+		return false
+	case a.AuthenticationType != b.AuthenticationType:
+		return false
+	case a.AuthenticationType == "apiKey":
+		return a.Email == b.Email && a.UserID == b.UserID
+	case a.AuthenticationType == "rsaKeyFederated":
+		return a.ClientID == b.ClientID
+	case a.AuthenticationType == "rsaKey":
+		return a.ClientID == b.ClientID
+	}
+	return false
+}
+
+// Meant for the `vcpctl login*` commands.
+func saveCurrentContext(toolctx ToolContext, contextFlag string) error {
 	conf, err := loadFileConf()
 	if err != nil {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Derive context name if not set.
-	if toolctx.Name == "" {
-		toolctx.Name = deriveContextName(toolctx, conf.ToolContexts)
+	// Derive context name.
+	if contextFlag != "" {
+		// User specified --context flag, use it directly.
+		toolctx.Name = contextFlag
+	} else if toolctx.Name == "" {
+		toolctx.Name = generateContextName(toolctx, conf.ToolContexts)
 	}
 
-	// Check if a context with this name already exists; if so, update it.
+	// Check if context exists and handle auth type change warning.
 	for i := range conf.ToolContexts {
-		if conf.ToolContexts[i].Name == toolctx.Name {
+		if sameContext(conf.ToolContexts[i], toolctx) {
+			existingCtx := conf.ToolContexts[i]
+
+			// Warn about auth type change.
+			if existingCtx.AuthenticationType != "" &&
+				existingCtx.AuthenticationType != toolctx.AuthenticationType {
+				fmt.Printf("⚠️  Warning: Changing authentication type from '%s' to '%s' for context '%s'\n",
+					existingCtx.AuthenticationType, toolctx.AuthenticationType, toolctx.Name)
+				fmt.Printf("To keep existing context unchanged, use: vcpctl login --context <new-name>\n")
+
+				proceed, err := promptYesNo("Continue?")
+				if err != nil {
+					return err
+				}
+				if !proceed {
+					return fmt.Errorf("login cancelled")
+				}
+			}
+
 			conf.CurrentContext = toolctx.Name
 			conf.ToolContexts[i] = toolctx
 			return saveFileConf(conf)
 		}
 	}
 
-	// If it doesn't exist, add it.
+	// If it doesn't exist, add it
 	conf.CurrentContext = toolctx.Name
 	conf.ToolContexts = append(conf.ToolContexts, toolctx)
-
 	return saveFileConf(conf)
 }
 
 // Backwards compatibility alias
 func saveCurrentTenant(ctx ToolContext) error {
-	return saveCurrentContext(ctx)
+	return saveCurrentContext(ctx, "")
 }
 
-// deriveContextName derives a context name from the tenant URL domain. For API
-// key type:
+// generateContextName derives a Docker-style context name (e.g., "clever-alpaca") from
+// the tenant URL domain and user/service account ID.
 //
-//	glow-in-the-dark.venafi.cloud-email@user.com
-//	<------tenant domain-------> <----email--->
+// For API key type: Uses domain + user ID
+// For service account (rsaKeyFederated or rsaKey): Uses domain + service account ID
 //
-// For service account (rsaKeyFederated or rsaKey):
-//
-//	glow-in-the-dark.venafi.cloud-a645a5e1-6155-46d0-982f-da2ab68e82a5
-//	 <------tenant domain------> <-------service account ID--------->
-func deriveContextName(toolctx ToolContext, existingContexts []ToolContext) string {
-	// Extract domain from URL.
-	url := toolctx.TenantURL
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "http://")
-	domain := strings.Split(url, ".")[0]
-
-	// Determine base name based on authentication type
-	var baseName string
-	if toolctx.AuthenticationType == "rsaKeyFederated" || toolctx.AuthenticationType == "rsaKey" {
-		// For service accounts, use domain + client ID
-		baseName = domain + "-" + toolctx.ClientID
-	} else if toolctx.AuthenticationType == "apiKey" {
-		// For API keys, use domain + email
-		baseName = domain + "-" + toolctx.Email
-	} else {
-		// Fallback: use domain only
-		baseName = domain
+// The name generation is deterministic based on the seed, so the same tenant/user
+// combination will always produce the same name.
+func generateContextName(toolctx ToolContext, existing []ToolContext) string {
+	alreadyUsed := func(name string) bool {
+		for _, ctx := range existing {
+			if ctx.Name == name {
+				return true
+			}
+		}
+		return false
 	}
 
-	// Check if this name already exists
+	// Attempt 1: just the domain name. Example:
+	//  glow-in-the-dark.venafi.cloud
+	contextName := extractDomainFromURL(toolctx.TenantURL)
+	if !alreadyUsed(contextName) {
+		return contextName
+	}
+
+	// Attempt 2: add a number. Example:
+	//  glow-in-the-dark.venafi.cloud.2
+	for i := 2; i < 1000; i++ {
+		candidate := fmt.Sprintf("%s.%d", contextName, i)
+		if !alreadyUsed(candidate) {
+			return candidate
+		}
+	}
+
+	panic("why do you have so many contexts? I give up")
+}
+
+// extractDomainFromURL extracts the domain name from a given URL.
+func extractDomainFromURL(tenantURL string) string {
+	url := tenantURL
+	url = strings.TrimPrefix(url, "https://")
+	url = strings.TrimPrefix(url, "http://")
+	parts := strings.SplitN(url, "/", 2)
+	return parts[0]
+}
+
+// ensureUniqueName ensures the name is unique by appending hash suffix if collision exists
+func ensureUniqueName(baseName, seed string, existingContexts []ToolContext) string {
 	nameExists := func(name string) bool {
 		for _, ctx := range existingContexts {
 			if ctx.Name == name {
@@ -799,15 +868,10 @@ func deriveContextName(toolctx ToolContext, existingContexts []ToolContext) stri
 		return baseName
 	}
 
-	// Find next available numeric suffix
-	suffix := 2
-	for {
-		name := fmt.Sprintf("%s-%d", baseName, suffix)
-		if !nameExists(name) {
-			return name
-		}
-		suffix++
-	}
+	// If collision, append first 4 chars of hash
+	h := sha256.Sum256([]byte(seed))
+	suffix := fmt.Sprintf("%x", h[:2]) // first 4 hex chars
+	return baseName + "-" + suffix
 }
 
 // resolveContext find a context by name.
@@ -908,7 +972,7 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	if flagContext != "" {
 		current, ok = resolveContext(conf, flagContext)
 		if !ok {
-			return ToolConf{}, fmt.Errorf("context '%s' not found in configuration. Available contexts can be listed with 'vcpctl use-context'. Log in to a new tenant with 'vcpctl login'.", flagContext)
+			return ToolConf{}, fmt.Errorf("context '%s' not found in configuration. Available contexts can be listed with 'vcpctl switch'. Log in to a new tenant with 'vcpctl login'.", flagContext)
 		}
 		logutil.Debugf("Using context '%s' (tenant URL: %s, ID: %s) from --context flag", current.Name, current.TenantURL, current.TenantID)
 	} else {
@@ -947,9 +1011,40 @@ func loadFileConf() (FileConf, error) {
 		return FileConf{}, fmt.Errorf("while opening ~/%s: %w", configPath, err)
 	}
 
+	bytes, err := io.ReadAll(f)
+	if err != nil {
+		return FileConf{}, fmt.Errorf("while reading ~/%s: %w", configPath, err)
+	}
+
+	// If the file is empty, return an empty config.
+	if len(bytes) == 0 {
+		return FileConf{}, nil
+	}
+
 	var conf FileConf
-	if err := yaml.NewDecoder(f).Decode(&conf); err != nil {
+
+	err = yaml.Unmarshal(bytes, &conf)
+	if err != nil {
 		return FileConf{}, fmt.Errorf("while decoding ~/%s: %w", configPath, err)
+	}
+
+	// Check if this is an old format config that needs conversion Old format
+	// has "auths" field, new format has "contexts" field.
+	if len(conf.ToolContexts) == 0 {
+		// Try to unmarshal as old format
+		var oldConf OldFileConf
+		err = yaml.Unmarshal(bytes, &oldConf)
+		if err == nil && len(oldConf.Auths) > 0 {
+			logutil.Debugf("Detected old config format, converting to new format")
+			conf = convertOldToNewConfig(oldConf)
+
+			// Automatically save the converted config
+			if err := saveFileConf(conf); err != nil {
+				logutil.Debugf("Warning: failed to save converted config: %v", err)
+			} else {
+				logutil.Infof("✓ Configuration automatically converted to new format")
+			}
+		}
 	}
 
 	return conf, nil
@@ -986,4 +1081,50 @@ func currentFrom(conf FileConf) (ToolContext, bool) {
 	}
 
 	return ToolContext{}, false
+}
+
+// Legacy type for backward compatibility during migration (not used in new
+// code).
+type Auth = ToolContext
+
+// OldFileConf represents the deprecated config structure used before the
+// current-context/contexts redesign. This is kept for automatic migration.
+type OldFileConf struct {
+	CurrentURL string    `yaml:"currentURL"` // Corresponds to the UI URL of the current tenant.
+	Auths      []OldAuth `yaml:"auths"`
+}
+
+// OldAuth represents the deprecated auth structure.
+type OldAuth struct {
+	URL      string `yaml:"url"`      // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	APIURL   string `yaml:"apiURL"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	APIKey   string `yaml:"apiKey"`   // The API key for authentication
+	TenantID string `yaml:"tenantID"` // The tenant ID (company ID)
+}
+
+// convertOldToNewConfig converts the old config format to the new one.
+func convertOldToNewConfig(old OldFileConf) FileConf {
+	var newConf FileConf
+
+	// Convert current URL to current context name
+	// The current URL becomes the name of the current context
+	if old.CurrentURL != "" {
+		newConf.CurrentContext = old.CurrentURL
+	}
+
+	// Convert each old auth to a new context
+	for _, oldAuth := range old.Auths {
+		newCtx := ToolContext{
+			Name:               oldAuth.URL, // Use the URL as the context name
+			TenantURL:          oldAuth.URL,
+			APIURL:             oldAuth.APIURL,
+			AuthenticationType: "apiKey",
+			APIKey:             oldAuth.APIKey,
+			TenantID:           oldAuth.TenantID,
+			// Email and UserID are not in the old format, so they remain empty
+		}
+		newConf.ToolContexts = append(newConf.ToolContexts, newCtx)
+	}
+
+	return newConf
 }

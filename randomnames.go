@@ -45,19 +45,19 @@ var blacklist = map[string]bool{
 	"boring-wozniak": true, // classic Docker easter egg.
 }
 
-// Random returns a random "adjective-noun" pair, e.g. "sparkly-lemur".
+// Random returns a random "adjective_noun" pair, e.g. "sparkly_lemur".
 func Random() string {
 	for {
 		a := adjectives[rand.Intn(len(adjectives))]
 		n := nouns[rand.Intn(len(nouns))]
-		name := fmt.Sprintf("%s-%s", a, n)
+		name := fmt.Sprintf("%s_%s", a, n)
 		if !blacklist[name] {
 			return name
 		}
 	}
 }
 
-// Deterministic returns a stable "adjective-noun" pair derived from id.
+// Deterministic returns a stable "adjective_noun" pair derived from id.
 // Same id -> same name, using SHA-256 for indexing.
 func Deterministic(id string) string {
 	h := sha256.Sum256([]byte(id))
@@ -65,22 +65,22 @@ func Deterministic(id string) string {
 	aIdx := binary.BigEndian.Uint32(h[0:4]) % uint32(len(adjectives))
 	nIdx := binary.BigEndian.Uint32(h[4:8]) % uint32(len(nouns))
 
-	name := fmt.Sprintf("%s-%s", adjectives[aIdx], nouns[nIdx])
+	name := fmt.Sprintf("%s_%s", adjectives[aIdx], nouns[nIdx])
 
 	// If blacklisted, bump indices deterministically.
 	if blacklist[name] {
 		aIdx = (aIdx + 1) % uint32(len(adjectives))
 		nIdx = (nIdx + 1) % uint32(len(nouns))
-		name = fmt.Sprintf("%s-%s", adjectives[aIdx], nouns[nIdx])
+		name = fmt.Sprintf("%s_%s", adjectives[aIdx], nouns[nIdx])
 	}
 
 	return name
 }
 
-// Generate chooses mode:
+// GenerateFunnyName chooses mode:
 //   - no args      -> Random()
 //   - one string   -> Deterministic(id)
-func Generate(id string) string {
+func GenerateFunnyName(id string) string {
 	if len(id) == 0 {
 		return Random()
 	}

@@ -1,10 +1,7 @@
 {
-  "title": "CyberArk Workload Identity Manager Manifests",
-  "description": "Schema describing the YAML manifests consumed by vcpctl.",
   "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
   "allOf": [
     {
-      "type": "object",
       "properties": {
         "apiVersion": {
           "type": "string"
@@ -16,7 +13,8 @@
       "required": [
         "kind",
         "name"
-      ]
+      ],
+      "type": "object"
     },
     {
       "$ref": "#/$defs/SubCaProviderInformation"
@@ -27,67 +25,10 @@
       "type": "object",
       "properties": {
         "id": {
+          "type": "string",
           "description": "UUID of the Sub CA provider",
           "format": "uuid",
-          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746",
-          "type": "string"
-        },
-        "validityPeriod": {
-          "type": "string",
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D"
-        },
-        "organization": {
-          "description": "Organization",
-          "example": "Some organization",
-          "type": "string"
-        },
-        "caProductOptionId": {
-          "type": "string",
-          "description": "UUID of the CA product option used by this Sub CA provider",
-          "format": "uuid",
-          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd"
-        },
-        "country": {
-          "description": "Country",
-          "example": "US",
-          "type": "string"
-        },
-        "pkcs11": {
-          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
-        },
-        "caType": {
-          "enum": [
-            "MOCKCA",
-            "DIGICERT",
-            "GLOBALSIGN",
-            "BUILTIN",
-            "ENTRUST",
-            "MICROSOFT",
-            "ACME",
-            "ZTPKI",
-            "GLOBALSIGNMSSL",
-            "TPP"
-          ],
-          "type": "string",
-          "description": "Type of CA this Sub CA provider works with",
-          "example": "BUILTIN"
-        },
-        "commonName": {
-          "example": "example.com",
-          "type": "string",
-          "description": "Common name"
-        },
-        "stateOrProvince": {
-          "type": "string",
-          "description": "State or province",
-          "example": "Texas"
-        },
-        "modificationDate": {
-          "type": "string",
-          "description": "When the Sub CA provider was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
+          "example": "2f3c6030-b1e0-11ed-a3ed-e3dbaf56a746"
         },
         "companyId": {
           "type": "string",
@@ -100,16 +41,75 @@
           "description": "Name of the Sub CA provider",
           "example": "Some Sub CA provider"
         },
-        "caAccountId": {
+        "validityPeriod": {
+          "example": "P30D",
           "type": "string",
-          "description": "UUID of the CA account used by this Sub CA provider",
-          "format": "uuid",
-          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a"
+          "description": "ISO8601 Period Format",
+          "format": "PnYnMnDTnHnMnS"
         },
         "organizationalUnit": {
           "type": "string",
           "description": "Organizational unit",
           "example": "Some organizational unit"
+        },
+        "stateOrProvince": {
+          "type": "string",
+          "description": "State or province",
+          "example": "Texas"
+        },
+        "caAccountId": {
+          "format": "uuid",
+          "example": "4ece3180-b1e0-11ed-862d-ad36b18e787a",
+          "type": "string",
+          "description": "UUID of the CA account used by this Sub CA provider"
+        },
+        "country": {
+          "description": "Country",
+          "example": "US",
+          "type": "string"
+        },
+        "creationDate": {
+          "description": "When the Sub CA provider was initially created",
+          "example": "2022-10-10T14:50:41.710+00:00",
+          "type": "string"
+        },
+        "organization": {
+          "type": "string",
+          "description": "Organization",
+          "example": "Some organization"
+        },
+        "modificationDate": {
+          "type": "string",
+          "description": "When the Sub CA provider was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00"
+        },
+        "caType": {
+          "type": "string",
+          "description": "Type of CA this Sub CA provider works with",
+          "example": "BUILTIN",
+          "enum": [
+            "MOCKCA",
+            "DIGICERT",
+            "GLOBALSIGN",
+            "BUILTIN",
+            "ENTRUST",
+            "MICROSOFT",
+            "ACME",
+            "ZTPKI",
+            "GLOBALSIGNMSSL",
+            "TPP"
+          ]
+        },
+        "caProductOptionId": {
+          "type": "string",
+          "description": "UUID of the CA product option used by this Sub CA provider",
+          "format": "uuid",
+          "example": "6b3d8d20-b1e0-11ed-9c2f-953e35982bbd"
+        },
+        "commonName": {
+          "example": "example.com",
+          "type": "string",
+          "description": "Common name"
         },
         "locality": {
           "type": "string",
@@ -130,16 +130,19 @@
             "EC_ED25519"
           ]
         },
-        "creationDate": {
-          "type": "string",
-          "description": "When the Sub CA provider was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00"
+        "pkcs11": {
+          "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
         }
       }
     },
     "SubCaProviderPkcs11ConfigurationInformation": {
-      "type": "object",
       "properties": {
+        "partitionSerialNumber": {
+          "type": "string",
+          "description": "HSM Partition Serial Number",
+          "example": "1444210958933",
+          "pattern": "^[A-Fa-fx0-9]{0,18}$"
+        },
         "pin": {
           "type": "string",
           "description": "HSM PIN",
@@ -147,34 +150,31 @@
           "example": "1234"
         },
         "allowedClientLibraries": {
+          "type": "array",
+          "description": "A collection of strings each of which represents SHA256 hash of an allowed HSM client library",
           "example": [
             "c34d199f2e30bb679cd9b8533b99975465aefe8b023be1b37972f1ab43ab7b2d"
           ],
           "items": {
             "type": "string"
-          },
-          "type": "array",
-          "description": "A collection of strings each of which represents SHA256 hash of an allowed HSM client library"
+          }
         },
         "signingEnabled": {
-          "example": true,
           "type": "boolean",
-          "description": "Indicates whether HSM signing is enabled or not"
+          "description": "Indicates whether HSM signing is enabled or not",
+          "example": true
         },
         "partitionLabel": {
-          "example": "workload-identity-manager-hsm-partition",
           "type": "string",
-          "description": "HSM Partition Label"
-        },
-        "partitionSerialNumber": {
-          "type": "string",
-          "description": "HSM Partition Serial Number",
-          "example": "1444210958933",
-          "pattern": "^[A-Fa-fx0-9]{0,18}$"
+          "description": "HSM Partition Label",
+          "example": "workload-identity-manager-hsm-partition"
         }
-      }
+      },
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/wim-manifest.schema.json"
+  "$id": "https://example.com/wim-manifest.schema.json",
+  "title": "CyberArk Workload Identity Manager Manifests",
+  "description": "Schema describing the YAML manifests consumed by vcpctl."
 }

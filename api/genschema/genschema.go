@@ -483,136 +483,236 @@ func removeFromRequired(schema any, fieldToRemove string) {
 // For example, if I have the following object (this is the JSON representation,
 // but what the func accepts is a map[string]any):
 //
-//  {
-//   "components": {
-//     "schemas": {
-//       "YourSuperObject": {
-//          "allOf": [
-//            {"$ref": "#/components/schemas/BaseObject"},
-//            {
-//              "properties": {
-//                "enabled": {
-//                  "type": "boolean",
-//                  "nullable": true                       <----- adds this
-//                }
-//              },
-//              "type": "object"
-//            }
-//          ],
-//       }
-//     }
-//   }
+//	{
+//	 "components": {
+//	   "schemas": {
+//	     "YourSuperObject": {
+//	        "allOf": [
+//	          {"$ref": "#/components/schemas/BaseObject"},
+//	          {
+//	            "properties": {
+//	              "enabled": {
+//	                "type": "boolean",
+//	                "nullable": true                       <----- adds this
+//	              }
+//	            },
+//	            "type": "object"
+//	          }
+//	        ],
+//	     }
+//	   }
+//	 }
 //
 // And if I give:
 //
-//  setNullableOnProperty("YourSuperObject", "enabled")
+//	setNullableOnProperty("YourSuperObject", "enabled")
 //
 // Then the property "enabled" should now have "nullable": true.
 //
 // This func should also work for "allOf" as well as properties directly under
 // the schema, for example:
 //
-//  {
-//   "components": {
-//     "schemas": {
-//       "YourSuperObject": {
-//         "properties": {
-//           "enabled": {
-//             "type": "boolean",
-//             "nullable": true                            <----- adds this
-//           }
-//         },
-//         "type": "object"
-//       }
-//     }
-//   }
-
+//	{
+//	 "components": {
+//	   "schemas": {
+//	     "YourSuperObject": {
+//	       "properties": {
+//	         "enabled": {
+//	           "type": "boolean",
+//	           "nullable": true                            <----- adds this
+//	         }
+//	       },
+//	       "type": "object"
+//	     }
+//	   }
+//	 }
+//
 // setNullableOnProperty finds the schema `schemaName` under components.schemas
 // and sets nullable: true on the property `propName`.
 //
 // It works both when the property is directly under "properties" and when it is
 // nested inside an "allOf" item of that schema.
-func setNullableOnProperty(doc map[string]any, schemaName, propName string) error {
-	componentsRaw, ok := doc["components"]
-	if !ok {
-		return fmt.Errorf(`no "components" key in document`)
-	}
-	components, ok := componentsRaw.(map[string]any)
-	if !ok {
-		return fmt.Errorf(`"components" is not an object`)
+func setNullableOnProperty(doc map[string]any, schemaName, propName string) {
+	set := false
+	err := mutateSchemaProperties(doc, schemaName, func(schema map[string]any) {
+		props, ok := schema["properties"].(map[string]any)
+		if !ok {
+			return
+		}
+
+		prop, ok := props[propName].(map[string]any)
+		if !ok {
+			return
+		}
+
+		prop["nullable"] = true
+		set = true
+	})
+
+	if err != nil {
+		panic(fmt.Errorf("setting nullable on %q.%q: %w", schemaName, propName, err))
 	}
 
-	schemasRaw, ok := components["schemas"]
-	if !ok {
-		return fmt.Errorf(`no "schemas" under "components"`)
+	if !set {
+		panic(fmt.Errorf("property %q not found in schema %q", propName, schemaName))
 	}
-	schemas, ok := schemasRaw.(map[string]any)
+}
+
+// Goes over all schemas that contain a "properties" in the given schemaName
+// (schemaName must belong to components.schemas). For example, when calling:
+//
+//	mutateSchemaProperties(doc, "YourSuperObject", f)
+//
+// Then f will be applied to the three maps below:
+//
+//	{
+//	  "components": {
+//	    "schemas": {
+//	      "YourSuperObject": { // <----- f is called on this object
+//	        "properties": {
+//	          "enabled": true
+//	        }
+//	      }
+//	    }
+//	  }
+//	}
+//
+// It also goes into all objects that contain a 'properties' field inside a
+// "oneOf":
+//
+//	{
+//	  "components": {
+//	    "schemas": {
+//	      "YourSuperObject": {
+//	         "oneOf": [
+//	           {    // <----- NOT called here because 'properties' is missing
+//	             "$ref": "#/components/schemas/BaseObject"
+//	           },
+//	           {    // <----- it is called on this object
+//	              "properties": {
+//	                "enabled": true
+//	              }
+//	           }
+//	         ]
+//	      }
+//	    }
+//	  }
+//	}
+//
+// mutateSchemaProperties walks the schema named schemaName inside
+// components.schemas and calls visitor on every JSON object that contains a
+// "properties" field.
+//
+// It starts from:
+//
+//	doc["components"]["schemas"][schemaName]
+//
+// and then recursively descends into any objects contained within "oneOf" and
+// "allOf" arrays.
+//
+// The visitor receives the *schema object* (the map that contains "properties",
+// not the "properties" map itself).
+//
+// Example:
+//
+//	mutateSchemaProperties(doc, "YourSuperObject", func(schema map[string]any) bool {
+//	    props, _ := schema["properties"].(map[string]any)
+//	    // mutate props / schema here...
+//	})
+func mutateSchemaProperties(
+	doc map[string]any,
+	schemaName string,
+	mutate func(schema map[string]any),
+) error {
+	components, ok := doc["components"].(map[string]any)
 	if !ok {
-		return fmt.Errorf(`"components.schemas" is not an object`)
+		return fmt.Errorf(`expected doc["components"] to be a map[string]any`)
 	}
 
-	schemaRaw, ok := schemas[schemaName]
+	schemas, ok := components["schemas"].(map[string]any)
 	if !ok {
-		return fmt.Errorf(`schema %q not found under components.schemas`, schemaName)
-	}
-	schema, ok := schemaRaw.(map[string]any)
-	if !ok {
-		return fmt.Errorf(`schema %q is not an object`, schemaName)
+		return fmt.Errorf(`expected components["schemas"] to be a map[string]any`)
 	}
 
-	if !setNullableOnPropertyInSchema(schema, propName) {
-		return fmt.Errorf(`property %q not found (directly or in allOf) in schema %q`, propName, schemaName)
+	rawSchema, ok := schemas[schemaName]
+	if !ok {
+		return fmt.Errorf("schema %q not found under components.schemas", schemaName)
 	}
 
+	rootSchema, ok := rawSchema.(map[string]any)
+	if !ok {
+		return fmt.Errorf("schema %q is not a JSON object (map[string]any)", schemaName)
+	}
+
+	// Recursive walker: apply 'mutate' on the object if it contains
+	// "properties", then descend into "oneOf" and "allOf" arrays.
+	var walk func(schema map[string]any)
+	walk = func(schema map[string]any) {
+		// If schema has "properties", call 'mutate'.
+		if _, hasProps := schema["properties"].(map[string]any); hasProps {
+			mutate(schema)
+		}
+
+		// Helper to process arrays under keys like "oneOf", "allOf".
+		processArray := func(key string) {
+			raw, exists := schema[key]
+			if !exists {
+				return
+			}
+
+			items, ok := raw.([]any)
+			if !ok {
+				// Malformed but non-fatal; just ignore.
+				return
+			}
+
+			for _, item := range items {
+				child, ok := item.(map[string]any)
+				if !ok {
+					// Could be non-object entries (e.g. something weird); skip
+					// them.
+					continue
+				}
+				walk(child)
+			}
+		}
+
+		processArray("oneOf")
+		processArray("allOf")
+	}
+
+	walk(rootSchema)
 	return nil
 }
 
-// setNullableOnPropertyInSchema mutates the given schema map in place and
-// returns true if it found and updated the property.
-//
-// It looks for:
-//   - schema.properties[propName]
-//   - any item in schema.allOf that is an object and has that property
-func setNullableOnPropertyInSchema(schema map[string]any, propName string) bool {
-	// 1. Look for the property directly under "properties"
-	if propsRaw, ok := schema["properties"]; ok {
-		if props, ok := propsRaw.(map[string]any); ok {
-			if propRaw, ok := props[propName]; ok {
-				if propSchema, ok := propRaw.(map[string]any); ok {
-					propSchema["nullable"] = true
-					// map mutation is in-place, but assigning back is harmless
-					props[propName] = propSchema
-					schema["properties"] = props
-					return true
+func setRequiredProperties(doc map[string]any, schemaName string, fields ...string) error {
+	return mutateSchemaProperties(doc, schemaName, func(schema map[string]any) {
+		rawRequired, ok := schema["required"]
+		var required []any
+		if ok {
+			required, ok = rawRequired.([]any)
+			if !ok {
+				panic(fmt.Sprintf("schema %q: 'required' is not an array", schemaName))
+			}
+		} else {
+			required = []any{}
+		}
+
+		for _, field := range fields {
+			found := false
+			for _, req := range required {
+				if reqStr, ok := req.(string); ok && reqStr == field {
+					found = true
+					break
 				}
+			}
+			if !found {
+				required = append(required, field)
 			}
 		}
-	}
 
-	// 2. Look into "allOf" items
-	if allOfRaw, ok := schema["allOf"]; ok {
-		if allOfSlice, ok := allOfRaw.([]any); ok {
-			changed := false
-			for i, item := range allOfSlice {
-				itemSchema, ok := item.(map[string]any)
-				if !ok {
-					// could be {"$ref": ...} or something else; skip
-					continue
-				}
-				if setNullableOnPropertyInSchema(itemSchema, propName) {
-					// store back the modified item
-					allOfSlice[i] = itemSchema
-					changed = true
-				}
-			}
-			if changed {
-				schema["allOf"] = allOfSlice
-				return true
-			}
-		}
-	}
-
-	return false
+		schema["required"] = required
+	})
 }
 
 // It should deep-copy. Otherwise, if I edit one schema, it would affect the
@@ -643,32 +743,6 @@ func copySchema(schema map[string]any, existing string, to string) {
 // Sets a value in a nested map given a dot-separated path. Example:
 //
 //	set(schema, "components.schemas.MySuperObject.properties.type", "string")
-// func set(schema map[string]any, path string, value any) {
-// 	parts := strings.Split(path, ".")
-// 	current := schema
-// 	for i, part := range parts {
-// 		if i == len(parts)-1 {
-// 			// last part
-// 			current[part] = value
-// 			return
-// 		}
-// 		nextRaw, ok := current[part]
-// 		if !ok {
-// 			next := make(map[string]any)
-// 			current[part] = next
-// 			current = next
-// 		}
-// 		if nextRaw == nil {
-// 			panic(fmt.Sprintf("segment '%v' in path %v doesn't exist in the given schema", part, path))
-// 		}
-// 		next, ok := nextRaw.(map[string]any)
-// 		if !ok {
-// 			panic(fmt.Sprintf("cannot set path %v: %v is not an object; it's a %T", path, part, nextRaw))
-// 		}
-// 		current = next
-// 	}
-// }
-
 func set(schema map[string]any, path string, value any) {
 	parts := strings.Split(path, ".")
 	current := schema

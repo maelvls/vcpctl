@@ -34,7 +34,7 @@ type serviceAccountTokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, apiURLFlag string) error {
+func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, apiURLFlag string, contextName string) error {
 	if saKeyPath == "" {
 		return errutil.Fixable(fmt.Errorf("--sa-keypair requires a JSON file path or '-' for stdin"))
 	}
@@ -98,7 +98,7 @@ func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, a
 		TenantID:           self.Company.Id.String(),
 	}
 
-	if err := saveCurrentTenant(current); err != nil {
+	if err := saveCurrentContext(current, contextName); err != nil {
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 

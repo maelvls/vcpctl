@@ -179,7 +179,10 @@ func apiToManifestJwtClientInformation(in []api.JwtClientInformation) ([]manifes
 
 // manifestToAPIClientAuthentication converts manifest ClientAuthentication to API union type.
 // ClientAuthenticationInformation is a union type, so we use JSON marshaling to handle it.
-func manifestToAPIClientAuthentication(resolvePolicy func(string) (api.ExtendedPolicyInformation, error), in manifest.ClientAuthentication) (api.ClientAuthenticationInformation, error) {
+func manifestToAPIClientAuthentication(
+	resolvePolicy func(string) (api.ExtendedPolicyInformation, error),
+	in manifest.ClientAuthentication,
+) (api.ClientAuthenticationInformation, error) {
 	switch in.Type {
 	case "JWT_JWKS":
 		var result api.ClientAuthenticationInformation

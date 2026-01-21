@@ -193,7 +193,11 @@ func uploadJWKS0x0(jwks []byte) (string, error) {
 }
 
 type wifJSON struct {
-	Type       string `json:"type"`
+	Type string `json:"type"`
+
+	// The client ID isn't really needed to authenticate (we only need the
+	// tenant ID). However, it allows us to identify the service account used,
+	// which is something we use to know when two contexts are the same.
 	ClientID   string `json:"client_id"`
 	PrivateKey string `json:"private_key"`
 	TenantURL  string `json:"tenant_url"`
@@ -203,7 +207,7 @@ type wifJSON struct {
 	Sub        string `json:"sub"`
 }
 
-func loginWithWIFJSON(ctx context.Context, wifJSONPath string) error {
+func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName string) error {
 	if wifJSONPath == "" {
 		return errutil.Fixable(fmt.Errorf("--sa-wif requires a JSON file path or '-' for stdin"))
 	}
@@ -293,7 +297,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string) error {
 		TenantID:           info.TenantID,
 	}
 
-	if err := saveCurrentTenant(current); err != nil {
+	if err := saveCurrentContext(current, contextName); err != nil {
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 
