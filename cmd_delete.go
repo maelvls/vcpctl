@@ -14,11 +14,10 @@ func deleteCmd(groupID string) *cobra.Command {
 	var ignoreNotFound bool
 	cmd := &cobra.Command{
 		Use:   "delete",
-		Short: "Delete WIM resources from a manifest",
+		Short: "Delete resources from a YAML manifest",
 		Long: undent.Undent(`
-			Delete WIM (Workload Identity Manager, formerly Firefly) resources
-			from a manifest file in CyberArk Certificate Manager, SaaS.
-			The resource name is read from the manifest's 'name' field.
+			Delete resources from a manifest file in CyberArk Certificate Manager,
+			SaaS.
 
 			The deletion order goes from the last object to the first in order
 			to respect dependencies (e.g., ServiceAccount should be deleted
@@ -36,7 +35,7 @@ func deleteCmd(groupID string) *cobra.Command {
 			return runDelete(cmd, filePath, args, ignoreNotFound)
 		},
 	}
-	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the WIM configuration file (YAML). Use '-' to read from stdin.")
+	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the manifest file (YAML). Use '-' to read from stdin.")
 	cmd.Flags().BoolVar(&ignoreNotFound, "ignore-not-found", false, "Ignore errors if the resource is not found")
 	return cmd
 }

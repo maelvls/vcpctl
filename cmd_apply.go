@@ -14,14 +14,10 @@ func applyCmd(groupID string) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "apply",
-		Short: "Create or update a WIM configuration",
+		Short: "Applies resources from a YAML manifest",
 		Long: undent.Undent(`
-			Create or update a WIM (Workload Identity Manager, formerly Firefly)
-			configuration in CyberArk Certificate Manager, SaaS. The configuration
-			name is read from the manifest's 'name' field.
-			Provide a kubectl-style multi-document manifest: declare ServiceAccount
-			manifests first, followed by WIMIssuerPolicy manifests, and finish with
-			a WIMConfiguration manifest.
+			Applies resources from a manifest file to CyberArk Certificate Manager,
+			SaaS.
 		`),
 		Example: undent.Undent(`
 			vcpctl apply -f config.yaml

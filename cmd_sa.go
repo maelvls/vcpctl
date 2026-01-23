@@ -29,8 +29,11 @@ func saSubcmd(groupID string) *cobra.Command {
 			vcpctl sa ls
 			vcpctl sa rm <sa-name>
 			vcpctl sa get <sa-name>
+			vcpctl sa get <sa-name> -oclientid
+			vcpctl sa edit <sa-name>
 			vcpctl sa put wif <sa-name>
 			vcpctl sa put keypair <sa-name>
+			vcpctl sa gen wif <sa-name>
 			vcpctl sa gen keypair <sa-name>
 			vcpctl sa scopes
 		`),
@@ -46,9 +49,9 @@ func saSubcmd(groupID string) *cobra.Command {
 		saGetCmd(),
 		saEditCmd(),
 		saScopesCmd(),
-		&cobra.Command{Use: "gen-rsa", Deprecated: "the 'gen-rsa' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
-		&cobra.Command{Use: "keygen", Deprecated: "the 'keygen' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE},
-		&cobra.Command{Use: "get-clientid", Deprecated: "the 'get-clientid' command is deprecated, please use 'get-clientid' instead.", RunE: saGenkeypairCmd().RunE},
+		&cobra.Command{Use: "gen-rsa", Deprecated: "the 'gen-rsa' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE, Hidden: true},
+		&cobra.Command{Use: "keygen", Deprecated: "the 'keygen' command is deprecated, please use 'keypair' instead.", RunE: saGenkeypairCmd().RunE, Hidden: true},
+		&cobra.Command{Use: "get-clientid", Deprecated: "the 'get-clientid' command is deprecated, please use 'vcpctl sa get -oclientid' instead.", RunE: saGenkeypairCmd().RunE, Hidden: true},
 	)
 	return cmd
 }
