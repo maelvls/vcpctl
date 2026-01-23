@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -36,8 +35,9 @@ type ToolContext struct {
 	Name string `yaml:"name"` // Derived from tenant URL domain with numeric suffix
 
 	TenantID  string `json:"tenantID,omitzero"` // The tenant ID (company ID).
-	TenantURL string `yaml:"url"`               // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	TenantURL string `yaml:"url,omitzero"`      // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
 	APIURL    string `json:"apiURL,omitzero"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	Username  string `json:"username,omitzero"` // Not really used. Just there to help the user identify the context.
 
 	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey"
 
@@ -97,10 +97,11 @@ func promptYesNo(question string) (bool, error) {
 
 		char := strings.ToLower(string(buf[0]))
 
-		if char == "y" {
+		switch char {
+		case "y":
 			fmt.Println("y")
 			return true, nil
-		} else if char == "n" {
+		case "n":
 			fmt.Println("n")
 			return false, nil
 		}
@@ -128,7 +129,7 @@ func promptString(prompt string, validate func(string) error) (string, error) {
 	}
 }
 
-func deprecatedAuthCmd(groupID string) *cobra.Command {
+func deprecatedAuthCmd(_ string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "auth",
 		Short:         "Commands for authenticating and switching tenants.",
@@ -216,7 +217,7 @@ func loginCmd(groupID string) *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
+				resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
 				if err != nil {
 					return fmt.Errorf("while checking the API key's validity: %w", err)
 				}
@@ -229,6 +230,7 @@ func loginCmd(groupID string) *cobra.Command {
 					TenantID:           resp.Company.Id.String(),
 					Email:              resp.User.EmailAddress,
 					UserID:             resp.User.Id.String(),
+					Username:           resp.User.Username,
 				}
 
 				err = saveCurrentContext(current, contextName)
@@ -236,7 +238,7 @@ func loginCmd(groupID string) *cobra.Command {
 					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
 
-				logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
+				logutil.Infof("✅  You are now authenticated with the user '%s'.", current.Email)
 				return nil
 			}
 
@@ -278,7 +280,7 @@ func loginCmd(groupID string) *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("while creating API client: %w", err)
 					}
-					resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
+					resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
 					if err != nil {
 						return fmt.Errorf("while checking the API key's validity: %w", err)
 					}
@@ -309,7 +311,7 @@ func loginCmd(groupID string) *cobra.Command {
 							return fmt.Errorf("while creating API client: %w", err)
 						}
 
-						resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
+						resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
 						if err != nil {
 							return err
 						}
@@ -317,6 +319,7 @@ func loginCmd(groupID string) *cobra.Command {
 						current.TenantURL = tenantURL
 						current.Email = resp.User.EmailAddress
 						current.UserID = resp.User.Id.String()
+						current.Username = resp.User.Username
 						return nil
 					})
 					if err != nil {
@@ -330,7 +333,7 @@ func loginCmd(groupID string) *cobra.Command {
 					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
 
-				logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.TenantURL+"'."))
+				logutil.Infof("\n%s\n", successStyle.Render("✅  You are now authenticated with the user '"+current.Email+"'."))
 				return nil
 			}
 
@@ -362,9 +365,9 @@ func loginCmd(groupID string) *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				_, tenantURL, err := api.SelfCheck(context.Background(), cl)
+				_, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
 				if err == nil {
-					fmt.Printf("\n%s\n\n", successStyle.Render("✓ You are already logged in to "+tenantURL))
+					fmt.Printf("\n%s\n\n", successStyle.Render("✅  You are already logged in to "+tenantURL))
 
 					// Ask if they want to add a new tenant or re-login to existing one
 					addNew, err := promptYesNo("Do you want to add a new tenant?")
@@ -452,7 +455,7 @@ func loginCmd(groupID string) *cobra.Command {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
 
-				resp, tenantURL, err := api.SelfCheck(context.Background(), cl)
+				resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
 				if err != nil {
 					return err
 				}
@@ -460,6 +463,7 @@ func loginCmd(groupID string) *cobra.Command {
 				current.TenantURL = tenantURL
 				current.Email = resp.User.EmailAddress
 				current.UserID = resp.User.Id.String()
+				current.Username = resp.User.Username
 
 				return nil
 			})
@@ -469,7 +473,7 @@ func loginCmd(groupID string) *cobra.Command {
 			current.APIKey = apiKeyInput
 			current.AuthenticationType = "apiKey"
 
-			logutil.Infof("\n%s\n", successStyle.Render("✓ You are now authenticated to tenant '"+current.TenantURL+"'."))
+			logutil.Infof("\n%s\n", successStyle.Render("✅  You are now authenticated with the user '"+current.Email+"'."))
 
 			// Save the configuration to ~/.config/vcpctl.yaml
 			err = saveCurrentContext(current, contextName)
@@ -639,13 +643,16 @@ func tenantidCmd(groupID string) *cobra.Command {
 	}
 	return cmd
 }
+
 func switchCmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch [context-name]",
-		Short: "Switch to a different CyberArk Certificate Manager, SaaS context.",
+		Short: "Switch to a context",
 		Long: undent.Undent(`
-			Switch to a different CyberArk Certificate Manager, SaaS context. If the context is not specified,
-				you will be prompted to select one.
+			Switch to a different context. A context holds the authentication
+			information: server URL, API key, etc. It allows you to easily switch
+			between different CyberArk Certificate Manager SaaS tenants, as well
+			as different users within the same tenant.
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -672,16 +679,13 @@ func switchCmd(groupID string) *cobra.Command {
 			}
 
 			// If no context is provided, we prompt the user to select one.
-			current, ok := currentFrom(conf)
-			if !ok {
-				return fmt.Errorf("no current context found in configuration. Please run `vcpctl login` to add one.")
-			}
+			current, _ := currentFrom(conf)
 
 			var opts []huh.Option[ToolContext]
 			for _, toolctx := range conf.ToolContexts {
 				opts = append(opts, huh.Option[ToolContext]{
 					Value: toolctx,
-					Key:   fmt.Sprintf("%s (%s)", toolctx.Name, toolctx.TenantURL),
+					Key:   displayContextForSelection(toolctx),
 				})
 			}
 
@@ -706,6 +710,33 @@ func switchCmd(groupID string) *cobra.Command {
 	}
 
 	return cmd
+}
+
+// The fields in the context may be sparse. We need to display something like:
+//
+//	  foo (type: apiKey, url: https://glow-in-the-dark.venafi.cloud, email: mael.valais@venafi.com)
+//	  bar (type: rsaKey, username: firefly)
+//	> baz (type: rsaKeyFederated, service account: 12345678-90ab-cdef-1234-567890abcdef)
+//
+// Sometimes, Username or Email may be empty. Let's skip the missing fields.
+func displayContextForSelection(toolctx ToolContext) string {
+	var parts []string
+	if toolctx.AuthenticationType != "" {
+		parts = append(parts, fmt.Sprintf("type: %s", toolctx.AuthenticationType))
+	}
+	if toolctx.TenantURL != "" {
+		parts = append(parts, fmt.Sprintf("url: %s", toolctx.TenantURL))
+	}
+	if toolctx.Email != "" {
+		parts = append(parts, fmt.Sprintf("email: %s", toolctx.Email))
+	} else if toolctx.Username != "" && toolctx.AuthenticationType == "apiKey" {
+		parts = append(parts, fmt.Sprintf("username: %s", toolctx.Username))
+	} else if toolctx.Username != "" && toolctx.AuthenticationType != "apiKey" {
+		parts = append(parts, fmt.Sprintf("service account: %s", toolctx.Username))
+	} else if toolctx.ClientID != "" {
+		parts = append(parts, fmt.Sprintf("service account: %s", toolctx.ClientID))
+	}
+	return fmt.Sprintf("%s (%s)", toolctx.Name, strings.Join(parts, ", "))
 }
 
 // authSwitchCmd is a deprecated alias for switchCmd
@@ -742,7 +773,8 @@ func saveCurrentContext(toolctx ToolContext, contextFlag string) error {
 	if contextFlag != "" {
 		// User specified --context flag, use it directly.
 		toolctx.Name = contextFlag
-	} else if toolctx.Name == "" {
+	}
+	if toolctx.Name == "" {
 		toolctx.Name = generateContextName(toolctx, conf.ToolContexts)
 	}
 
@@ -1027,7 +1059,7 @@ func loadFileConf() (FileConf, error) {
 			if err := saveFileConf(conf); err != nil {
 				logutil.Debugf("Warning: failed to save converted config: %v", err)
 			} else {
-				logutil.Infof("✓ Configuration automatically converted to new format")
+				logutil.Infof("✅  Configuration automatically converted to new format")
 			}
 		}
 	}

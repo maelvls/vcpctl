@@ -45,19 +45,19 @@ type oauthTokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func generateWIFKeyPairAndJWKS() (*ecdsa.PrivateKey, string, string, []byte, error) {
+func generateWIFKeyPairAndJWKS() (privPEM string, kid string, jwksPayload []byte, _ error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, "", "", nil, err
+		return "", "", nil, err
 	}
 	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
-		return nil, "", "", nil, err
+		return "", "", nil, err
 	}
-	privPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
+	privPEM = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
 
-	kid := jwkThumbprintEC(&priv.PublicKey)
-	jwksPayload, err := json.MarshalIndent(jwksSet{
+	kid = jwkThumbprintEC(&priv.PublicKey)
+	jwksPayload, err = json.MarshalIndent(jwksSet{
 		Keys: []jwksKey{
 			{
 				Kty: "EC",
@@ -71,10 +71,10 @@ func generateWIFKeyPairAndJWKS() (*ecdsa.PrivateKey, string, string, []byte, err
 		},
 	}, "", "  ")
 	if err != nil {
-		return nil, "", "", nil, err
+		return "", "", nil, err
 	}
 
-	return priv, string(privPEM), kid, jwksPayload, nil
+	return privPEM, kid, jwksPayload, nil
 }
 
 func signWIFJWT(priv *ecdsa.PrivateKey, kid, issuer, subject, audience string, validity time.Duration) (string, error) {
@@ -198,13 +198,18 @@ type wifJSON struct {
 	// The client ID isn't really needed to authenticate (we only need the
 	// tenant ID). However, it allows us to identify the service account used,
 	// which is something we use to know when two contexts are the same.
-	ClientID   string `json:"client_id"`
+	ClientID string `json:"client_id"`
+	JWKSURL  string `json:"jwks_url"`
+
+	// Allow you generate new ID tokens for requesting new access tokens.
 	PrivateKey string `json:"private_key"`
-	TenantURL  string `json:"tenant_url"`
-	JWKSURL    string `json:"jwks_url"`
 	Iss        string `json:"iss"`
 	Aud        string `json:"aud"`
 	Sub        string `json:"sub"`
+
+	// Optional. Useful because it lets us fill in the tenant URL in
+	// ~/.config/vcpctl.yaml.
+	TenantURL string `json:"tenant_url"`
 }
 
 func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName string) error {
@@ -301,7 +306,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 
-	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
+	logutil.Infof("✅  You are now authenticated with a WIF service account")
 	return nil
 }
 

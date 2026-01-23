@@ -111,6 +111,18 @@ func saGenkeypairCmd() *cobra.Command {
 			}
 			logutil.Debugf("Client ID: %s", existingSA.Id.String())
 
+			// At this point, we need to know the tenant URL; if we are
+			// authenticated using an API key, then we can fetch it.
+			var tenantURL string
+			if conf.APIKey != "" {
+				_, tenantURL, err = api.SelfCheckAPIKey(cmd.Context(), apiClient)
+				if err != nil {
+					return fmt.Errorf("while getting tenant URL from API key: %w", err)
+				}
+			} else {
+				return fmt.Errorf("can only use an API key to generate WIF credentials. This is because we need to determine the tenant URL, but /v1/useraccounts is only available for API key authentication, not when using an access token tied to a service account")
+			}
+
 			switch outputFormat {
 			case "pem":
 				fmt.Println(ecKey)
@@ -120,6 +132,7 @@ func saGenkeypairCmd() *cobra.Command {
 					ClientID:   existingSA.Id.String(),
 					PrivateKey: ecKey,
 					APIURL:     conf.APIURL,
+					TenantURL:  tenantURL,
 				}, "", "  ")
 				if err != nil {
 					return fmt.Errorf("while marshaling JSON: %w", err)
@@ -171,6 +184,16 @@ func saPutKeypairCmd() *cobra.Command {
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
+			}
+
+			// If --scope=all is passed, let's retrieve all available scopes for
+			// 'rsaKey' authentication type.
+			if len(scopes) == 1 && scopes[0] == "all" {
+				scopes, err = api.GetServiceAccountScopesByType(cmd.Context(), apiClient, "rsaKey")
+				if err != nil {
+					return fmt.Errorf("while retrieving available scopes for 'rsaKey' authentication type: %w", err)
+				}
+				logutil.Debugf("Using all available scopes for 'rsaKey': %s", strings.Join(scopes, ", "))
 			}
 
 			// Does it already exist?
@@ -233,6 +256,6 @@ func saPutKeypairCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pem", "Output format (pem, json)")
-	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"platform-admin-role"}, "Scope for the service account. You can give multiple scopes by separating them with commas, or repeating the --scope flag. To list the scopes you can use with this command, run 'vcpctl sa scopes --type rsaKey'.")
+	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"all"}, "Scope for the service account. You can give multiple scopes by separating them with commas, or repeating the --scope flag. To list the scopes you can use with this command, run 'vcpctl sa scopes --type rsaKey'. You can use 'all' to assign all available scopes for 'rsaKey' authentication type.")
 	return cmd
 }

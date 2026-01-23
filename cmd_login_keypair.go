@@ -70,14 +70,17 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				return fmt.Errorf("while exchanging JWT for access token: %w", err)
 			}
 
-			_, err = api.NewAccessTokenClient(saKey.APIURL, accessToken)
+			cl, err := api.NewAccessTokenClient(saKey.APIURL, accessToken)
 			if err != nil {
 				return fmt.Errorf("while creating access-token client: %w", err)
 			}
 
-			// We can't run SelfCheck() here because it only works with API
-			// keys. And since we don't have a tenant URL, we don't have a good
-			// way of generating a context name.
+			// We can't run SelfCheckAPIKeys() here because it only works with
+			// API keys. But we can still know the service account name.
+			saName, err := api.SelfCheckServiceAccount(ctx, cl)
+			if err != nil {
+				return fmt.Errorf("while checking service account: %w", err)
+			}
 
 			current := Auth{
 				APIURL:             saKey.APIURL,
@@ -85,13 +88,14 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				ClientID:           saKey.ClientID,
 				PrivateKey:         saKey.PrivateKey,
 				AccessToken:        accessToken,
+				Username:           saName,
 			}
 
 			if err := saveCurrentContext(current, contextName); err != nil {
 				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 			}
 
-			logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
+			logutil.Infof("✅  You are now authenticated with the service account '%s'.", current.Username)
 			return nil
 		},
 	}
@@ -104,6 +108,10 @@ type jsonAuthKeypair struct {
 	ClientID   string `json:"client_id"`
 	PrivateKey string `json:"private_key"`
 	APIURL     string `json:"api_url"`
+
+	// Optional. Useful because it lets us fill in the tenant URL in
+	// ~/.config/vcpctl.yaml.
+	TenantURL string `json:"tenant_url,omitzero"`
 }
 
 type serviceAccountTokenResponse struct {

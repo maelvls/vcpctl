@@ -48,6 +48,39 @@ func GetServiceAccounts(ctx context.Context, cl *Client) ([]ServiceAccountDetail
 	return result, nil
 }
 
+type combination struct {
+	scopeID            string
+	authenticationType string
+}
+
+// Some "authenticationType, scope" combinations are known to not work.
+var notWorking = map[combination]struct{}{
+	{"satellite", "rsaKey"}:                     {},
+	{"certificate-issuance", "rsaKeyFederated"}: {},
+}
+
+// Returns the list of scope IDs (e.g., "platform-admin-role") available for the
+// given authentication type (e.g., "rsaKeyFederated").
+func GetServiceAccountScopesByType(ctx context.Context, cl *Client, authType string) ([]string, error) {
+	scopes, err := GetServiceAccountScopes(ctx, cl)
+	if err != nil {
+		return nil, fmt.Errorf("while getting service account scopes: %w", err)
+	}
+
+	var filtered []string
+	for _, scope := range scopes {
+		_, notWorkingCombination := notWorking[combination{scope.Id, authType}]
+		if notWorkingCombination {
+			continue
+		}
+		if scope.AuthenticationType == authType {
+			filtered = append(filtered, scope.Id)
+		}
+	}
+
+	return filtered, nil
+}
+
 func GetServiceAccountScopes(ctx context.Context, cl *Client) ([]ScopeDetails, error) {
 	resp, err := cl.GetV1Serviceaccountscopes(ctx)
 	if err != nil {
@@ -72,7 +105,17 @@ func GetServiceAccountScopes(ctx context.Context, cl *Client) ([]ScopeDetails, e
 		return nil, fmt.Errorf("while decoding %s response: %w, body was: %s", resp.Status, err, body.String())
 	}
 
-	return result, nil
+	// Filter out scopes that are known to not work.
+	var filtered []ScopeDetails
+	for _, scope := range result {
+		_, notWorkingCombination := notWorking[combination{scope.Id, scope.AuthenticationType}]
+		if notWorkingCombination {
+			continue
+		}
+		filtered = append(filtered, scope)
+	}
+
+	return filtered, nil
 }
 
 func GetServiceAccount(ctx context.Context, cl *Client, nameOrID string) (ServiceAccountDetails, error) {

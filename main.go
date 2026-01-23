@@ -121,16 +121,20 @@ func errHandler(w io.Writer, styles fang.Styles, err error) {
 
 	// Handle multiline error messages by processing each line separately to
 	// preserve the transform while maintaining line breaks.
+	//
+	// Also, don't apply the 'titleFirstWord' transform when the line start with
+	// something that looks like a flag, e.g. "--jwks-url" should not be
+	// transformed to "--Jwks-url".
 	errStr := err.Error()
-	noTransform := styles.ErrorText.UnsetTransform()
+	noTitleFirstWord := styles.ErrorText.UnsetTransform()
 	var errMsgLines []string
 	for i, line := range strings.Split(errStr, "\n") {
 		if line == "" {
 			errMsgLines = append(errMsgLines, "")
 			continue
 		}
-		if i > 0 {
-			errMsgLines = append(errMsgLines, noTransform.Render(line))
+		if i > 0 || strings.HasPrefix(line, "-") {
+			errMsgLines = append(errMsgLines, noTitleFirstWord.Render(line))
 			continue
 		}
 		errMsgLines = append(errMsgLines, styles.ErrorText.Render(line))
