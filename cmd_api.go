@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/spf13/cobra"
 )
@@ -35,19 +36,6 @@ func apiCmd() *cobra.Command {
 The path should start with a slash and can optionally include /v1/ prefix.
 If /v1/ is not present, it will be automatically prepended.
 
-Examples:
-  # GET request
-  vcpctl api /v1/serviceaccounts
-
-  # POST request with fields
-  vcpctl api /v1/serviceaccounts -F name=mysa -F description="My Service Account"
-
-  # Include response headers
-  vcpctl api /v1/serviceaccounts -i
-
-  # Custom method
-  vcpctl api -X DELETE /v1/serviceaccounts/abc123
-
 Field value conversions:
   - Numeric values are converted to integers: -F count=123
   - Boolean literals are converted: -F enabled=true
@@ -57,6 +45,19 @@ Field value conversions:
 
 Use -f/--raw-field to always send values as strings without conversion.
 `,
+		Example: undent.Undent(`
+			# GET request
+			vcpctl api /v1/serviceaccounts
+
+			# POST request with fields
+			vcpctl api /v1/serviceaccounts -F name=mysa -F description="My Service Account"
+
+  			# Include response headers
+  			vcpctl api /v1/serviceaccounts -i
+
+  			# Custom method
+  			vcpctl api -X DELETE /v1/serviceaccounts/abc123
+		`),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPI(cmd, opts, args[0])
@@ -104,7 +105,7 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		if err != nil {
 			return err
 		}
-		value, err := magicFieldValue(strValue)
+		value, err := magicFieldValue(cmd.Context(), strValue)
 		if err != nil {
 			return err
 		}
@@ -175,19 +176,26 @@ func parseField(f string) (string, string, error) {
 // - Numeric strings become integers
 // - "true", "false", "null" become boolean or nil
 // - Everything else remains a string
-func magicFieldValue(v string) (any, error) {
+func magicFieldValue(ctx context.Context, v string) (any, error) {
 	// File reading: @filename or @- for stdin
 	if strings.HasPrefix(v, "@") {
 		filename := v[1:]
 		var data []byte
 		var err error
 
+		var fd io.Reader
 		if filename == "-" {
-			data, err = io.ReadAll(os.Stdin)
+			fd = os.Stdin
 		} else {
-			data, err = os.ReadFile(filename)
+			fdCloser, err := os.Open(filename)
+			if err != nil {
+				return nil, fmt.Errorf("opening file %q: %w", filename, err)
+			}
+			defer fdCloser.Close()
+			fd = fdCloser
 		}
 
+		data, err = io.ReadAll(New(ctx, fd))
 		if err != nil {
 			return nil, fmt.Errorf("reading file %q: %w", filename, err)
 		}
@@ -267,4 +275,51 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, pa
 	}
 
 	return cl.Client.Do(req)
+}
+
+type CancelableReader struct {
+	ctx  context.Context
+	data chan []byte
+	err  error
+	r    io.Reader
+}
+
+func (c *CancelableReader) begin() {
+	buf := make([]byte, 1024)
+	for {
+		n, err := c.r.Read(buf)
+		if n > 0 {
+			tmp := make([]byte, n)
+			copy(tmp, buf[:n])
+			c.data <- tmp
+		}
+		if err != nil {
+			c.err = err
+			close(c.data)
+			return
+		}
+	}
+}
+
+func (c *CancelableReader) Read(p []byte) (int, error) {
+	select {
+	case <-c.ctx.Done():
+		return 0, c.ctx.Err()
+	case d, ok := <-c.data:
+		if !ok {
+			return 0, c.err
+		}
+		copy(p, d)
+		return len(d), nil
+	}
+}
+
+func New(ctx context.Context, r io.Reader) *CancelableReader {
+	c := &CancelableReader{
+		r:    r,
+		ctx:  ctx,
+		data: make(chan []byte),
+	}
+	go c.begin()
+	return c
 }

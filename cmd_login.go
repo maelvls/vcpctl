@@ -515,35 +515,6 @@ func loginWifCmd() *cobra.Command {
 	return cmd
 }
 
-func loginKeypairCmd() *cobra.Command {
-	var contextName string
-	cmd := &cobra.Command{
-		Use:           "login-keypair <json-file>",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		Args:          cobra.ExactArgs(1),
-		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant using a service account keypair.",
-		Long: undent.Undent(`
-			Authenticate to a CyberArk Certificate Manager, SaaS tenant using a service account keypair.
-
-			This command expects a JSON file containing the service account credentials from 'vcpctl sa gen keypair'.
-			Use '-' to read the JSON from stdin.
-		`),
-		Example: undent.Undent(`
-			# Keypair login from file:
-			vcpctl login-keypair sa-keypair.json
-
-			# Keypair login from stdin:
-			vcpctl sa gen keypair my-sa -ojson | vcpctl login-keypair -
-		`),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return loginWithServiceAccountKey(cmd.Context(), []string{}, args[0], "", contextName)
-		},
-	}
-	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
-	return cmd
-}
-
 // authLoginCmd is a deprecated alias for loginCmd
 func authLoginCmd() *cobra.Command {
 	cmd := loginCmd()
@@ -825,20 +796,28 @@ func generateContextName(toolctx ToolContext, existing []ToolContext) string {
 		return false
 	}
 
-	// Attempt 1: just the domain name. Example:
-	//  glow-in-the-dark.venafi.cloud
-	contextName := extractDomainFromURL(toolctx.TenantURL)
-	if !alreadyUsed(contextName) {
-		return contextName
-	}
-
-	// Attempt 2: add a number. Example:
-	//  glow-in-the-dark.venafi.cloud.2
-	for i := 2; i < 1000; i++ {
-		candidate := fmt.Sprintf("%s.%d", contextName, i)
-		if !alreadyUsed(candidate) {
-			return candidate
+	if toolctx.TenantURL != "" {
+		// Attempt 1: just the domain name. Example:
+		//  glow-in-the-dark.venafi.cloud
+		contextName := extractDomainFromURL(toolctx.TenantURL)
+		if !alreadyUsed(contextName) {
+			return contextName
 		}
+
+		// Attempt 2: add a number. Example:
+		//  glow-in-the-dark.venafi.cloud.2
+		for i := 2; i < 1000; i++ {
+			candidate := fmt.Sprintf("%s.%d", contextName, i)
+			if !alreadyUsed(candidate) {
+				return candidate
+			}
+		}
+	} else if toolctx.ClientID != "" {
+		// If no tenant URL, fall back to "sa-<id>".
+		return "sa" + toolctx.ClientID
+	} else if toolctx.UserID != "" {
+		// If no tenant URL or client ID, fall back to "user-<id>".
+		return "user-" + toolctx.UserID
 	}
 
 	panic("why do you have so many contexts? I give up")

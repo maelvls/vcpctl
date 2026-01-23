@@ -18,12 +18,87 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
+	"github.com/spf13/cobra"
 )
 
-type serviceAccountKeyInput struct {
+func loginKeypairCmd() *cobra.Command {
+	var contextName string
+	cmd := &cobra.Command{
+		Use:           "login-keypair <json-file>",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ExactArgs(1),
+		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant using a service account keypair.",
+		Long: undent.Undent(`
+			Authenticate to a CyberArk Certificate Manager, SaaS tenant using a service account keypair.
+
+			This command expects a JSON file containing the service account credentials from 'vcpctl sa gen keypair'.
+			Use '-' to read the JSON from stdin.
+		`),
+		Example: undent.Undent(`
+			# Keypair login from file:
+			vcpctl login-keypair sa-keypair.json
+
+			# Keypair login from stdin:
+			vcpctl sa gen keypair my-sa -ojson | vcpctl login-keypair -
+		`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+
+			if len(args) < 1 {
+				return errutil.Fixable(fmt.Errorf("a file path to the JSON authentication file or '-' for stdin is required"))
+			}
+			saKeyPath := args[0]
+
+			saKey, err := readJSONAuthKeypair(saKeyPath)
+			if err != nil {
+				return err
+			}
+
+			signedJWT, err := signServiceAccountJWT(saKey.ClientID, saKey.PrivateKey, saKey.APIURL, 30*time.Minute)
+			if err != nil {
+				return fmt.Errorf("while signing JWT: %w", err)
+			}
+
+			accessToken, err := exchangeServiceAccountJWT(ctx, saKey.APIURL, signedJWT)
+			if err != nil {
+				return fmt.Errorf("while exchanging JWT for access token: %w", err)
+			}
+
+			_, err = api.NewAccessTokenClient(saKey.APIURL, accessToken)
+			if err != nil {
+				return fmt.Errorf("while creating access-token client: %w", err)
+			}
+
+			// We can't run SelfCheck() here because it only works with API
+			// keys. And since we don't have a tenant URL, we don't have a good
+			// way of generating a context name.
+
+			current := Auth{
+				APIURL:             saKey.APIURL,
+				AuthenticationType: "rsaKey",
+				ClientID:           saKey.ClientID,
+				PrivateKey:         saKey.PrivateKey,
+				AccessToken:        accessToken,
+			}
+
+			if err := saveCurrentContext(current, contextName); err != nil {
+				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
+			}
+
+			logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
+	return cmd
+}
+
+type jsonAuthKeypair struct {
 	Type       string `json:"type"`
 	ClientID   string `json:"client_id"`
 	PrivateKey string `json:"private_key"`
@@ -34,79 +109,7 @@ type serviceAccountTokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func loginWithServiceAccountKey(ctx context.Context, args []string, saKeyPath, apiURLFlag string, contextName string) error {
-	if saKeyPath == "" {
-		return errutil.Fixable(fmt.Errorf("--sa-keypair requires a JSON file path or '-' for stdin"))
-	}
-
-	saKey, err := readServiceAccountKeyInput(saKeyPath)
-	if err != nil {
-		return err
-	}
-
-	// Determine the API URL.
-	var apiURL string
-	if apiURLFlag != "" {
-		apiURL = apiURLFlag
-	} else if len(args) > 0 {
-		tenantURL := args[0]
-		if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
-			tenantURL = "https://" + tenantURL
-		}
-		httpCl := http.Client{Transport: api.LogTransport}
-		info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
-		if err != nil {
-			return fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
-		}
-		apiURL = info.APIURL
-	} else {
-		return errutil.Fixable(fmt.Errorf("--api-url or tenant URL is required for --sa-keypair"))
-	}
-
-	apiURL = strings.TrimRight(apiURL, "/")
-	if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
-		apiURL = "https://" + apiURL
-	}
-
-	signedJWT, err := signServiceAccountJWT(saKey.ClientID, saKey.PrivateKey, apiURL, 30*time.Minute)
-	if err != nil {
-		return fmt.Errorf("while signing JWT: %w", err)
-	}
-
-	accessToken, err := exchangeServiceAccountJWT(ctx, apiURL, signedJWT)
-	if err != nil {
-		return fmt.Errorf("while exchanging JWT for access token: %w", err)
-	}
-
-	cl, err := api.NewAccessTokenClient(apiURL, accessToken)
-	if err != nil {
-		return fmt.Errorf("while creating access-token client: %w", err)
-	}
-
-	self, tenantURL, err := api.SelfCheck(ctx, cl)
-	if err != nil {
-		return fmt.Errorf("while checking the access token's validity: %w", err)
-	}
-
-	current := Auth{
-		TenantURL:          tenantURL,
-		APIURL:             apiURL,
-		AuthenticationType: "rsaKey",
-		ClientID:           saKey.ClientID,
-		PrivateKey:         saKey.PrivateKey,
-		AccessToken:        accessToken,
-		TenantID:           self.Company.Id.String(),
-	}
-
-	if err := saveCurrentContext(current, contextName); err != nil {
-		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
-	}
-
-	logutil.Infof("✅  You are now authenticated to tenant '%s'.", current.TenantURL)
-	return nil
-}
-
-func readServiceAccountKeyInput(path string) (serviceAccountKeyInput, error) {
+func readJSONAuthKeypair(path string) (jsonAuthKeypair, error) {
 	var raw []byte
 	var err error
 	if path == "-" {
@@ -115,27 +118,27 @@ func readServiceAccountKeyInput(path string) (serviceAccountKeyInput, error) {
 		raw, err = os.ReadFile(path)
 	}
 	if err != nil {
-		return serviceAccountKeyInput{}, fmt.Errorf("while reading %s: %w", path, err)
+		return jsonAuthKeypair{}, fmt.Errorf("while reading %s: %w", path, err)
 	}
 	if len(strings.TrimSpace(string(raw))) == 0 {
-		return serviceAccountKeyInput{}, errutil.Fixable(fmt.Errorf("empty service account JSON"))
+		return jsonAuthKeypair{}, errutil.Fixable(fmt.Errorf("empty service account JSON"))
 	}
 
-	var input serviceAccountKeyInput
+	var input jsonAuthKeypair
 	if err := json.Unmarshal(raw, &input); err != nil {
-		return serviceAccountKeyInput{}, fmt.Errorf("while parsing JSON: %w", err)
+		return jsonAuthKeypair{}, fmt.Errorf("while parsing JSON: %w", err)
 	}
 
 	input.ClientID = strings.TrimSpace(input.ClientID)
 	input.PrivateKey = strings.TrimSpace(input.PrivateKey)
 	if input.ClientID == "" {
-		return serviceAccountKeyInput{}, errutil.Fixable(fmt.Errorf("missing 'client_id'"))
+		return jsonAuthKeypair{}, errutil.Fixable(fmt.Errorf("missing 'client_id'"))
 	}
 	if input.PrivateKey == "" {
-		return serviceAccountKeyInput{}, errutil.Fixable(fmt.Errorf("missing 'private_key'"))
+		return jsonAuthKeypair{}, errutil.Fixable(fmt.Errorf("missing 'private_key'"))
 	}
 	if input.APIURL == "" {
-		return serviceAccountKeyInput{}, errutil.Fixable(fmt.Errorf("missing 'api_url'"))
+		return jsonAuthKeypair{}, errutil.Fixable(fmt.Errorf("missing 'api_url'"))
 	}
 
 	return input, nil

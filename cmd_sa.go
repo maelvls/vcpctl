@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -326,7 +327,8 @@ func saEditCmd() *cobra.Command {
 }
 
 func saScopesCmd() *cobra.Command {
-	var outputFormat string
+	var outputFormat string // "json", "table"
+	var typeFilter string   // "rsaKey", "rsaKeyFederated"
 	cmd := &cobra.Command{
 		Use:   "scopes",
 		Short: "List all available Service Account scopes",
@@ -338,13 +340,15 @@ func saScopesCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl sa scopes
 			vcpctl sa scopes -o json
+			vcpctl sa scopes --type rsaKey
+			vcpctl sa scopes --type rsaKeyFederated -o table
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa scopes: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
@@ -353,38 +357,54 @@ func saScopesCmd() *cobra.Command {
 
 			scopes, err := api.GetServiceAccountScopes(context.Background(), apiClient)
 			if err != nil {
-				return fmt.Errorf("sa scopes: while listing scopes: %w", err)
+				return fmt.Errorf("while listing scopes: %w", err)
+			}
+
+			if typeFilter != "" {
+				var filtered []api.ScopeDetails
+				for _, s := range scopes {
+					if s.AuthenticationType == typeFilter || slices.Contains(s.AuthenticationTypes, typeFilter) {
+						filtered = append(filtered, s)
+					}
+				}
+				scopes = filtered
 			}
 
 			switch outputFormat {
 			case "json":
 				b, err := marshalIndent(scopes, "", "  ")
 				if err != nil {
-					return fmt.Errorf("sa scopes: while marshaling scopes to JSON: %w", err)
+					return fmt.Errorf("while marshaling scopes to JSON: %w", err)
 				}
 				fmt.Println(string(b))
 				return nil
 			case "table":
 				var rows [][]string
 				for _, scope := range scopes {
-					authType := scope.AuthenticationType
-					if authType == "" {
-						authType = "-"
+					var authTypes []string
+					if scope.AuthenticationType != "" {
+						authTypes = append(authTypes, scope.AuthenticationType)
+					}
+					authTypes = append(authTypes, scope.AuthenticationTypes...)
+
+					if len(authTypes) == 0 {
+						authTypes = []string{"-"}
 					}
 					rows = append(rows, []string{
 						scope.Id,
-						authType,
+						strings.Join(authTypes, ", "),
 						scope.ReadableName,
 					})
 				}
 				printTable([]string{"Scope ID", "Auth Type", "Description"}, rows)
 				return nil
 			default:
-				return errutil.Fixable(fmt.Errorf("sa scopes: invalid output format: %s", outputFormat))
+				return errutil.Fixable(fmt.Errorf("invalid output format: %s", outputFormat))
 			}
 		},
 	}
-	cmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, table)")
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, table).")
+	cmd.Flags().StringVarP(&typeFilter, "type", "a", "", "Filter scopes by authentication type. Supported values are 'rsaKey' and 'rsaKeyFederated'.")
 	return cmd
 }
 

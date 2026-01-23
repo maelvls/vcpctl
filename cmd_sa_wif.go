@@ -138,25 +138,6 @@ func saGenWifCmd() *cobra.Command {
 				logutil.Debugf("No owner team provided, using the first available one: %s (%s)", teams[0].Name, teams[0].Id.String())
 			}
 
-			// Scopes can't be empty. When empty, a '500 Internal Server Error'
-			// is returned by the API. So, if the user doesn't set any scope,
-			// let's go with the biggest set of scopes for that auth type.
-			if len(scopes) == 0 {
-				availScopes, err := api.GetServiceAccountScopes(cmd.Context(), apiClient)
-				if err != nil {
-					return fmt.Errorf("while retrieving service account scopes: %w", err)
-				}
-				for _, s := range availScopes {
-					if s.AuthenticationType != "rsaKeyFederated" {
-						continue
-					}
-					scopes = append(scopes, s.Id)
-				}
-			}
-			if len(scopes) == 0 {
-				return fmt.Errorf("at least one scope must be specified for the service account using --scope")
-			}
-
 			// Check if service account exists.
 			existingSA, err := api.GetServiceAccount(context.Background(), apiClient, saName)
 			var clientID string
@@ -187,9 +168,8 @@ func saGenWifCmd() *cobra.Command {
 				desiredSA.Audience = audience
 				desiredSA.IssuerURL = issuerURL
 				desiredSA.JwksURI = jwksURL
-				if len(scopes) > 0 {
-					desiredSA.Scopes = scopes
-				}
+				desiredSA.Scopes = scopes
+
 				if len(applications) > 0 {
 					desiredSA.Applications = applications
 				}
@@ -250,7 +230,7 @@ func saGenWifCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (only 'json' is supported)")
-	cmd.Flags().StringArrayVar(&scopes, "scope", []string{}, "Scopes for the Service Account (can be specified multiple times)")
+	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"platform-admin-role"}, "Scope for the service account. You can give multiple scopes by separating them with commas, or repeating the --scope flag. To list the scopes you can use with this command, run 'vcpctl sa scopes --type rsaKeyFederated'.")
 	cmd.Flags().StringVar(&subject, "subject", "", "The subject of the entity (defaults to 'system:serviceaccount:default:<sa-name>')")
 	cmd.Flags().StringVar(&audience, "audience", "", "The intended audience (defaults to 'venafi-cloud')")
 	cmd.Flags().StringVar(&issuerURL, "issuer-url", "", "The issuer URL (defaults to the JWKS URL)")
@@ -436,7 +416,7 @@ func saPutWifCmd() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringArrayVar(&scopes, "scope", []string{}, "Scopes for the Service Account (can be specified multiple times, e.g. '--scope kubernetes-discovery-federated --scope certificate-issuance')")
+	cmd.Flags().StringSliceVar(&scopes, "scope", []string{}, "Scopes for the service account .The flag --scope can be specified multiple times, or a comma-separated list can be provided instead. By default, all available scopes for 'rsaKeyFederated' authentication type are set.")
 	cmd.Flags().StringVar(&subject, "subject", "", "The subject of the entity (required)")
 	cmd.Flags().StringVar(&audience, "audience", "", "The intended audience or recipients of the entity (required)")
 	cmd.Flags().StringVar(&issuerURL, "issuer-url", "", "The URL of the entity issuer (required)")

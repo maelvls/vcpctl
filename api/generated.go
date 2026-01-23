@@ -2633,7 +2633,8 @@ type Scope = string
 // ScopeDetails The service account authorization scopes detailed
 type ScopeDetails struct {
 	// AuthenticationType Type of authentication used in the scope
-	AuthenticationType string `json:"authenticationType,omitempty,omitzero"`
+	AuthenticationType  string   `json:"authenticationType,omitempty,omitzero"`
+	AuthenticationTypes []string `json:"authenticationTypes,omitempty,omitzero"`
 
 	// Id ID for the given scope
 	Id string `json:"id"`

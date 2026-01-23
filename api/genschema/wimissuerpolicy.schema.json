@@ -4,6 +4,7 @@
   "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
   "allOf": [
     {
+      "type": "object",
       "properties": {
         "apiVersion": {
           "type": "string"
@@ -15,83 +16,26 @@
       "required": [
         "kind",
         "name"
-      ],
-      "type": "object"
+      ]
     },
     {
       "$ref": "#/$defs/PolicyInformation"
     }
   ],
   "$defs": {
-    "PropertyInformation": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "IGNORED",
-            "FORBIDDEN",
-            "OPTIONAL",
-            "REQUIRED",
-            "LOCKED"
-          ]
-        },
-        "allowedValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "defaultValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "minOccurrences": {
-          "format": "int32",
-          "type": "integer"
-        },
-        "maxOccurrences": {
-          "type": "integer",
-          "format": "int32"
-        }
-      }
-    },
-    "SansInformation": {
-      "type": "object",
-      "properties": {
-        "dnsNames": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "ipAddresses": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "rfc822Names": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "uniformResourceIdentifiers": {
-          "$ref": "#/$defs/PropertyInformation"
-        }
-      },
-      "description": "Subject alternative names"
-    },
     "PolicyInformation": {
       "type": "object",
       "properties": {
-        "keyAlgorithm": {
-          "$ref": "#/$defs/KeyAlgorithmInformation"
-        },
-        "creationDate": {
-          "type": "string",
-          "description": "When the policy was initially created",
-          "example": "2022-10-10T14:50:41.710+00:00"
-        },
         "id": {
           "type": "string",
           "description": "UUID of the policy",
           "format": "uuid",
           "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
+        },
+        "name": {
+          "description": "Name of the policy",
+          "example": "Some policy",
+          "type": "string"
         },
         "validityPeriod": {
           "type": "string",
@@ -101,6 +45,25 @@
         },
         "subject": {
           "$ref": "#/$defs/SubjectAttributesInformation"
+        },
+        "keyAlgorithm": {
+          "$ref": "#/$defs/KeyAlgorithmInformation"
+        },
+        "creationDate": {
+          "description": "When the policy was initially created",
+          "example": "2022-10-10T14:50:41.710+00:00",
+          "type": "string"
+        },
+        "modificationDate": {
+          "type": "string",
+          "description": "When the policy was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "UUID specific to your company",
+          "format": "uuid",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
         },
         "sans": {
           "$ref": "#/$defs/SansInformation"
@@ -127,30 +90,14 @@
             ]
           }
         },
-        "modificationDate": {
-          "example": "2023-12-12T20:00:10.500+00:00",
-          "type": "string",
-          "description": "When the policy was last modified"
-        },
-        "companyId": {
-          "description": "UUID specific to your company",
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
-          "type": "string"
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the policy",
-          "example": "Some policy"
-        },
         "extendedKeyUsages": {
+          "type": "array",
           "description": "Extended key usages",
           "example": [
             "CLIENT_AUTH",
             "SERVER_AUTH"
           ],
           "items": {
-            "type": "string",
             "enum": [
               "ANY",
               "SERVER_AUTH",
@@ -174,11 +121,70 @@
               "CAPWAP_WTP",
               "IPSEC_IKE_INTERMEDIATE",
               "SMARTCARD_LOGON"
-            ]
-          },
-          "type": "array"
+            ],
+            "type": "string"
+          }
         }
       }
+    },
+    "SubjectAttributesInformation": {
+      "type": "object",
+      "properties": {
+        "commonName": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organization": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organizationalUnit": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "locality": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "stateOrProvince": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "country": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      },
+      "description": "Subject attributes"
+    },
+    "PropertyInformation": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "IGNORED",
+            "FORBIDDEN",
+            "OPTIONAL",
+            "REQUIRED",
+            "LOCKED"
+          ]
+        },
+        "allowedValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defaultValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "minOccurrences": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "maxOccurrences": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "type": "object"
     },
     "KeyAlgorithmInformation": {
       "required": [
@@ -205,8 +211,6 @@
           "type": "array"
         },
         "defaultValue": {
-          "type": "string",
-          "description": "Key algorithm default value",
           "example": "RSA_4096",
           "enum": [
             "RSA_2048",
@@ -216,34 +220,30 @@
             "EC_P384",
             "EC_P521",
             "EC_ED25519"
-          ]
+          ],
+          "type": "string",
+          "description": "Key algorithm default value"
         }
       },
       "description": "Key algorithm"
     },
-    "SubjectAttributesInformation": {
-      "type": "object",
+    "SansInformation": {
       "properties": {
-        "country": {
+        "dnsNames": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "commonName": {
+        "ipAddresses": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "organization": {
+        "rfc822Names": {
           "$ref": "#/$defs/PropertyInformation"
         },
-        "organizationalUnit": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "locality": {
-          "$ref": "#/$defs/PropertyInformation"
-        },
-        "stateOrProvince": {
+        "uniformResourceIdentifiers": {
           "$ref": "#/$defs/PropertyInformation"
         }
       },
-      "description": "Subject attributes"
+      "description": "Subject alternative names",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -196,6 +196,17 @@ func main() {
 		panic(fmt.Errorf("merging discriminator fix: %w", err))
 	}
 
+	// The /scopes API was changed to either return 'authenticationType' when
+	// there is a single scope, or 'authenticationTypes' when there are multiple
+	// authentication types. Let's patch the schema until the new
+	// 'authenticationTypes' is added to the OpenAPI.
+	set(merged, "components.schemas.ScopeDetails.properties.authenticationTypes", map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type": "string",
+		},
+	})
+
 	// Some fields' zero values are meaningful; when PATCHing, we want to be
 	// able to set them to the zero value without it being omitted.
 	setNullableOnProperty(merged, "PatchServiceAccountByClientIDRequestBody", "enabled")

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -67,7 +66,7 @@ func saGenkeypairCmd() *cobra.Command {
 			}
 
 			// Does it already exist?
-			existingSA, err := api.GetServiceAccount(context.Background(), apiClient, saName)
+			existingSA, err := api.GetServiceAccount(cmd.Context(), apiClient, saName)
 			switch {
 			case errors.As(err, &errutil.NotFound{}):
 				return fmt.Errorf(undent.Undent(`
@@ -97,13 +96,13 @@ func saGenkeypairCmd() *cobra.Command {
 				return fmt.Errorf("while creating service account patch: %w", err)
 			}
 
-			err = api.PatchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
+			err = api.PatchServiceAccount(cmd.Context(), apiClient, existingSA.Id.String(), patch)
 			if err != nil {
 				return fmt.Errorf("while patching service account: %w", err)
 			}
 
 			if logutil.EnableDebug {
-				updatedSA, err := api.GetServiceAccountByID(context.Background(), apiClient, existingSA.Id.String())
+				updatedSA, err := api.GetServiceAccountByID(cmd.Context(), apiClient, existingSA.Id.String())
 				if err != nil {
 					return fmt.Errorf("while retrieving updated service account: %w", err)
 				}
@@ -116,12 +115,7 @@ func saGenkeypairCmd() *cobra.Command {
 			case "pem":
 				fmt.Println(ecKey)
 			case "json":
-				bytes, err := marshalIndent(struct {
-					Type       string `json:"type"`
-					ClientID   string `json:"client_id"`
-					PrivateKey string `json:"private_key"`
-					APIURL     string `json:"api_url"`
-				}{
+				bytes, err := marshalIndent(jsonAuthKeypair{
 					Type:       "rsaKey",
 					ClientID:   existingSA.Id.String(),
 					PrivateKey: ecKey,
@@ -160,6 +154,8 @@ func saPutKeypairCmd() *cobra.Command {
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
+			vcpctl sa put keypair <sa-name> --scope platform-admin-role --scope distributed-issuance
+			vcpctl sa put keypair <sa-name> --scope platform-admin-role,distributed-issuance
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -167,68 +163,76 @@ func saPutKeypairCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa put keypair: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			saName := args[0]
 
-			// Does it already exist?
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			existingSA, err := api.GetServiceAccount(context.Background(), apiClient, saName)
+
+			// Does it already exist?
+			existingSA, err := api.GetServiceAccount(cmd.Context(), apiClient, saName)
 			switch {
 			case errors.As(err, &errutil.NotFound{}):
 				// Doesn't exist yet.
-				resp, err := api.CreateServiceAccount(context.Background(), apiClient, api.ServiceAccountDetails{
+				resp, err := api.CreateServiceAccount(cmd.Context(), apiClient, api.ServiceAccountDetails{
 					Name:               saName,
 					CredentialLifetime: 365, // days
 					Scopes:             scopes,
+					AuthenticationType: "rsaKey",
 				})
 				if err != nil {
-					return fmt.Errorf("sa put keypair: while creating service account: %w", err)
+					return fmt.Errorf("while creating service account: %w", err)
 				}
-				logutil.Debugf("Service Account '%s' created.\nScopes: %s", saName, strings.Join(scopes, ", "))
+				logutil.Debugf("Service Account '%s' created with the scopes %v", saName, strings.Join(scopes, ", "))
 
 				fmt.Println(resp.Id.String())
 				return nil
 			case err == nil:
-				// Exists, we will be updating it.
-				desiredSA := existingSA
-				desiredSA.Scopes = scopes
-				patch, smthChanged, err := api.DiffToPatchServiceAccount(existingSA, desiredSA)
-				if err != nil {
-					return fmt.Errorf("sa put keypair: while creating service account patch: %w", err)
-				}
-				if !smthChanged {
-					logutil.Debugf("Service Account '%s' is already up to date.", saName)
-					fmt.Println(existingSA.Id.String())
-					return nil
-				}
+				// Exists, we will be updating it below.
+			default:
+				return fmt.Errorf("while checking if service account exists: %w", err)
+			}
 
-				err = api.PatchServiceAccount(context.Background(), apiClient, existingSA.Id.String(), patch)
-				if err != nil {
-					return fmt.Errorf("sa put keypair: while patching service account: %w", err)
-				}
+			// Check that it is an 'rsaKey' service account.
+			if existingSA.AuthenticationType != "rsaKey" {
+				return fmt.Errorf("service account '%s' has authentication type '%s', expected 'rsaKey'. You can only use this command for 'rsaKey' service accounts.", saName, existingSA.AuthenticationType)
+			}
 
-				if logutil.EnableDebug {
-					updatedSA, err := api.GetServiceAccountByID(context.Background(), apiClient, existingSA.Id.String())
-					if err != nil {
-						return fmt.Errorf("sa put keypair: while retrieving updated service account: %w", err)
-					}
-					d := api.ANSIDiff(existingSA, updatedSA)
-					logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
-				}
-
+			desiredSA := existingSA
+			desiredSA.Scopes = scopes
+			patch, smthChanged, err := api.DiffToPatchServiceAccount(existingSA, desiredSA)
+			if err != nil {
+				return fmt.Errorf("while creating service account patch: %w", err)
+			}
+			if !smthChanged {
+				logutil.Debugf("Service Account '%s' is already up to date.", saName)
 				fmt.Println(existingSA.Id.String())
 				return nil
-			default:
-				return fmt.Errorf("sa put keypair: while checking if service account exists: %w", err)
 			}
+
+			err = api.PatchServiceAccount(cmd.Context(), apiClient, existingSA.Id.String(), patch)
+			if err != nil {
+				return fmt.Errorf("while patching service account: %w", err)
+			}
+
+			if logutil.EnableDebug {
+				updatedSA, err := api.GetServiceAccountByID(cmd.Context(), apiClient, existingSA.Id.String())
+				if err != nil {
+					return fmt.Errorf("while retrieving updated service account: %w", err)
+				}
+				d := api.ANSIDiff(existingSA, updatedSA)
+				logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
+			}
+
+			fmt.Println(existingSA.Id.String())
+			return nil
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "pem", "Output format (pem, json)")
-	cmd.Flags().StringArrayVar(&scopes, "scopes", []string{"distributed-issuance"}, "Scopes for the Service Account (comma-separated, e.g. 'distributed-issuance,read-only')")
+	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"platform-admin-role"}, "Scope for the service account. You can give multiple scopes by separating them with commas, or repeating the --scope flag. To list the scopes you can use with this command, run 'vcpctl sa scopes --type rsaKey'.")
 	return cmd
 }
