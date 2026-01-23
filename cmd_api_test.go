@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,7 +123,7 @@ func TestMagicFieldValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, err := magicFieldValue(tt.input)
+			value, err := magicFieldValue(context.Background(), tt.input)
 			if tt.wantErr {
 				require.Error(t, err)
 				return

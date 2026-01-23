@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -15,6 +17,9 @@ import (
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/spf13/cobra"
 )
+
+//go:embed api/genschema/openapi.json
+var openapiSchema []byte
 
 type apiOptions struct {
 	method              string
@@ -29,9 +34,11 @@ func apiCmd(groupID string) *cobra.Command {
 	opts := &apiOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "api <path>",
+		Use:   "api [path]",
 		Short: "Make an authenticated HTTP request to the API",
 		Long: `Make an authenticated HTTP request to the API and print the response.
+
+Without a path argument, lists all available API endpoints.
 
 The path should start with a slash and can optionally include /v1/ prefix.
 If /v1/ is not present, it will be automatically prepended.
@@ -46,6 +53,9 @@ Field value conversions:
 Use -f/--raw-field to always send values as strings without conversion.
 `,
 		Example: undent.Undent(`
+			# List all available endpoints
+			vcpctl api
+
 			# GET request
 			vcpctl api /v1/serviceaccounts
 
@@ -58,9 +68,12 @@ Use -f/--raw-field to always send values as strings without conversion.
   			# Custom method
   			vcpctl api -X DELETE /v1/serviceaccounts/abc123
 		`),
-		Args:    cobra.ExactArgs(1),
+		Args:    cobra.MaximumNArgs(1),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return listEndpoints()
+			}
 			return runAPI(cmd, opts, args[0])
 		},
 		SilenceErrors: true,
@@ -81,6 +94,49 @@ Use -f/--raw-field to always send values as strings without conversion.
 	}
 
 	return cmd
+}
+
+// listEndpoints parses the embedded OpenAPI schema and lists all available endpoints.
+func listEndpoints() error {
+	var schema struct {
+		Paths map[string]map[string]interface{} `json:"paths"`
+	}
+
+	if err := json.Unmarshal(openapiSchema, &schema); err != nil {
+		return fmt.Errorf("parsing OpenAPI schema: %w", err)
+	}
+
+	// Collect all endpoint paths with their methods.
+	type endpoint struct {
+		path    string
+		methods []string
+	}
+
+	var endpoints []endpoint
+	for path, methods := range schema.Paths {
+		ep := endpoint{path: path}
+		for method := range methods {
+			// Filter out non-HTTP methods (OpenAPI can have extensions).
+			switch strings.ToUpper(method) {
+			case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS":
+				ep.methods = append(ep.methods, strings.ToUpper(method))
+			}
+		}
+		sort.Strings(ep.methods)
+		endpoints = append(endpoints, ep)
+	}
+
+	// Sort endpoints by path.
+	sort.Slice(endpoints, func(i, j int) bool {
+		return endpoints[i].path < endpoints[j].path
+	})
+
+	// Print endpoints.
+	for _, ep := range endpoints {
+		fmt.Printf("%-10s %s\n", strings.Join(ep.methods, ","), ep.path)
+	}
+
+	return nil
 }
 
 func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
