@@ -24,6 +24,7 @@ var openapiSchema []byte
 type apiOptions struct {
 	method              string
 	methodPassed        bool
+	requestInputFile    string
 	magicFields         []string
 	rawFields           []string
 	headers             []string
@@ -50,7 +51,16 @@ Field value conversions:
   - Files can be read: -F data=@filename or -F data=@- (stdin)
   - Everything else is a string: -F name="value"
 
+Nested parameters:
+  - Use bracket syntax for nested objects: -F config[timeout]=30
+  - Use empty brackets for arrays: -F tags[]=prod -F tags[]=api
+  - Combine for complex structures: -F items[0][name]=first -F items[0][count]=5
+
 Use -f/--raw-field to always send values as strings without conversion.
+
+Request body:
+  - Use --input to read request body from a file or stdin
+  - When --input is used, field flags are added as query parameters
 `,
 		Example: undent.Undent(`
 			# List all available endpoints
@@ -61,6 +71,21 @@ Use -f/--raw-field to always send values as strings without conversion.
 
 			# POST request with fields
 			vcpctl api /v1/serviceaccounts -F name=mysa -F description="My Service Account"
+
+			# Nested parameters
+			vcpctl api /v1/config -F settings[timeout]=30 -F settings[retry]=true
+
+			# Array parameters
+			vcpctl api /v1/resource -F tags[]=prod -F tags[]=api -F tags[]=v1
+
+			# Complex nested structure
+			vcpctl api /v1/items -F items[0][name]=first -F items[0][count]=5
+
+			# Request body from file
+			vcpctl api /v1/serviceaccounts --input payload.json
+
+			# Request body from stdin
+			echo '{"name":"mysa"}' | vcpctl api /v1/serviceaccounts --input -
 
   			# Include response headers
   			vcpctl api /v1/serviceaccounts -i
@@ -81,6 +106,7 @@ Use -f/--raw-field to always send values as strings without conversion.
 	}
 
 	cmd.Flags().StringVarP(&opts.method, "method", "X", "GET", "HTTP method")
+	cmd.Flags().StringVar(&opts.requestInputFile, "input", "", "Read request body from file (use \"-\" for stdin)")
 	cmd.Flags().StringArrayVarP(&opts.magicFields, "field", "F", nil, "Add a parameter with type conversion (key=value)")
 	cmd.Flags().StringArrayVarP(&opts.rawFields, "raw-field", "f", nil, "Add a string parameter (key=value)")
 	cmd.Flags().StringArrayVarP(&opts.headers, "header", "H", nil, "Add a request header (key:value)")
@@ -145,33 +171,14 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		return fmt.Errorf("getting config: %w", err)
 	}
 
-	params := make(map[string]any)
-
-	// Process raw fields (strings only).
-	for _, f := range opts.rawFields {
-		key, value, err := parseField(f)
-		if err != nil {
-			return err
-		}
-		params[key] = value
-	}
-
-	// Process magic fields (with type conversion).
-	for _, f := range opts.magicFields {
-		key, strValue, err := parseField(f)
-		if err != nil {
-			return err
-		}
-		value, err := magicFieldValue(cmd.Context(), strValue)
-		if err != nil {
-			return err
-		}
-		params[key] = value
+	params, err := parseFields(cmd.Context(), opts)
+	if err != nil {
+		return err
 	}
 
 	// Auto-detect method if not explicitly set.
 	method := opts.method
-	if len(params) > 0 && !opts.methodPassed {
+	if (len(params) > 0 || opts.requestInputFile != "") && !opts.methodPassed {
 		method = "POST"
 	}
 
@@ -179,7 +186,19 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 	if err != nil {
 		return fmt.Errorf("creating API client: %w", err)
 	}
-	resp, err := makeAPIRequest(cmd.Context(), cl, method, path, params, opts.headers)
+
+	var requestBody any = params
+	if opts.requestInputFile != "" {
+		// When using --input, read body from file and add fields as query params
+		file, err := openUserFile(opts.requestInputFile)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		requestBody = file
+	}
+
+	resp, err := makeAPIRequest(cmd.Context(), cl, method, path, requestBody, opts.headers)
 	if err != nil {
 		return err
 	}
@@ -219,13 +238,172 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 	return nil
 }
 
-// parseField splits a "key=value" string into key and value parts.
-func parseField(f string) (string, string, error) {
-	idx := strings.IndexRune(f, '=')
-	if idx == -1 {
-		return "", "", fmt.Errorf("field %q requires a value separated by '='", f)
+const (
+	keyStart     = '['
+	keyEnd       = ']'
+	keySeparator = '='
+)
+
+// parseFields parses all field flags (both raw and magic) into a nested map structure.
+// Supports nested syntax like key[subkey]=value and array syntax like key[]=value.
+func parseFields(ctx context.Context, opts *apiOptions) (map[string]any, error) {
+	params := make(map[string]any)
+
+	parseField := func(f string, isMagic bool) error {
+		var valueIndex int
+		var keystack []string
+		keyStartAt := 0
+	parseLoop:
+		for i, r := range f {
+			switch r {
+			case keyStart:
+				if keyStartAt == 0 {
+					keystack = append(keystack, f[0:i])
+				}
+				keyStartAt = i + 1
+			case keyEnd:
+				keystack = append(keystack, f[keyStartAt:i])
+			case keySeparator:
+				if keyStartAt == 0 {
+					keystack = append(keystack, f[0:i])
+				}
+				valueIndex = i + 1
+				break parseLoop
+			}
+		}
+
+		if len(keystack) == 0 {
+			return fmt.Errorf("invalid key: %q", f)
+		}
+
+		key := f
+		var value any = nil
+		if valueIndex == 0 {
+			if keystack[len(keystack)-1] != "" {
+				return fmt.Errorf("field %q requires a value separated by '='", key)
+			}
+		} else {
+			key = f[0 : valueIndex-1]
+			value = f[valueIndex:]
+		}
+
+		if isMagic && value != nil {
+			var err error
+			value, err = magicFieldValue(ctx, value.(string))
+			if err != nil {
+				return fmt.Errorf("error parsing %q value: %w", key, err)
+			}
+		}
+
+		destMap := params
+		isArray := false
+		var subkey string
+		for _, k := range keystack {
+			if k == "" {
+				isArray = true
+				continue
+			}
+			if subkey != "" {
+				var err error
+				if isArray {
+					destMap, err = addParamsSlice(destMap, subkey, k)
+					isArray = false
+				} else {
+					destMap, err = addParamsMap(destMap, subkey)
+				}
+				if err != nil {
+					return err
+				}
+			}
+			subkey = k
+		}
+
+		if isArray {
+			if value == nil {
+				destMap[subkey] = []any{}
+			} else {
+				if v, exists := destMap[subkey]; exists {
+					if existSlice, ok := v.([]any); ok {
+						destMap[subkey] = append(existSlice, value)
+					} else {
+						return fmt.Errorf("expected array type under %q, got %T", subkey, v)
+					}
+				} else {
+					destMap[subkey] = []any{value}
+				}
+			}
+		} else {
+			if _, exists := destMap[subkey]; exists {
+				return fmt.Errorf("unexpected override of existing field %q", subkey)
+			}
+			destMap[subkey] = value
+		}
+		return nil
 	}
-	return f[0:idx], f[idx+1:], nil
+
+	for _, f := range opts.rawFields {
+		if err := parseField(f, false); err != nil {
+			return params, err
+		}
+	}
+	for _, f := range opts.magicFields {
+		if err := parseField(f, true); err != nil {
+			return params, err
+		}
+	}
+	return params, nil
+}
+
+func addParamsMap(m map[string]any, key string) (map[string]any, error) {
+	if v, exists := m[key]; exists {
+		if existMap, ok := v.(map[string]any); ok {
+			return existMap, nil
+		}
+		return nil, fmt.Errorf("expected map type under %q, got %T", key, v)
+	}
+	newMap := make(map[string]any)
+	m[key] = newMap
+	return newMap, nil
+}
+
+func addParamsSlice(m map[string]any, prevkey, newkey string) (map[string]any, error) {
+	if v, exists := m[prevkey]; exists {
+		if existSlice, ok := v.([]any); ok {
+			if len(existSlice) > 0 {
+				lastItem := existSlice[len(existSlice)-1]
+				if lastMap, ok := lastItem.(map[string]any); ok {
+					if _, keyExists := lastMap[newkey]; !keyExists {
+						// Key doesn't exist in last map, reuse it
+						return lastMap, nil
+					} else if existVal, ok := lastMap[newkey].([]any); ok {
+						// Key exists and is an array, reuse the map to append to the array
+						_ = existVal // just to use the variable
+						return lastMap, nil
+					}
+					// Key exists but is not an array, need a new map element
+				}
+			}
+			newMap := make(map[string]any)
+			m[prevkey] = append(existSlice, newMap)
+			return newMap, nil
+		}
+		return nil, fmt.Errorf("expected array type under %q, got %T", prevkey, v)
+	}
+	newMap := make(map[string]any)
+	m[prevkey] = []any{newMap}
+	return newMap, nil
+}
+
+func openUserFile(fn string) (io.ReadCloser, error) {
+	if fn == "-" {
+		return io.NopCloser(os.Stdin), nil
+	}
+
+	r, err := os.Open(fn)
+	if err != nil {
+		return nil, fmt.Errorf("opening file %q: %w", fn, err)
+	}
+	return r, nil
 }
 
 // magicFieldValue converts a string value to its appropriate type:
@@ -278,7 +456,7 @@ func magicFieldValue(ctx context.Context, v string) (any, error) {
 	return v, nil
 }
 
-func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, params map[string]any, headers []string) (*http.Response, error) {
+func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, requestBody any, headers []string) (*http.Response, error) {
 	// The 'Server' field of the api.Client always has a trailing slash. Which
 	// means we need to remove any leading slash from 'path'. Also, since we
 	// allow the user to skip the leading '/v1/' part, we add it if missing.
@@ -294,13 +472,25 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, pa
 	var body io.Reader
 	var bodyIsJSON bool
 
-	if len(params) > 0 {
-		jsonData, err := json.Marshal(params)
-		if err != nil {
-			return nil, fmt.Errorf("marshaling request body: %w", err)
+	switch v := requestBody.(type) {
+	case map[string]any:
+		if strings.EqualFold(method, "GET") && len(v) > 0 {
+			// Add fields as query parameters for GET requests
+			url = addQueryParams(url, v)
+		} else if len(v) > 0 {
+			jsonData, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("marshaling request body: %w", err)
+			}
+			body = bytes.NewReader(jsonData)
+			bodyIsJSON = true
 		}
-		body = bytes.NewReader(jsonData)
-		bodyIsJSON = true
+	case io.Reader:
+		body = v
+	case nil:
+		// No body
+	default:
+		return nil, fmt.Errorf("unrecognized request body type: %T", requestBody)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
@@ -332,6 +522,41 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, pa
 	}
 
 	return cl.Client.Do(req)
+}
+
+func addQueryParams(path string, params map[string]any) string {
+	if len(params) == 0 {
+		return path
+	}
+
+	var parts []string
+	for key, value := range params {
+		switch v := value.(type) {
+		case string:
+			parts = append(parts, fmt.Sprintf("%s=%s", key, v))
+		case int:
+			parts = append(parts, fmt.Sprintf("%s=%d", key, v))
+		case bool:
+			parts = append(parts, fmt.Sprintf("%s=%v", key, v))
+		case nil:
+			parts = append(parts, fmt.Sprintf("%s=", key))
+		case []any:
+			for _, item := range v {
+				parts = append(parts, fmt.Sprintf("%s[]=%v", key, item))
+			}
+		default:
+			// For complex types, try to marshal as JSON
+			if jsonBytes, err := json.Marshal(v); err == nil {
+				parts = append(parts, fmt.Sprintf("%s=%s", key, string(jsonBytes)))
+			}
+		}
+	}
+
+	sep := "?"
+	if strings.ContainsRune(path, '?') {
+		sep = "&"
+	}
+	return path + sep + strings.Join(parts, "&")
 }
 
 type CancelableReader struct {

@@ -2,58 +2,93 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseField(t *testing.T) {
+func TestParseFields_Simple(t *testing.T) {
 	tests := []struct {
 		name      string
-		input     string
-		wantKey   string
-		wantValue string
+		rawFields []string
+		wantValue map[string]any
 		wantErr   bool
 	}{
 		{
 			name:      "simple field",
-			input:     "name=value",
-			wantKey:   "name",
-			wantValue: "value",
+			rawFields: []string{"name=value"},
+			wantValue: map[string]any{"name": "value"},
 			wantErr:   false,
 		},
 		{
 			name:      "field with equals in value",
-			input:     "query=a=b",
-			wantKey:   "query",
-			wantValue: "a=b",
+			rawFields: []string{"query=a=b"},
+			wantValue: map[string]any{"query": "a=b"},
 			wantErr:   false,
 		},
 		{
 			name:      "empty value",
-			input:     "name=",
-			wantKey:   "name",
-			wantValue: "",
+			rawFields: []string{"name="},
+			wantValue: map[string]any{"name": ""},
 			wantErr:   false,
 		},
 		{
-			name:    "missing equals",
-			input:   "namevalue",
-			wantErr: true,
+			name:      "multiple fields",
+			rawFields: []string{"name=value", "count=5"},
+			wantValue: map[string]any{"name": "value", "count": "5"},
+			wantErr:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key, value, err := parseField(tt.input)
+			opts := &apiOptions{rawFields: tt.rawFields}
+			result, err := parseFields(context.Background(), opts)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantKey, key)
-			assert.Equal(t, tt.wantValue, value)
+			assert.Equal(t, tt.wantValue, result)
+		})
+	}
+}
+
+func TestParseFields_Nested(t *testing.T) {
+	tests := []struct {
+		name         string
+		magicFields  []string
+		expectedJSON string
+	}{
+		{
+			name:         "nested object",
+			magicFields:  []string{"config[timeout]=30", "config[retry]=true"},
+			expectedJSON: `{"config":{"retry":true,"timeout":30}}`,
+		},
+		{
+			name:         "array values",
+			magicFields:  []string{"tags[]=prod", "tags[]=api", "tags[]=v1"},
+			expectedJSON: `{"tags":["prod","api","v1"]}`,
+		},
+		{
+			name:         "complex nested array (gh CLI style)",
+			magicFields:  []string{"properties[][property_name]=environment", "properties[][default_value]=production", "properties[][allowed_values][]=staging", "properties[][allowed_values][]=production"},
+			expectedJSON: `{"properties":[{"property_name":"environment","default_value":"production","allowed_values":["staging","production"]}]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := &apiOptions{magicFields: tt.magicFields}
+			result, err := parseFields(context.Background(), opts)
+			require.NoError(t, err)
+
+			// Convert to JSON to compare
+			jsonBytes, err := json.Marshal(result)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.expectedJSON, string(jsonBytes))
 		})
 	}
 }
