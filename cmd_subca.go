@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func subcaCmd() *cobra.Command {
+func subcaSubcmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subca",
 		Short: "Manage SubCA Providers",
@@ -31,6 +31,7 @@ func subcaCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 	}
 	cmd.AddCommand(
 		subcaLsCmd(),

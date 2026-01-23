@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func loginKeypairCmd() *cobra.Command {
+func loginKeypairCmd(groupID string) *cobra.Command {
 	var contextName string
 	cmd := &cobra.Command{
 		Use:           "login-keypair <json-file>",
@@ -46,6 +46,7 @@ func loginKeypairCmd() *cobra.Command {
 			# Keypair login from stdin:
 			vcpctl sa gen keypair my-sa -ojson | vcpctl login-keypair -
 		`),
+		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 

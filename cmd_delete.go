@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func deleteCmd() *cobra.Command {
+func deleteCmd(groupID string) *cobra.Command {
 	var filePath string
 	var ignoreNotFound bool
 	cmd := &cobra.Command{
@@ -31,6 +31,7 @@ func deleteCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDelete(cmd, filePath, args, ignoreNotFound)
 		},

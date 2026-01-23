@@ -16,7 +16,7 @@ import (
 )
 
 // Parent command for conf operations
-func confCmd() *cobra.Command {
+func confSubcmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "conf",
 		Short: "Manage WIM (Workload Identity Manager) configurations",
@@ -24,6 +24,7 @@ func confCmd() *cobra.Command {
 			Manage WIM (Workload Identity Manager, formerly Firefly) configurations in
 			CyberArk Certificate Manager, SaaS.
 		`),
+		GroupID: groupID,
 	}
 	cmd.AddCommand(confLsCmd())
 	cmd.AddCommand(confGetCmd())
@@ -323,7 +324,7 @@ func deprecatedLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "ls",
 		Short:         "List WIM configurations (deprecated: use 'vcpctl conf ls')",
-		Hidden:        false,
+		Hidden:        true,
 		Deprecated:    "use 'vcpctl conf ls' instead",
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -340,7 +341,7 @@ func deprecatedGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "get <config-name>",
 		Short:         "Export a WIM configuration (deprecated: use 'vcpctl conf get')",
-		Hidden:        false,
+		Hidden:        true,
 		Deprecated:    "use 'vcpctl conf get' instead",
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -357,7 +358,7 @@ func deprecatedRmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "rm <config-name>",
 		Short:         "Remove a WIM configuration (deprecated: use 'vcpctl conf rm')",
-		Hidden:        false,
+		Hidden:        true,
 		Deprecated:    "use 'vcpctl conf rm' instead",
 		SilenceErrors: true,
 		SilenceUsage:  true,

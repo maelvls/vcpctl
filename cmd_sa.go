@@ -18,7 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func saCmd() *cobra.Command {
+func saSubcmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sa",
 		Short: "Manage Service Accounts",
@@ -36,6 +36,7 @@ func saCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 	}
 	cmd.AddCommand(
 		saLsCmd(),

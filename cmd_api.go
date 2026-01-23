@@ -25,7 +25,7 @@ type apiOptions struct {
 	showResponseHeaders bool
 }
 
-func apiCmd() *cobra.Command {
+func apiCmd(groupID string) *cobra.Command {
 	opts := &apiOptions{}
 
 	cmd := &cobra.Command{
@@ -58,7 +58,8 @@ Use -f/--raw-field to always send values as strings without conversion.
   			# Custom method
   			vcpctl api -X DELETE /v1/serviceaccounts/abc123
 		`),
-		Args: cobra.ExactArgs(1),
+		Args:    cobra.ExactArgs(1),
+		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPI(cmd, opts, args[0])
 		},

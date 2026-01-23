@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func attachSaCmd() *cobra.Command {
+func attachSaCmd(groupID string) *cobra.Command {
 	var saName string
 	cmd := &cobra.Command{
 		Use:   "attach-sa <config-name> --sa <sa-name>",
@@ -24,6 +24,7 @@ func attachSaCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)

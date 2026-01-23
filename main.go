@@ -63,30 +63,38 @@ func main() {
 
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
 	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebugHTTP, "debug-http", false, "Enable HTTP request/response logging (set to 'true' to enable)")
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "resources", Title: "Managing Resources"},
+		&cobra.Group{ID: "auth", Title: "Authentication"},
+	)
+
 	rootCmd.AddCommand(
-		loginCmd(),
-		loginWifCmd(),
-		loginKeypairCmd(),
-		switchCmd(),
-		tenantidCmd(),
-		apikeyCmd(),
-		apiurlCmd(),
-		authCmd(),
-		apiCmd(),
-		confCmd(),
-		attachSaCmd(),
-		applyCmd(),
-		deleteCmd(),
+		loginCmd("auth"),
+		loginWifCmd("auth"),
+		loginKeypairCmd("auth"),
+		switchCmd("auth"),
+		tenantidCmd("auth"),
+		apikeyCmd("auth"),
+		apiurlCmd("auth"),
+
+		apiCmd(""),
+
+		applyCmd("resources"),
+		deleteCmd("resources"),
+		attachSaCmd("resources"),
+		confSubcmd("resources"),
+		saSubcmd("resources"),
+		subcaSubcmd("resources"),
+		policySubcmd("resources"),
+
+		ophis.Command(&ophis.Config{}),
+
+		deprecatedAuthCmd(""),
 		deprecatedPutCmd(),
 		deprecatedLsCmd(),
 		deprecatedGetCmd(),
 		deprecatedRmCmd(),
-		saCmd(),
-		subcaCmd(),
-		policyCmd(),
 	)
-
-	rootCmd.AddCommand(ophis.Command(&ophis.Config{}))
 
 	ctx := context.Background()
 

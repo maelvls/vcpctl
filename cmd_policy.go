@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func policyCmd() *cobra.Command {
+func policySubcmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "policy",
 		Short: "Manage Policies",
@@ -33,6 +33,7 @@ func policyCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 	}
 	cmd.AddCommand(
 		policyLsCmd(),

@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func applyCmd() *cobra.Command {
+func applyCmd(groupID string) *cobra.Command {
 	var filePath string
 	var dryRun bool
 	cmd := &cobra.Command{
@@ -30,6 +30,7 @@ func applyCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runApply(cmd, filePath, args, dryRun)
 		},

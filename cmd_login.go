@@ -128,7 +128,7 @@ func promptString(prompt string, validate func(string) error) (string, error) {
 	}
 }
 
-func authCmd() *cobra.Command {
+func deprecatedAuthCmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "auth",
 		Short:         "Commands for authenticating and switching tenants.",
@@ -138,11 +138,11 @@ func authCmd() *cobra.Command {
 		Hidden:        true,
 		Deprecated:    "all auth subcommands are now available at root level. Use 'vcpctl login', 'vcpctl switch', 'vcpctl apikey', and 'vcpctl apiurl'",
 	}
-	cmd.AddCommand(authLoginCmd(), authSwitchCmd(), authAPIKeyCmd(), authAPIURLCmd())
+	cmd.AddCommand(authLoginCmd(""), authSwitchCmd(""), authAPIKeyCmd(""), authAPIURLCmd(""))
 	return cmd
 }
 
-func loginCmd() *cobra.Command {
+func loginCmd(groupID string) *cobra.Command {
 	var apiURL, apiKey, contextName string
 	cmd := &cobra.Command{
 		Use:           "login [url]",
@@ -181,6 +181,7 @@ func loginCmd() *cobra.Command {
 			# Bypass tenant URL to API URL conversion (for advanced use):
 			vcpctl login https://glow-in-the-dark.venafi.cloud --api-key <key>
 		`),
+		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check for conflicts between positional URL argument and --api-url
 			// flag or env vars.
@@ -486,7 +487,7 @@ func loginCmd() *cobra.Command {
 	return cmd
 }
 
-func loginWifCmd() *cobra.Command {
+func loginWifCmd(groupID string) *cobra.Command {
 	var contextName string
 	cmd := &cobra.Command{
 		Use:           "login-wif <json-file>",
@@ -507,6 +508,7 @@ func loginWifCmd() *cobra.Command {
 			# WIF login from stdin:
 			vcpctl sa gen wif my-sa -ojson | vcpctl login-wif -
 		`),
+		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return loginWithWIFJSON(cmd.Context(), args[0], contextName)
 		},
@@ -516,18 +518,19 @@ func loginWifCmd() *cobra.Command {
 }
 
 // authLoginCmd is a deprecated alias for loginCmd
-func authLoginCmd() *cobra.Command {
-	cmd := loginCmd()
+func authLoginCmd(groupID string) *cobra.Command {
+	cmd := loginCmd(groupID)
 	cmd.Deprecated = "use 'vcpctl login' instead; 'vcpctl auth login' will be removed in a future release"
 	return cmd
 }
 
-func apikeyCmd() *cobra.Command {
+func apikeyCmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "apikey",
 		Short:         "Prints the API key for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envAPIKey := os.Getenv("VEN_API_KEY")
 			flagAPIKey, _ := cmd.Flags().GetString("api-key")
@@ -552,19 +555,20 @@ func apikeyCmd() *cobra.Command {
 }
 
 // authAPIKeyCmd is a deprecated alias for apikeyCmd
-func authAPIKeyCmd() *cobra.Command {
-	cmd := apikeyCmd()
+func authAPIKeyCmd(groupID string) *cobra.Command {
+	cmd := apikeyCmd(groupID)
 	cmd.Use = "api-key"
 	cmd.Deprecated = "use 'vcpctl apikey' instead; 'vcpctl auth api-key' will be removed in a future release"
 	return cmd
 }
 
-func apiurlCmd() *cobra.Command {
+func apiurlCmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "apiurl",
 		Short:         "Prints the API URL for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envAPIURL := os.Getenv("VEN_API_URL")
 			flagAPIURL, _ := cmd.Flags().GetString("api-url")
@@ -589,19 +593,20 @@ func apiurlCmd() *cobra.Command {
 }
 
 // authAPIURLCmd is a deprecated alias for apiurlCmd
-func authAPIURLCmd() *cobra.Command {
-	cmd := apiurlCmd()
+func authAPIURLCmd(groupID string) *cobra.Command {
+	cmd := apiurlCmd(groupID)
 	cmd.Use = "api-url"
 	cmd.Deprecated = "use 'vcpctl apiurl' instead; 'vcpctl auth api-url' will be removed in a future release"
 	return cmd
 }
 
-func tenantidCmd() *cobra.Command {
+func tenantidCmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "tenantid",
 		Short:         "Prints the tenant ID for the current CyberArk Certificate Manager, SaaS tenant in the configuration.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envAPIURL := os.Getenv("VEN_API_URL")
 			envAPIKey := os.Getenv("VEN_API_KEY")
@@ -634,7 +639,7 @@ func tenantidCmd() *cobra.Command {
 	}
 	return cmd
 }
-func switchCmd() *cobra.Command {
+func switchCmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch [context-name]",
 		Short: "Switch to a different CyberArk Certificate Manager, SaaS context.",
@@ -644,6 +649,7 @@ func switchCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := loadFileConf()
 			if err != nil {
@@ -703,8 +709,8 @@ func switchCmd() *cobra.Command {
 }
 
 // authSwitchCmd is a deprecated alias for switchCmd
-func authSwitchCmd() *cobra.Command {
-	cmd := switchCmd()
+func authSwitchCmd(groupID string) *cobra.Command {
+	cmd := switchCmd(groupID)
 	cmd.Deprecated = "use 'vcpctl switch' instead; 'vcpctl auth switch' will be removed in a future release"
 	return cmd
 }
