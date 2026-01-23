@@ -198,7 +198,7 @@ func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccoun
 		}
 		ownerUUID := teams[0].Id
 
-		logutil.Infof("ServiceAccount: no owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].Id)
+		logutil.Debugf("No owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].Id)
 		desired.Owner = ownerUUID
 	}
 

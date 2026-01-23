@@ -769,6 +769,15 @@ func saveCurrentContext(toolctx ToolContext, contextFlag string) error {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
 
+	// Find an existing context that matches the current one.
+	for _, existingCtx := range conf.ToolContexts {
+		if sameContext(existingCtx, toolctx) {
+			// If found, update and set as current.
+			conf.CurrentContext = existingCtx.Name
+			return saveFileConf(conf)
+		}
+	}
+
 	// Derive context name.
 	if contextFlag != "" {
 		// User specified --context flag, use it directly.
@@ -985,7 +994,7 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	var current ToolContext
 	var ok bool
 
-	// If --context flag is provided, use it to override the current context
+	// If --context flag is provided, use it to override the current context.
 	if flagContext != "" {
 		current, ok = resolveContext(conf, flagContext)
 		if !ok {
@@ -993,9 +1002,13 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		}
 		logutil.Debugf("Using context '%s' (tenant URL: %s, ID: %s) from --context flag", current.Name, current.TenantURL, current.TenantID)
 	} else {
-		// Find the current context from config
+		// Find the current context from config.
 		current, ok = currentFrom(conf)
 		if !ok {
+			if len(conf.ToolContexts) > 0 {
+				return ToolConf{}, fmt.Errorf("no context set, but %d contexts exist. Run this to select one of them:\n	vcpctl switch", len(conf.ToolContexts))
+			}
+
 			return ToolConf{}, fmt.Errorf("not logged in. To authenticate, run:\n    vcpctl login")
 		}
 	}
