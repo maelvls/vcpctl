@@ -80,9 +80,10 @@ Use `--ignore-not-found` to skip missing resources without failing the command.
 
 > [!NOTE]
 >
-> The `apply` command expects a kubectl-style multi-document manifest. Declare
-> `ServiceAccount` resources first, followed by `WIMIssuerPolicy`, then
-> `WIMSubCAProvider`, and finish with a single `WIMConfiguration` resource.
+> The `apply` command expects a kubectl-style multi-document manifest. The order
+> of declaration of the resources matters: for example, if want to create a
+> `WIMConfiguration` that depends on a `WIMSubCAProvider`, you will have to
+> declare the `WIMSubCAProvider` first in the manifest.
 >
 > The `conf edit --deps` command outputs a multi-document manifest in the same
 > order as `conf get --deps`: `WIMConfiguration`, `ServiceAccount`,

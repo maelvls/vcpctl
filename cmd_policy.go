@@ -176,13 +176,13 @@ func policyRmCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected a single argument (the Policy name), got %s", args)
+				return fmt.Errorf("expected a single argument (the Policy name or ID), but got %s", args)
 			}
 			policyNameOrID := args[0]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("rm: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
@@ -190,7 +190,7 @@ func policyRmCmd() *cobra.Command {
 			}
 			err = api.DeletePolicy(cmd.Context(), apiClient, policyNameOrID)
 			if err != nil {
-				return fmt.Errorf("rm: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			logutil.Debugf("Policy '%s' deleted successfully.", policyNameOrID)
 			return nil
@@ -220,11 +220,11 @@ func policyEditCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("policy edit: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
-				return fmt.Errorf("policy edit: while creating API client: %w", err)
+				return fmt.Errorf("while creating API client: %w", err)
 			}
 
 			policy, err := api.GetPolicy(cmd.Context(), apiClient, nameOrID)
@@ -232,7 +232,7 @@ func policyEditCmd() *cobra.Command {
 			case errors.As(err, &errutil.NotFound{}):
 				return errutil.Fixable(fmt.Errorf("policy '%s' not found. Please create it first using 'vcpctl apply -f <manifest.yaml>'", nameOrID))
 			case err != nil:
-				return fmt.Errorf("policy edit: while getting policy: %w", err)
+				return fmt.Errorf("while getting policy: %w", err)
 			}
 
 			policyManifest := policyManifest{
@@ -243,7 +243,7 @@ func policyEditCmd() *cobra.Command {
 			var buf bytes.Buffer
 			enc := yaml.NewEncoder(&buf)
 			if err := enc.Encode(policyManifest); err != nil {
-				return fmt.Errorf("policy edit: while encoding WIMIssuerPolicy to YAML: %w", err)
+				return fmt.Errorf("while encoding WIMIssuerPolicy to YAML: %w", err)
 			}
 
 			return editManifestsInEditor(
@@ -254,7 +254,7 @@ func policyEditCmd() *cobra.Command {
 				},
 				func(items []manifest.Manifest) error {
 					if err := applyManifests(cmd.Context(), apiClient, items, false); err != nil {
-						return fmt.Errorf("policy edit: while patching WIMIssuerPolicy: %w", err)
+						return fmt.Errorf("while patching WIMIssuerPolicy: %w", err)
 					}
 					return nil
 				},

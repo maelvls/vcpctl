@@ -50,22 +50,22 @@ func confEditCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("edit: expected a single argument (the WIM configuration name), got %s", args)
+				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)
 			}
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("edit: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			client, err := newAPIClient(conf)
 			if err != nil {
-				return fmt.Errorf("edit: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			err = confEditCmdLogic(cmd.Context(), client, args[0], showDeps)
 			if err != nil {
-				return fmt.Errorf("edit: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			return nil

@@ -184,13 +184,13 @@ func subcaRmCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("rm: expected a single argument (the Sub CA name), got %s", args)
+				return fmt.Errorf("expected a single argument (the Sub CA name or ID), got %s", args)
 			}
 			providerNameOrID := args[0]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("rm: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
@@ -198,7 +198,7 @@ func subcaRmCmd() *cobra.Command {
 			}
 			err = api.DeleteSubCaProvider(cmd.Context(), apiClient, providerNameOrID)
 			if err != nil {
-				return fmt.Errorf("rm: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			return nil
@@ -228,11 +228,11 @@ func subcaEditCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("subca edit: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
-				return fmt.Errorf("subca edit: while creating API client: %w", err)
+				return fmt.Errorf("while creating API client: %w", err)
 			}
 
 			subca, err := api.GetSubCAProvider(cmd.Context(), apiClient, nameOrID)
@@ -240,17 +240,17 @@ func subcaEditCmd() *cobra.Command {
 			case errors.As(err, &errutil.NotFound{}):
 				return errutil.Fixable(fmt.Errorf("SubCA Provider '%s' not found. Please create it first using 'vcpctl apply -f <manifest.yaml>'", nameOrID))
 			case err != nil:
-				return fmt.Errorf("subca edit: while getting SubCA Provider: %w", err)
+				return fmt.Errorf("while getting SubCA Provider: %w", err)
 			}
 
 			issuingTemplates, err := api.GetIssuingTemplates(cmd.Context(), apiClient)
 			if err != nil {
-				return fmt.Errorf("subca edit: while getting issuing templates: %w", err)
+				return fmt.Errorf("while getting issuing templates: %w", err)
 			}
 
 			manifestSubCa, err := apiToManifestSubCa(cmd.Context(), issuingtemplateResolver(issuingTemplates), subca)
 			if err != nil {
-				return fmt.Errorf("subca edit: while converting to manifest: %w", err)
+				return fmt.Errorf("while converting to manifest: %w", err)
 			}
 
 			subCaManifest := subCaProviderManifest{
@@ -261,7 +261,7 @@ func subcaEditCmd() *cobra.Command {
 			var buf bytes.Buffer
 			enc := yaml.NewEncoder(&buf)
 			if err := enc.Encode(subCaManifest); err != nil {
-				return fmt.Errorf("subca edit: while encoding WIMSubCAProvider to YAML: %w", err)
+				return fmt.Errorf("while encoding WIMSubCAProvider to YAML: %w", err)
 			}
 
 			return editManifestsInEditor(
@@ -272,7 +272,7 @@ func subcaEditCmd() *cobra.Command {
 				},
 				func(items []manifest.Manifest) error {
 					if err := applyManifests(cmd.Context(), apiClient, items, false); err != nil {
-						return fmt.Errorf("subca edit: while patching WIMSubCAProvider: %w", err)
+						return fmt.Errorf("while patching WIMSubCAProvider: %w", err)
 					}
 					return nil
 				},
