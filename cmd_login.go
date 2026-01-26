@@ -11,12 +11,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
@@ -24,7 +24,6 @@ import (
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 // This CLI stores its authentication information in ~/.config/vcpctl.yaml.
@@ -58,183 +57,6 @@ type ToolContext struct {
 	// For the type "rsaKey" and "rsaKeyFederated". Not really needed for
 	// "rsaKeyFederated", but useful to know when two contexts are the "same".
 	ClientID string `json:"clientID,omitzero"`
-}
-
-// Styles for prompts.
-var (
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
-	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-)
-
-func promptYesNo(ctx context.Context, question string) (bool, error) {
-	fmt.Printf("%s %s: ", question, subtleStyle.Render("(y/n)"))
-
-	// Try to set raw mode for immediate single-character input.
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		// Fallback to line-based input if raw mode not available.
-		stdin := bufio.NewReader(cancellablereader.New(ctx, os.Stdin))
-		input, err := stdin.ReadString('\n')
-		if err != nil {
-			return false, err
-		}
-		input = strings.TrimSpace(strings.ToLower(input))
-		switch input {
-		case "y", "yes":
-			return true, nil
-		case "n", "no":
-			return false, nil
-		}
-		fmt.Println(errorStyle.Render("❌  Please enter 'y' or 'n'"))
-		return promptYesNo(ctx, question)
-	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
-
-	// Read single character without waiting for Enter.
-	stdin := cancellablereader.New(ctx, os.Stdin)
-	for {
-		var buf [1]byte
-		_, err = stdin.Read(buf[:])
-		if err != nil {
-			term.Restore(int(os.Stdin.Fd()), oldState)
-			return false, err
-		}
-
-		char := strings.ToLower(string(buf[0]))
-
-		switch char {
-		case "y":
-			fmt.Println("y")
-			return true, nil
-		case "n":
-			fmt.Println("n")
-			return false, nil
-		}
-		// Invalid input; let's continue reading without showing an error
-		// message for better UX.
-	}
-}
-
-type validationDoneMsg struct {
-	err error
-}
-
-type promptInputModel struct {
-	prompt     string
-	input      textinput.Model
-	spinner    spinner.Model
-	validating bool
-	err        error
-	validate   func(string) error
-	canceled   bool
-}
-
-func (m promptInputModel) Init() tea.Cmd {
-	return textinput.Blink
-}
-
-func (m promptInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
-			m.canceled = true
-			return m, tea.Quit
-		case tea.KeyEnter:
-			if m.validating {
-				return m, nil
-			}
-			if m.validate == nil {
-				return m, tea.Quit
-			}
-			value := strings.TrimSpace(m.input.Value())
-			m.validating = true
-			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
-				return validationDoneMsg{err: m.validate(value)}
-			})
-		}
-	case spinner.TickMsg:
-		if m.validating {
-			var cmd tea.Cmd
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
-	case validationDoneMsg:
-		m.validating = false
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		return m, tea.Quit
-	}
-
-	if m.validating {
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	return m, cmd
-}
-
-func (m promptInputModel) View() string {
-	var b strings.Builder
-	b.WriteString(strings.TrimSpace(m.prompt))
-	b.WriteString("\n")
-	b.WriteString(m.input.View())
-	if m.validating {
-		b.WriteString("\n")
-		b.WriteString(subtleStyle.Render(m.spinner.View()))
-		b.WriteString(subtleStyle.Render(" validating..."))
-	}
-	if m.err != nil {
-		b.WriteString("\n")
-		b.WriteString(errorStyle.Render("❌  " + m.err.Error()))
-	}
-	return b.String()
-}
-
-func promptString(ctx context.Context, prompt, defaultVal string, validate func(ctx context.Context, input string) error) (string, error) {
-	input := textinput.New()
-	input.SetValue(strings.TrimSpace(defaultVal))
-	input.CharLimit = 0
-	input.Prompt = "› "
-	input.PromptStyle = subtleStyle
-	input.Cursor.SetMode(cursor.CursorBlink)
-	input.Cursor.Style = lipgloss.NewStyle().Reverse(true)
-	input.Cursor.TextStyle = lipgloss.NewStyle().Reverse(true)
-	input.Focus()
-
-	sp := spinner.New()
-	sp.Spinner = spinner.MiniDot
-	sp.Style = subtleStyle
-
-	var validator func(string) error
-	if validate != nil {
-		validator = func(value string) error {
-			return validate(ctx, strings.TrimSpace(value))
-		}
-	}
-
-	model := promptInputModel{
-		prompt:   prompt,
-		input:    input,
-		spinner:  sp,
-		validate: validator,
-	}
-
-	result, err := tea.NewProgram(model).Run()
-	if err != nil {
-		return "", err
-	}
-	finalModel := result.(promptInputModel)
-	if finalModel.canceled {
-		return "", context.Canceled
-	}
-
-	return strings.TrimSpace(finalModel.input.Value()), nil
 }
 
 func deprecatedAuthCmd(_ string) *cobra.Command {
@@ -293,308 +115,21 @@ func loginCmd(groupID string) *cobra.Command {
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Check for conflicts between positional URL argument and --api-url
-			// flag or env vars.
-			tenantURLArgProvided := len(args) > 0
+			warnIgnoredLoginEnvVars()
 
+			tenantURLArgProvided := len(args) > 0
 			if tenantURLArgProvided {
 				if apiURL != "" {
 					logutil.Infof("⚠️  Warning: --api-url will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
-					apiURL = "" // Clear it to use the tenant URL flow
-				} else if os.Getenv("VEN_API_URL") != "" {
-					logutil.Infof("⚠️  Warning: VEN_API_URL will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
-				} else if os.Getenv("APIURL") != "" {
-					logutil.Infof("⚠️  Warning: APIURL will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
 				}
+				return loginWithTenantURL(cmd.Context(), args[0], apiKey, contextName)
 			}
 
-			// If the user provided the --api-url and --api-key flags, we use
-			// them. (But not if there are positional args as those take
-			// precedence)
-			if !tenantURLArgProvided && (apiURL != "" || apiKey != "") {
-				if apiURL == "" {
-					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
-				}
-				if apiKey == "" {
-					return errutil.Fixable(fmt.Errorf("the --api-key flag is required when using the --api-url flag"))
-				}
-
-				// Normalize the API URL.
-				apiURL = strings.TrimRight(apiURL, "/")
-				if !strings.HasPrefix(apiURL, "https://") && !strings.HasPrefix(apiURL, "http://") {
-					apiURL = "https://" + apiURL
-				}
-
-				cl, err := api.NewAPIKeyClient(apiURL, apiKey)
-				if err != nil {
-					return fmt.Errorf("while creating API client: %w", err)
-				}
-				resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
-				if err != nil {
-					return fmt.Errorf("while checking the API key's validity: %w", err)
-				}
-
-				current := Auth{
-					APIURL:             apiURL,
-					AuthenticationType: "apiKey",
-					APIKey:             apiKey,
-					TenantURL:          tenantURL,
-					TenantID:           resp.Company.Id.String(),
-					Email:              resp.User.EmailAddress,
-					UserID:             resp.User.Id.String(),
-					Username:           resp.User.Username,
-				}
-
-				err = saveCurrentContext(cmd.Context(), current, contextName)
-				if err != nil {
-					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
-				}
-
-				logutil.Infof("✅  You are now authenticated with the user '%s'.", current.Email)
-				return nil
+			if apiURL != "" {
+				return loginWithAPIURL(cmd.Context(), apiURL, apiKey, contextName)
 			}
 
-			// If the user provided a positional argument, use it as tenant URL
-			// instead of prompting for the tenant URL.
-			if tenantURLArgProvided {
-				tenantURL := args[0]
-
-				// Normalize tenant URL.
-				tenantURL = strings.TrimRight(tenantURL, "/")
-				if !strings.HasPrefix(tenantURL, "https://") && !strings.HasPrefix(tenantURL, "http://") {
-					tenantURL = "https://" + tenantURL
-				}
-
-				// Convert tenant URL to API URL.
-				httpCl := http.Client{Transport: api.LogTransport}
-				info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
-				switch {
-				case err == nil:
-					// Success, continue below.
-				case errors.As(err, &errutil.NotFound{}):
-					return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
-				default:
-					return fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
-				}
-
-				current := Auth{
-					AuthenticationType: "apiKey",
-					TenantURL:          tenantURL,
-					TenantID:           info.TenantID,
-					APIURL:             info.APIURL,
-				}
-
-				// If --api-key was provided, use it; otherwise prompt for it.
-				if apiKey != "" {
-					current.APIKey = apiKey
-
-					// Validate the API key.
-					cl, err := api.NewAPIKeyClient(current.APIURL, current.APIKey)
-					if err != nil {
-						return fmt.Errorf("while creating API client: %w", err)
-					}
-					resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
-					if err != nil {
-						return fmt.Errorf("while checking the API key's validity: %w", err)
-					}
-
-					current.Email = resp.User.EmailAddress
-					current.UserID = resp.User.Id.String()
-					logutil.Debugf("API key's tenant URL is %s", tenantURL)
-				} else {
-					// Prompt for API key.
-					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
-					fmt.Println()
-
-					apiKeyInput, err := promptString(cmd.Context(), "API Key: ", current.APIKey, func(ctx context.Context, input string) error {
-						if input == "" {
-							return fmt.Errorf("API key cannot be empty")
-						}
-
-						// Remove extraneous spaces before and after the user's
-						// input for convenience.
-						input = strings.TrimSpace(input)
-
-						if len(input) != 36 {
-							return fmt.Errorf("API key must be 36 characters long")
-						}
-
-						cl, err := api.NewAPIKeyClient(current.APIURL, input)
-						if err != nil {
-							return fmt.Errorf("while creating API client: %w", err)
-						}
-
-						resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
-						if err != nil {
-							return err
-						}
-						current.TenantID = resp.Company.Id.String()
-						current.TenantURL = tenantURL
-						current.Email = resp.User.EmailAddress
-						current.UserID = resp.User.Id.String()
-						current.Username = resp.User.Username
-						return nil
-					})
-					if err != nil {
-						return err
-					}
-					current.APIKey = apiKeyInput
-				}
-
-				err = saveCurrentContext(cmd.Context(), current, contextName)
-				if err != nil {
-					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
-				}
-
-				logutil.Infof("\n%s\n", successStyle.Render("✅  You are now authenticated with the user '"+current.Email+"'."))
-				return nil
-			}
-
-			// Load the current configuration.
-			conf, err := loadFileConf(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("loading configuration: %w", err)
-			}
-			current, _ := currentFrom(conf)
-
-			// If multiple contexts exist and no --context flag, inform the user.
-			if len(conf.ToolContexts) > 1 && contextName == "" {
-				if current.Name != "" {
-					fmt.Printf("\n📝  Re-logging in using current context '%s'.\n", current.Name)
-					fmt.Println("\nOther available contexts:")
-					for _, toolctx := range conf.ToolContexts {
-						if toolctx.Name != current.Name {
-							displayContextForSelection(toolctx)
-						}
-					}
-					fmt.Printf("\n💡  To log in to a different context, use: vcpctl login --context <name>\n\n")
-				}
-			}
-
-			// Let the user know if they are already authenticated.
-			skipTenantPrompt := false
-			if current.TenantURL != "" {
-				cl, err := api.NewAPIKeyClient(current.APIURL, current.APIKey)
-				if err != nil {
-					return fmt.Errorf("while creating API client: %w", err)
-				}
-				_, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
-				if err == nil {
-					fmt.Printf("\n%s\n\n", successStyle.Render("✅  You are already logged in to "+tenantURL))
-
-					// Ask if they want to add a new tenant or re-login to existing one
-					addNew, err := promptYesNo(cmd.Context(), "Do you want to add a new tenant?")
-					if err != nil {
-						return fmt.Errorf("prompt cancelled: %w", err)
-					}
-
-					if !addNew {
-						relogin, err := promptYesNo(cmd.Context(), "Do you want to re-login to "+tenantURL+"?")
-						if err != nil {
-							return fmt.Errorf("prompt cancelled: %w", err)
-						}
-						if !relogin {
-							fmt.Println("\nLogin cancelled.")
-							return nil
-						}
-						// If re-login, skip the tenant URL prompt
-						skipTenantPrompt = true
-					} else {
-						// If adding new tenant, clear the current URL so they enter a new one
-						current = Auth{}
-					}
-					fmt.Println() // Add spacing
-				}
-			}
-
-			if os.Getenv("APIURL") != "" || os.Getenv("APIKEY") != "" {
-				fmt.Println(errorStyle.Render("⚠  WARNING: the env var APIURL or APIKEY is set."))
-				fmt.Println(errorStyle.Render("⚠  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."))
-				fmt.Println()
-			}
-
-			// Prompt for Tenant URL (skip if re-logging in).
-			if !skipTenantPrompt {
-				fmt.Println(subtleStyle.Render("Enter the URL you use to log into CyberArk Certificate Manager, SaaS"))
-				fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
-				fmt.Println()
-
-				tenantURL, err := promptString(cmd.Context(), "Tenant URL: ", current.TenantURL, func(ctx context.Context, input string) error {
-					// Normalize tenant URL
-					input = strings.TrimRight(input, "/")
-					if !strings.HasPrefix(input, "https://") && !strings.HasPrefix(input, "http://") {
-						input = "https://" + input
-					}
-
-					httpCl := http.Client{Transport: api.LogTransport}
-					info, err := api.GetTenantInfoFromTenantURL(httpCl, input)
-					switch {
-					case err == nil:
-						current.TenantURL = input
-						current.APIURL = info.APIURL
-						return nil
-					case errors.As(err, &errutil.NotFound{}):
-						return fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", input)
-					default:
-						return fmt.Errorf("while getting API URL for tenant '%s': %w", input, err)
-					}
-				})
-				if err != nil {
-					return err
-				}
-				current.TenantURL = tenantURL
-				fmt.Println()
-			}
-
-			// Prompt for API Key.
-			fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
-			fmt.Println()
-
-			apiKeyInput, err := promptString(cmd.Context(), "API Key: ", current.APIKey, func(ctx context.Context, input string) error {
-				if input == "" {
-					return fmt.Errorf("API key cannot be empty")
-				}
-
-				// Remove extraneous spaces before and after the user's
-				// input for convenience.
-				input = strings.TrimSpace(input)
-
-				if len(input) != 36 {
-					return fmt.Errorf("API key must be 36 characters long")
-				}
-
-				cl, err := api.NewAPIKeyClient(current.APIURL, input)
-				if err != nil {
-					return fmt.Errorf("while creating API client: %w", err)
-				}
-
-				resp, tenantURL, err := api.SelfCheckAPIKey(cmd.Context(), cl)
-				if err != nil {
-					return err
-				}
-				current.TenantID = resp.Company.Id.String()
-				current.TenantURL = tenantURL
-				current.Email = resp.User.EmailAddress
-				current.UserID = resp.User.Id.String()
-				current.Username = resp.User.Username
-
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-			current.APIKey = apiKeyInput
-			current.AuthenticationType = "apiKey"
-
-			logutil.Infof("\n%s\n", successStyle.Render("✅  You are now authenticated with the user '"+current.Email+"'."))
-
-			// Save the configuration to ~/.config/vcpctl.yaml
-			err = saveCurrentContext(cmd.Context(), current, contextName)
-			if err != nil {
-				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
-			}
-
-			return nil
+			return loginInteractive(cmd.Context(), apiKey, contextName)
 		},
 	}
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
@@ -602,6 +137,147 @@ func loginCmd(groupID string) *cobra.Command {
 	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
 
 	return cmd
+}
+
+func loginWithTenantURL(ctx context.Context, tenantURL, apiKey, contextName string) error {
+	tenantURL = normalizeURL(tenantURL)
+	if tenantURL == "" {
+		return fmt.Errorf("tenant URL cannot be empty")
+	}
+	info, err := tenantInfoFromURL(tenantURL)
+	if err != nil {
+		return err
+	}
+
+	current := Auth{
+		AuthenticationType: "apiKey",
+		TenantURL:          info.TenantURL,
+		TenantID:           info.TenantID,
+		APIURL:             info.APIURL,
+	}
+
+	if apiKey != "" {
+		if err := populateFromAPIKey(ctx, &current, apiKey); err != nil {
+			return err
+		}
+	} else {
+		if err := promptForAPIKey(ctx, &current); err != nil {
+			return err
+		}
+	}
+
+	return saveLoginAndReport(ctx, current, contextName)
+}
+
+func loginWithAPIURL(ctx context.Context, apiURL, apiKey, contextName string) error {
+	apiURL = normalizeURL(apiURL)
+	if apiURL == "" {
+		return fmt.Errorf("API URL cannot be empty")
+	}
+
+	current := Auth{
+		AuthenticationType: "apiKey",
+		APIURL:             apiURL,
+	}
+
+	if apiKey != "" {
+		if err := populateFromAPIKey(ctx, &current, apiKey); err != nil {
+			return err
+		}
+	} else {
+		if err := promptForAPIKey(ctx, &current); err != nil {
+			return err
+		}
+	}
+
+	return saveLoginAndReport(ctx, current, contextName)
+}
+
+func loginInteractive(ctx context.Context, apiKey, contextName string) error {
+	conf, err := loadFileConf(ctx)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	current, _ := currentFrom(conf)
+
+	if len(conf.ToolContexts) > 1 && contextName == "" {
+		if current.Name != "" {
+			fmt.Printf("\n📝  Re-logging in using current context '%s'.\n", displayContextForSelection(current))
+
+			if len(conf.ToolContexts) > 1 {
+				fmt.Println("\nOther available contexts:")
+				for _, toolctx := range conf.ToolContexts {
+					if toolctx.Name != current.Name {
+						displayContextForSelection(toolctx)
+					}
+				}
+				fmt.Printf("\n💡  To log in to a different context, use: vcpctl login --context <name>\n\n")
+			}
+		}
+	}
+
+	skipTenantPrompt := false
+	if current.TenantURL != "" && current.APIURL != "" && current.APIKey != "" {
+		cl, err := api.NewAPIKeyClient(current.APIURL, current.APIKey)
+		if err != nil {
+			return fmt.Errorf("while creating API client: %w", err)
+		}
+		_, tenantURL, err := api.SelfCheckAPIKey(ctx, cl)
+		if err == nil {
+			fmt.Printf("\n%s\n\n", successStyle.Render("✅  You are already logged in with the context "+displayContextForSelection(current)))
+
+			type loginChoice string
+			const (
+				loginChoiceRelogin loginChoice = "relogin"
+				loginChoiceNew     loginChoice = "new"
+			)
+			choice := loginChoiceRelogin
+			form := huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[loginChoice]().
+						Options(
+							huh.NewOption("Edit the current context's API key", loginChoiceRelogin),
+							huh.NewOption("Log in using a new context", loginChoiceNew),
+						).
+						Value(&choice),
+				).Title("How would you like to log in?"),
+			)
+			if err := form.RunWithContext(ctx); err != nil {
+				return fmt.Errorf("prompt cancelled: %w", err)
+			}
+
+			if choice == loginChoiceRelogin {
+				skipTenantPrompt = true
+				current.TenantURL = tenantURL
+			} else {
+				current = Auth{}
+			}
+			fmt.Println()
+		}
+	}
+
+	current.AuthenticationType = "apiKey"
+
+	if !skipTenantPrompt {
+		if err := promptForTenantURL(ctx, &current); err != nil {
+			return err
+		}
+		fmt.Println()
+	} else if current.APIURL == "" {
+		return fmt.Errorf("current context is missing an API URL; please specify --api-url or a tenant URL")
+	}
+
+	if apiKey != "" {
+		if err := populateFromAPIKey(ctx, &current, apiKey); err != nil {
+			return err
+		}
+	} else {
+		if err := promptForAPIKey(ctx, &current); err != nil {
+			return err
+		}
+	}
+
+	return saveLoginAndReport(ctx, current, contextName)
 }
 
 func loginWifCmd(groupID string) *cobra.Command {
@@ -813,7 +489,7 @@ func switchCmd(groupID string) *cobra.Command {
 				Description("Select the context you want to switch to.").
 				Value(&current),
 			)
-			err = huh.NewForm(huh.NewGroup(fields...)).Run()
+			err = huh.NewForm(huh.NewGroup(fields...)).RunWithContext(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("selecting context: %w", err)
 			}
@@ -875,7 +551,9 @@ func sameContext(a, b ToolContext) bool {
 	return false
 }
 
-// Meant for the `vcpctl login*` commands.
+// Meant for the `vcpctl login*` commands. The provided toolctx's name can be
+// left empty, in which case a name will be derived. The contextFlag can also be
+// left empty.
 func saveCurrentContext(ctx context.Context, toolctx ToolContext, contextFlag string) error {
 	conf, err := loadFileConf(ctx)
 	if err != nil {
@@ -1272,4 +950,303 @@ func convertOldToNewConfig(old OldFileConf) FileConf {
 	}
 
 	return newConf
+}
+
+// Styles for prompts.
+var (
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
+	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
+	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+)
+
+func promptYesNo(ctx context.Context, question string) (bool, error) {
+	fmt.Printf("%s %s: ", question, subtleStyle.Render("(y/n)"))
+
+	// Try to set raw mode for immediate single-character input.
+	oldState, err := term.MakeRaw(os.Stdin.Fd())
+	if err != nil {
+		// Fallback to line-based input if raw mode not available.
+		stdin := bufio.NewReader(cancellablereader.New(ctx, os.Stdin))
+		input, err := stdin.ReadString('\n')
+		if err != nil {
+			return false, err
+		}
+		input = strings.TrimSpace(strings.ToLower(input))
+		switch input {
+		case "y", "yes":
+			return true, nil
+		case "n", "no":
+			return false, nil
+		}
+		fmt.Println(errorStyle.Render("❌  Please enter 'y' or 'n'"))
+		return promptYesNo(ctx, question)
+	}
+	defer term.Restore(os.Stdin.Fd(), oldState)
+
+	// Read single character without waiting for Enter.
+	stdin := cancellablereader.New(ctx, os.Stdin)
+	for {
+		var buf [1]byte
+		_, err = stdin.Read(buf[:])
+		if err != nil {
+			term.Restore(os.Stdin.Fd(), oldState)
+			return false, err
+		}
+
+		char := strings.ToLower(string(buf[0]))
+
+		switch char {
+		case "y":
+			fmt.Println("y")
+			return true, nil
+		case "n":
+			fmt.Println("n")
+			return false, nil
+		}
+		// Invalid input; let's continue reading without showing an error
+		// message for better UX.
+	}
+}
+
+type validationDoneMsg struct {
+	err error
+}
+
+type promptInputModel struct {
+	prompt     string
+	input      textinput.Model
+	spinner    spinner.Model
+	validating bool
+	err        error
+	validate   func(string) error
+	canceled   bool
+}
+
+func (m promptInputModel) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (m promptInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			m.canceled = true
+			return m, tea.Quit
+		case "enter":
+			if m.validating {
+				return m, nil
+			}
+			if m.validate == nil {
+				return m, tea.Quit
+			}
+			value := strings.TrimSpace(m.input.Value())
+			m.validating = true
+			m.err = nil
+			return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
+				return validationDoneMsg{err: m.validate(value)}
+			})
+		}
+	case spinner.TickMsg:
+		if m.validating {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+	case validationDoneMsg:
+		m.validating = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		return m, tea.Quit
+	}
+
+	if m.validating {
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	return m, cmd
+}
+
+func (m promptInputModel) View() tea.View {
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(m.prompt))
+	b.WriteString("\n")
+	b.WriteString(m.input.View())
+	if m.validating {
+		b.WriteString("\n")
+		b.WriteString(subtleStyle.Render(m.spinner.View()))
+		b.WriteString(subtleStyle.Render(" validating..."))
+	}
+	if m.err != nil {
+		b.WriteString("\n")
+		b.WriteString(errorStyle.Render("❌  " + m.err.Error()))
+	}
+	return tea.NewView(b.String())
+}
+
+func promptString(ctx context.Context, prompt, defaultVal string, validate func(ctx context.Context, input string) error) (string, error) {
+	input := textinput.New()
+	input.SetValue(strings.TrimSpace(defaultVal))
+	input.CharLimit = 0
+	input.Prompt = "› "
+	// input.PromptStyle = subtleStyle
+	styles := input.Styles()
+	styles.Cursor.Shape = tea.CursorBlock
+	styles.Cursor.Blink = true
+	styles.Cursor.Color = lipgloss.Color("7")
+	input.SetStyles(styles)
+	input.Focus()
+
+	sp := spinner.New()
+	sp.Spinner = spinner.MiniDot
+	sp.Style = subtleStyle
+
+	var validator func(string) error
+	if validate != nil {
+		validator = func(value string) error {
+			return validate(ctx, strings.TrimSpace(value))
+		}
+	}
+
+	model := promptInputModel{
+		prompt:   prompt,
+		input:    input,
+		spinner:  sp,
+		validate: validator,
+	}
+
+	result, err := tea.NewProgram(model).Run()
+	if err != nil {
+		return "", err
+	}
+	finalModel := result.(promptInputModel)
+	if finalModel.canceled {
+		return "", context.Canceled
+	}
+
+	return strings.TrimSpace(finalModel.input.Value()), nil
+}
+
+func warnIgnoredLoginEnvVars() {
+	var set []string
+	for _, name := range []string{"VEN_API_URL", "VEN_API_KEY", "APIURL", "APIKEY"} {
+		if os.Getenv(name) != "" {
+			set = append(set, name)
+		}
+	}
+	if len(set) == 0 {
+		return
+	}
+	logutil.Infof("⚠️  Warning: %s set. vcpctl login ignores these environment variables.", strings.Join(set, ", "))
+}
+
+func normalizeURL(raw string) string {
+	url := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if url == "" {
+		return ""
+	}
+	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
+		url = "https://" + url
+	}
+	return url
+}
+
+func tenantInfoFromURL(tenantURL string) (api.TenantInfo, error) {
+	httpCl := http.Client{Transport: api.LogTransport}
+	info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
+	switch {
+	case err == nil:
+		return info, nil
+	case errors.As(err, &errutil.NotFound{}):
+		return api.TenantInfo{}, fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
+	default:
+		return api.TenantInfo{}, fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
+	}
+}
+
+func populateFromAPIKey(ctx context.Context, current *Auth, apiKey string) error {
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return fmt.Errorf("API key cannot be empty")
+	}
+	if current.APIURL == "" {
+		return fmt.Errorf("API URL is required to validate the API key")
+	}
+	cl, err := api.NewAPIKeyClient(current.APIURL, apiKey)
+	if err != nil {
+		return fmt.Errorf("while creating API client: %w", err)
+	}
+	resp, tenantURL, err := api.SelfCheckAPIKey(ctx, cl)
+	if err != nil {
+		return err
+	}
+	current.APIKey = apiKey
+	current.TenantID = resp.Company.Id.String()
+	current.TenantURL = tenantURL
+	current.Email = resp.User.EmailAddress
+	current.UserID = resp.User.Id.String()
+	current.Username = resp.User.Username
+	return nil
+}
+
+func promptForTenantURL(ctx context.Context, current *Auth) error {
+	fmt.Println(subtleStyle.Render("Enter the URL you use to log into CyberArk Certificate Manager, SaaS"))
+	fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
+	fmt.Println()
+
+	tenantURL, err := promptString(ctx, "Tenant URL: ", current.TenantURL, func(ctx context.Context, input string) error {
+		input = normalizeURL(input)
+		if input == "" {
+			return fmt.Errorf("tenant URL cannot be empty")
+		}
+		info, err := tenantInfoFromURL(input)
+		if err != nil {
+			return err
+		}
+		current.TenantURL = info.TenantURL
+		current.TenantID = info.TenantID
+		current.APIURL = info.APIURL
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	current.TenantURL = normalizeURL(tenantURL)
+	return nil
+}
+
+func promptForAPIKey(ctx context.Context, current *Auth) error {
+	if current.TenantURL != "" {
+		fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
+		fmt.Println()
+	}
+
+	apiKeyInput, err := promptString(ctx, "API Key: ", current.APIKey, func(ctx context.Context, input string) error {
+		return populateFromAPIKey(ctx, current, input)
+	})
+	if err != nil {
+		return err
+	}
+	current.APIKey = strings.TrimSpace(apiKeyInput)
+	return nil
+}
+
+func saveLoginAndReport(ctx context.Context, current Auth, contextName string) error {
+	if err := saveCurrentContext(ctx, current, contextName); err != nil {
+		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
+	}
+	conf, err := loadFileConf(ctx)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	if currentCtx, ok := currentFrom(conf); ok {
+		logutil.Infof("✅  You are now authenticated. Context name is %v", displayContextForSelection(currentCtx))
+		return nil
+	}
+	logutil.Infof("✅  You are now authenticated.")
+	return nil
 }

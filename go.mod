@@ -3,7 +3,10 @@ module github.com/maelvls/vcpctl
 go 1.24.6
 
 require (
+	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106193318-19329a3e8410
 	dario.cat/mergo v1.0.2
+	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7
+	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/fang v0.4.4
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -25,12 +28,11 @@ require (
 )
 
 require (
-	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106193318-19329a3e8410 // indirect
+	charm.land/bubbles/v2 v2.0.0-rc.1 // indirect
+	charm.land/bubbletea/v2 v2.0.0-rc.2 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
-	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7 // indirect
-	github.com/charmbracelet/bubbletea v1.3.10 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260113215839-fa031ff101a1 // indirect
 	github.com/charmbracelet/x/exp/charmtone v0.0.0-20260116010723-b770f9f0bfed // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20260116010723-b770f9f0bfed // indirect

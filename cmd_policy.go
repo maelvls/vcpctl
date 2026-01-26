@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -60,15 +59,15 @@ func policyLsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("policy ls: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			policies, err := api.GetPolicies(context.Background(), apiClient)
+			policies, err := api.GetPolicies(cmd.Context(), apiClient)
 			if err != nil {
-				return fmt.Errorf("policy ls: while listing policies: %w", err)
+				return fmt.Errorf("while listing policies: %w", err)
 			}
 			var rows [][]string
 			for _, policy := range policies {
@@ -120,7 +119,7 @@ func policyGetCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			policy, err := api.GetPolicy(context.Background(), apiClient, nameOrID)
+			policy, err := api.GetPolicy(cmd.Context(), apiClient, nameOrID)
 			if err != nil {
 				return fmt.Errorf("while getting policy: %w", err)
 			}
@@ -189,7 +188,7 @@ func policyRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = api.DeletePolicy(context.Background(), apiClient, policyNameOrID)
+			err = api.DeletePolicy(cmd.Context(), apiClient, policyNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
@@ -228,7 +227,7 @@ func policyEditCmd() *cobra.Command {
 				return fmt.Errorf("policy edit: while creating API client: %w", err)
 			}
 
-			policy, err := api.GetPolicy(context.Background(), apiClient, nameOrID)
+			policy, err := api.GetPolicy(cmd.Context(), apiClient, nameOrID)
 			switch {
 			case errors.As(err, &errutil.NotFound{}):
 				return errutil.Fixable(fmt.Errorf("policy '%s' not found. Please create it first using 'vcpctl apply -f <manifest.yaml>'", nameOrID))
