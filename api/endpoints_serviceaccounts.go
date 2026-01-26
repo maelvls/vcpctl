@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -69,13 +70,15 @@ func GetServiceAccountScopesByType(ctx context.Context, cl *Client, authType str
 
 	var filtered []string
 	for _, scope := range scopes {
-		_, notWorkingCombination := notWorking[combination{scope.Id, authType}]
+		_, notWorkingCombination := notWorking[combination{scope.Id, scope.AuthenticationType}]
 		if notWorkingCombination {
 			continue
 		}
-		if scope.AuthenticationType == authType {
-			filtered = append(filtered, scope.Id)
+		if scope.AuthenticationType != authType && !slices.Contains(scope.AuthenticationTypes, authType) {
+			continue
 		}
+
+		filtered = append(filtered, scope.Id)
 	}
 
 	return filtered, nil
