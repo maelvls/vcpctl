@@ -112,23 +112,20 @@ func promptYesNo(ctx context.Context, question string) (bool, error) {
 	}
 }
 
-func promptString(ctx context.Context, prompt string, validate func(ctx context.Context, input string) error) (string, error) {
-	reader := bufio.NewReader(cancellablereader.New(ctx, os.Stdin))
-	for {
-		fmt.Printf("%s", prompt)
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		input = strings.TrimSpace(input)
-		if validate != nil {
-			if err := validate(ctx, input); err != nil {
-				fmt.Println(errorStyle.Render("❌ " + err.Error()))
-				continue
-			}
-		}
-		return input, nil
+func promptString(ctx context.Context, prompt, defaultVal string, validate func(ctx context.Context, input string) error) (string, error) {
+	input := strings.TrimSpace(defaultVal)
+	field := huh.NewInput().
+		Title(strings.TrimSpace(prompt)).
+		Value(&input)
+	if validate != nil {
+		field.Validate(func(value string) error {
+			return validate(ctx, strings.TrimSpace(value))
+		})
 	}
+	if err := field.Run(); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(input), nil
 }
 
 func deprecatedAuthCmd(_ string) *cobra.Command {
@@ -295,7 +292,7 @@ func loginCmd(groupID string) *cobra.Command {
 					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
 					fmt.Println()
 
-					apiKeyInput, err := promptString(cmd.Context(), "API Key: ", func(ctx context.Context, input string) error {
+					apiKeyInput, err := promptString(cmd.Context(), "API Key: ", current.TenantURL, func(ctx context.Context, input string) error {
 						if input == "" {
 							return fmt.Errorf("API key cannot be empty")
 						}
@@ -349,11 +346,11 @@ func loginCmd(groupID string) *cobra.Command {
 			// If multiple contexts exist and no --context flag, inform the user
 			if len(conf.ToolContexts) > 1 && contextName == "" {
 				if current.Name != "" {
-					fmt.Printf("\n📝  Logging in using current context '%s'\n", current.Name)
+					fmt.Printf("\n📝  Re-logging in using current context '%s'.\n", current.Name)
 					fmt.Println("\nOther available contexts:")
-					for _, ctx := range conf.ToolContexts {
-						if ctx.Name != current.Name {
-							fmt.Printf("  - %s (%s)\n", ctx.Name, ctx.TenantURL)
+					for _, toolctx := range conf.ToolContexts {
+						if toolctx.Name != current.Name {
+							displayContextForSelection(toolctx)
 						}
 					}
 					fmt.Printf("\n💡  To log in to a different context, use: vcpctl login --context <name>\n\n")
@@ -408,7 +405,7 @@ func loginCmd(groupID string) *cobra.Command {
 				fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
 				fmt.Println()
 
-				tenantURL, err := promptString(cmd.Context(), "Tenant URL: ", func(ctx context.Context, input string) error {
+				tenantURL, err := promptString(cmd.Context(), "Tenant URL: ", current.TenantURL, func(ctx context.Context, input string) error {
 					// Normalize tenant URL
 					input = strings.TrimRight(input, "/")
 					if !strings.HasPrefix(input, "https://") && !strings.HasPrefix(input, "http://") {
@@ -439,7 +436,7 @@ func loginCmd(groupID string) *cobra.Command {
 			fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
 			fmt.Println()
 
-			apiKeyInput, err := promptString(cmd.Context(), "API Key: ", func(ctx context.Context, input string) error {
+			apiKeyInput, err := promptString(cmd.Context(), "API Key: ", current.APIKey, func(ctx context.Context, input string) error {
 				if input == "" {
 					return fmt.Errorf("API key cannot be empty")
 				}
