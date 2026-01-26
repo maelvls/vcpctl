@@ -11,6 +11,10 @@ import (
 	"path"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/goccy/go-yaml"
@@ -112,27 +116,130 @@ func promptYesNo(ctx context.Context, question string) (bool, error) {
 	}
 }
 
-func promptString(ctx context.Context, prompt, defaultVal string, validate func(ctx context.Context, input string) error) (string, error) {
-	input := strings.TrimSpace(defaultVal)
-	field := huh.NewInput().
-		Title(strings.TrimSpace(prompt)).
-		Value(&input)
-	if validate != nil {
-		field.Validate(func(value string) error {
-			return validate(ctx, strings.TrimSpace(value))
-		})
+type validationDoneMsg struct {
+	err error
+}
+
+type promptInputModel struct {
+	prompt     string
+	input      textinput.Model
+	spinner    spinner.Model
+	validating bool
+	err        error
+	validate   func(string) error
+	canceled   bool
+}
+
+func (m promptInputModel) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (m promptInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			m.canceled = true
+			return m, tea.Quit
+		case tea.KeyEnter:
+			if m.validating {
+				return m, nil
+			}
+			if m.validate == nil {
+				return m, tea.Quit
+			}
+			value := strings.TrimSpace(m.input.Value())
+			m.validating = true
+			m.err = nil
+			return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
+				return validationDoneMsg{err: m.validate(value)}
+			})
+		}
+	case spinner.TickMsg:
+		if m.validating {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+	case validationDoneMsg:
+		m.validating = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		return m, tea.Quit
 	}
-	if err := field.Run(); err != nil {
+
+	if m.validating {
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	return m, cmd
+}
+
+func (m promptInputModel) View() string {
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(m.prompt))
+	b.WriteString("\n")
+	b.WriteString(m.input.View())
+	if m.validating {
+		b.WriteString("\n")
+		b.WriteString(subtleStyle.Render(m.spinner.View()))
+		b.WriteString(subtleStyle.Render(" validating..."))
+	}
+	if m.err != nil {
+		b.WriteString("\n")
+		b.WriteString(errorStyle.Render("❌  " + m.err.Error()))
+	}
+	return b.String()
+}
+
+func promptString(ctx context.Context, prompt, defaultVal string, validate func(ctx context.Context, input string) error) (string, error) {
+	input := textinput.New()
+	input.SetValue(strings.TrimSpace(defaultVal))
+	input.CharLimit = 0
+	input.Prompt = "› "
+	input.PromptStyle = subtleStyle
+	input.Cursor.SetMode(cursor.CursorBlink)
+	input.Cursor.Style = lipgloss.NewStyle().Reverse(true)
+	input.Cursor.TextStyle = lipgloss.NewStyle().Reverse(true)
+	input.Focus()
+
+	sp := spinner.New()
+	sp.Spinner = spinner.MiniDot
+	sp.Style = subtleStyle
+
+	var validator func(string) error
+	if validate != nil {
+		validator = func(value string) error {
+			return validate(ctx, strings.TrimSpace(value))
+		}
+	}
+
+	model := promptInputModel{
+		prompt:   prompt,
+		input:    input,
+		spinner:  sp,
+		validate: validator,
+	}
+
+	result, err := tea.NewProgram(model).Run()
+	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(input), nil
+	finalModel := result.(promptInputModel)
+	if finalModel.canceled {
+		return "", context.Canceled
+	}
+
+	return strings.TrimSpace(finalModel.input.Value()), nil
 }
 
 func deprecatedAuthCmd(_ string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "auth",
-		Short:         "Commands for authenticating and switching tenants.",
-		Long:          "Manage authentication for CyberArk Certificate Manager, SaaS (formerly known as Venafi Control Plane and also known as Venafi Cloud), including login and switch.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Hidden:        true,
@@ -172,6 +279,9 @@ func loginCmd(groupID string) *cobra.Command {
 			For service account keypair authentication, use 'vcpctl login-keypair'.
 		`),
 		Example: undent.Undent(`
+			# Interactive login with prompts:
+			vcpctl login
+
 			# Provide tenant URL, will prompt for API key:
 			vcpctl login https://ui-stack-dev130.qa.venafi.io
 
@@ -179,13 +289,15 @@ func loginCmd(groupID string) *cobra.Command {
 			vcpctl login https://ui-stack-dev130.qa.venafi.io --api-key <key>
 
 			# Bypass tenant URL to API URL conversion (for advanced use):
-			vcpctl login https://glow-in-the-dark.venafi.cloud --api-key <key>
+			vcpctl login --api-url https://api-stack-dev130.qa.venafi.io --api-key <key>
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check for conflicts between positional URL argument and --api-url
 			// flag or env vars.
-			if len(args) > 0 {
+			tenantURLArgProvided := len(args) > 0
+
+			if tenantURLArgProvided {
 				if apiURL != "" {
 					logutil.Infof("⚠️  Warning: --api-url will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
 					apiURL = "" // Clear it to use the tenant URL flow
@@ -197,8 +309,9 @@ func loginCmd(groupID string) *cobra.Command {
 			}
 
 			// If the user provided the --api-url and --api-key flags, we use
-			// them. (But not if there are positional args - those take precedence)
-			if len(args) == 0 && (apiURL != "" || apiKey != "") {
+			// them. (But not if there are positional args as those take
+			// precedence)
+			if !tenantURLArgProvided && (apiURL != "" || apiKey != "") {
 				if apiURL == "" {
 					return fmt.Errorf("the --api-url flag is required when using the --api-key flag")
 				}
@@ -241,9 +354,9 @@ func loginCmd(groupID string) *cobra.Command {
 				return nil
 			}
 
-			// If the user provided a positional URL argument, use it instead of
-			// prompting.
-			if len(args) > 0 {
+			// If the user provided a positional argument, use it as tenant URL
+			// instead of prompting for the tenant URL.
+			if tenantURLArgProvided {
 				tenantURL := args[0]
 
 				// Normalize tenant URL.
@@ -265,9 +378,10 @@ func loginCmd(groupID string) *cobra.Command {
 				}
 
 				current := Auth{
-					TenantURL:          tenantURL,
-					APIURL:             info.APIURL,
 					AuthenticationType: "apiKey",
+					TenantURL:          tenantURL,
+					TenantID:           info.TenantID,
+					APIURL:             info.APIURL,
 				}
 
 				// If --api-key was provided, use it; otherwise prompt for it.
@@ -292,7 +406,7 @@ func loginCmd(groupID string) *cobra.Command {
 					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
 					fmt.Println()
 
-					apiKeyInput, err := promptString(cmd.Context(), "API Key: ", current.TenantURL, func(ctx context.Context, input string) error {
+					apiKeyInput, err := promptString(cmd.Context(), "API Key: ", current.APIKey, func(ctx context.Context, input string) error {
 						if input == "" {
 							return fmt.Errorf("API key cannot be empty")
 						}
@@ -343,7 +457,7 @@ func loginCmd(groupID string) *cobra.Command {
 			}
 			current, _ := currentFrom(conf)
 
-			// If multiple contexts exist and no --context flag, inform the user
+			// If multiple contexts exist and no --context flag, inform the user.
 			if len(conf.ToolContexts) > 1 && contextName == "" {
 				if current.Name != "" {
 					fmt.Printf("\n📝  Re-logging in using current context '%s'.\n", current.Name)
