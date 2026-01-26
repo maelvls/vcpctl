@@ -1,5 +1,29 @@
 # vcpctl
 
+## Install
+
+```bash
+GOEXPERIMENT=jsonv2 \
+  go install github.com/maelvls/vcpctl@latest
+```
+
+> [!NOTE]
+>
+> I'm using `omitzero` struct tags, which requires Go 1.25 or later. It allows
+> me to distinguish between the `[]` and "unset" for slices in patch objects.
+> Pointers are still required for creating partial patches with types for which
+> the zero value is allowed (example: when trying to set "enabled" from true to
+> false). But since we don't use the "nullable" in the right locations, I had to
+> fix that too...
+>
+> And make sure `GOPATH/bin` is in your `PATH` environment variable to be able to
+> run the `vcpctl` command after installation. Typically, you would add the
+> following to your ~/.bashrc or ~/.zshrc:
+>
+> ```bash
+> export PATH=$PATH:$(go env GOPATH)/bin
+> ```
+
 ## Overview
 
 To edit the CyberArk Workload Identity Manager configuration (formerly known as Firefly), the associated Sub CA configuration, and policy configuration, you can use the `vcpctl` command line tool.
