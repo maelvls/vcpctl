@@ -40,6 +40,15 @@ type VenafiError struct {
 	} `json:"errors"`
 }
 
+func (e VenafiError) HasCode(code int) bool {
+	for _, err := range e.Errors {
+		if err.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
 func (e VenafiError) Error() string {
 	var msgs []string
 	for _, err := range e.Errors {

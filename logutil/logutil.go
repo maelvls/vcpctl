@@ -39,3 +39,11 @@ func Infof(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "%s: ", Yel("info"))
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 }
+
+func DebugHTTPf(format string, a ...any) {
+	if !EnableDebugHTTP {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s: ", Cyan("http-debug"))
+	fmt.Fprintf(os.Stderr, format+"\n", a...)
+}

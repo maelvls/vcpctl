@@ -164,13 +164,13 @@ func saPutWifCmd() *cobra.Command {
 			CyberArk Certificate Manager, SaaS. Returns the Service Account's
 			client ID.
 
-			To know the scopes you can assign to a Service Account, use:
+			To know the scopes you can assign to a wif Service Account (i.e., a service
+			account for which the authenticationType is "rsaKeyFederated"), use:
 
-			  vcpctl sa scopes
+			  vcpctl sa scopes --type rsaKeyFederated
 
-			Note that you can only use the scopes that are compatible with
-			the authentication type 'rsaKeyFederated' (aka Workload Identity
-			Federation).
+			Note that only one scope that contains the word "role" can appear in the list
+			of scopes assigned to a service account.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put wif my-sa \
@@ -215,6 +215,14 @@ func saPutWifCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while retrieving available scopes for 'rsaKeyFederated' authentication type: %w", err)
 				}
+
+				scopes = replaceRolesWith(scopes, "platform-admin-role")
+				logutil.Debugf("Using all available scopes for 'rsaKeyFederated' authentication type: %s", strings.Join(scopes, ", "))
+			}
+
+			err = checkDuplicateRoles(scopes)
+			if err != nil {
+				return err
 			}
 
 			// Parse applications (UUIDs).
@@ -338,4 +346,42 @@ func saPutWifCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&apps, "app", []string{}, "Application UUID to associate with the service account (can be specified multiple times)")
 	cmd.Flags().StringVar(&ownerTeam, "owner-team", "", "Owner team UUID (if not provided, the first team will be used)")
 	return cmd
+}
+
+// Only a single scope containing the word "role" should ever exist in a service
+// account. Otherwise, you will get:
+//
+//	400 Bad Request
+//	{
+//	    "errors": [
+//	        {
+//	            "code": 60223,
+//	            "message": "Invalid scopes. Check and make sure that you have selected only one role scope"
+//	        }
+//	    ]
+//	}
+func checkDuplicateRoles(scopes []string) error {
+	var roleScopes []string
+	for _, scope := range scopes {
+		if strings.Contains(scope, "role") {
+			roleScopes = append(roleScopes, scope)
+		}
+	}
+	if len(roleScopes) > 1 {
+		return errutil.Fixable(fmt.Errorf("only one role scope can be assigned to a service account, but multiple role scopes were found: %s", strings.Join(roleScopes, ", ")))
+	}
+	return nil
+}
+
+func replaceRolesWith(scopes []string, newScopeRole string) []string {
+	var newScopes []string
+	for _, scope := range scopes {
+		if strings.Contains(scope, "role") {
+			continue
+		}
+		newScopes = append(newScopes, scope)
+
+	}
+	newScopes = append(newScopes, newScopeRole)
+	return newScopes
 }

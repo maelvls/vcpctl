@@ -27,7 +27,13 @@ func redactSensitiveHeaders(headers http.Header) http.Header {
 
 	authorization := redacted.Get("Authorization")
 	if len(authorization) > 0 {
-		redacted.Set("Authorization", strings.Repeat("*", len(authorization)-len(authorization)*1/10)+authorization[len(authorization)*9/10:])
+		next, hasBearer := strings.CutPrefix(authorization, "Bearer ")
+		if hasBearer {
+			token := next
+			redacted.Set("Authorization", "Bearer "+strings.Repeat("*", len(token)-len(token)*1/10)+token[len(token)*9/10:])
+		} else {
+			redacted.Set("Authorization", strings.Repeat("*", len(authorization)-len(authorization)*1/10)+authorization[len(authorization)*9/10:])
+		}
 	}
 
 	return redacted
@@ -97,7 +103,7 @@ func LogRequest(req *http.Request) {
 	} else {
 		body = ", body:" + body
 	}
-	logutil.Debugf("req:  %s %s %s%s", req.Method, req.URL, headersStr, body)
+	logutil.DebugHTTPf("req:  %s %s %s%s", req.Method, req.URL, headersStr, body)
 }
 
 func LogResponse(resp *http.Response) {
@@ -134,5 +140,5 @@ func LogResponse(resp *http.Response) {
 	} else {
 		body = ", body:" + body
 	}
-	logutil.Debugf("resp: %d %v%s", resp.StatusCode, strings.Join(s, " "), body)
+	logutil.DebugHTTPf("resp: %d %v%s", resp.StatusCode, strings.Join(s, " "), body)
 }

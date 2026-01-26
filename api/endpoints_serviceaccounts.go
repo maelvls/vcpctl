@@ -56,8 +56,8 @@ type combination struct {
 
 // Some "authenticationType, scope" combinations are known to not work.
 var notWorking = map[combination]struct{}{
-	{"satellite", "rsaKey"}:                     {},
-	{"certificate-issuance", "rsaKeyFederated"}: {},
+	{"satellite", "rsaKey"}: {},
+	// {"certificate-issuance", "rsaKeyFederated"}: {},
 }
 
 // Returns the list of scope IDs (e.g., "platform-admin-role") available for the
@@ -246,10 +246,40 @@ func PatchServiceAccount(ctx context.Context, cl *Client, id string, patch Patch
 	case http.StatusNotFound:
 		return fmt.Errorf("service account: %w", errutil.NotFound{NameOrID: id})
 	default:
-		return HTTPErrorFrom(resp)
+		return augmentRoleScopeError(HTTPErrorFrom(resp), patch)
 	}
 
 	return nil
+}
+
+func augmentRoleScopeError(err error, patch PatchServiceAccountByClientIDRequestBody) error {
+	const roleScopeErrCode = 60223
+	if !venafiErrorHasCode(err, roleScopeErrCode) {
+		return err
+	}
+	roleScopes := filterRoleScopes(patch.Scopes)
+	if len(roleScopes) < 2 {
+		return err
+	}
+	return fmt.Errorf("Invalid scopes: only one scope containing \"role\" is allowed; found: %s", strings.Join(roleScopes, ", "))
+}
+
+func filterRoleScopes(scopes []Scope) []string {
+	var roleScopes []string
+	for _, scope := range scopes {
+		if strings.Contains(scope, "role") {
+			roleScopes = append(roleScopes, scope)
+		}
+	}
+	return roleScopes
+}
+
+func venafiErrorHasCode(err error, code int) bool {
+	var v VenafiError
+	if !errors.As(err, &v) {
+		return false
+	}
+	return v.HasCode(code)
 }
 
 func DeleteServiceAccount(ctx context.Context, cl *Client, nameOrID string) error {

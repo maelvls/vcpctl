@@ -27,7 +27,7 @@ import (
 )
 
 func loginKeypairCmd(groupID string) *cobra.Command {
-	var contextName string
+	var contextFlag string
 	cmd := &cobra.Command{
 		Use:           "login-keypair <json-file>",
 		SilenceErrors: true,
@@ -98,15 +98,16 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				Username:           saName,
 			}
 
-			if err := saveCurrentContext(cmd.Context(), current, contextName); err != nil {
-				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
+			current, err = saveCurrentContext(cmd.Context(), current, contextFlag)
+			if err != nil {
+				return fmt.Errorf("saving configuration for context %v: %w", displayContextForSelection(current), err)
 			}
 
 			logutil.Infof("✅  You are now authenticated. Context: %s", displayContextForSelection(current))
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
+	cmd.Flags().StringVar(&contextFlag, "context", "", "Context name to create or update")
 	return cmd
 }
 
@@ -277,7 +278,7 @@ func exchangeServiceAccountJWT(ctx context.Context, apiURL, signedJWT string) (s
 		return "", fmt.Errorf("while reading token response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("token endpoint returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return "", newTokenExchangeError(resp.StatusCode, resp.Status, body)
 	}
 
 	var parsed serviceAccountTokenResponse

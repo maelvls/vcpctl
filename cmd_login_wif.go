@@ -128,7 +128,7 @@ func exchangeJWTForAccessToken(ctx context.Context, apiURL, tenantID string, sig
 		return "", fmt.Errorf("while reading token response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("token endpoint returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return "", newTokenExchangeError(resp.StatusCode, resp.Status, body)
 	}
 
 	var parsed oauthTokenResponse
@@ -213,7 +213,7 @@ type wifJSON struct {
 	TenantURL string `json:"tenant_url"`
 }
 
-func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName string) error {
+func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag string) error {
 	if wifJSONPath == "" {
 		return errutil.Fixable(fmt.Errorf("--sa-wif requires a JSON file path or '-' for stdin"))
 	}
@@ -276,8 +276,6 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 		return fmt.Errorf("while getting tenant info: %w", err)
 	}
 
-	// TODO: This logic should be run anytime a 401 is received, for for now,
-	// let's just do it once.
 	var accessToken string
 	retryDeadline := time.Now().Add(1 * time.Minute)
 	for {
@@ -306,9 +304,13 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 		AccessToken:        accessToken,
 		PrivateKey:         input.PrivateKey,
 		TenantID:           info.TenantID,
+		IssuerURL:          input.Iss,
+		Subject:            input.Sub,
+		Audience:           input.Aud,
 	}
 
-	if err := saveCurrentContext(ctx, current, contextName); err != nil {
+	current, err = saveCurrentContext(ctx, current, contextFlag)
+	if err != nil {
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 

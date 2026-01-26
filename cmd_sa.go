@@ -285,12 +285,12 @@ func saEditCmd() *cobra.Command {
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa edit: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
-				return fmt.Errorf("sa edit: while creating API client: %w", err)
+				return fmt.Errorf("while creating API client: %w", err)
 			}
 
 			sa, err := api.GetServiceAccount(cmd.Context(), apiClient, nameOrID)
@@ -298,7 +298,7 @@ func saEditCmd() *cobra.Command {
 			case errors.As(err, &errutil.NotFound{}):
 				return errutil.Fixable(fmt.Errorf("service account '%s' not found. Please create it first using 'vcpctl sa put keypair %s' or 'vcpctl sa put wif %s'", nameOrID, nameOrID, nameOrID))
 			case err != nil:
-				return fmt.Errorf("sa edit: while getting service account: %w", err)
+				return fmt.Errorf("while getting service account: %w", err)
 			}
 
 			saManifest := serviceAccountManifest{
@@ -309,7 +309,7 @@ func saEditCmd() *cobra.Command {
 			var buf bytes.Buffer
 			enc := yaml.NewEncoder(&buf)
 			if err := enc.Encode(saManifest); err != nil {
-				return fmt.Errorf("sa edit: while encoding ServiceAccount to YAML: %w", err)
+				return fmt.Errorf("while encoding ServiceAccount to YAML: %w", err)
 			}
 
 			return editManifestsInEditor(
@@ -320,7 +320,7 @@ func saEditCmd() *cobra.Command {
 				},
 				func(items []manifest.Manifest) error {
 					if err := applyManifests(cmd.Context(), apiClient, items, false); err != nil {
-						return fmt.Errorf("sa edit: while patching ServiceAccount: %w", err)
+						return fmt.Errorf("while patching ServiceAccount: %w", err)
 					}
 					return nil
 				},
@@ -461,13 +461,13 @@ func saRmCmd() *cobra.Command {
 			}
 
 			if len(args) != 1 {
-				return fmt.Errorf("sa rm: expected a single argument (the service account name), got: %s", args)
+				return fmt.Errorf("expected a single argument (the service account name), got: %s", args)
 			}
 			saName := args[0]
 
 			conf, err := getToolConfig(cmd)
 			if err != nil {
-				return fmt.Errorf("sa rm: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 			apiClient, err := newAPIClient(conf)
 			if err != nil {
@@ -475,7 +475,7 @@ func saRmCmd() *cobra.Command {
 			}
 			err = api.DeleteServiceAccount(cmd.Context(), apiClient, saName)
 			if err != nil {
-				return fmt.Errorf("sa rm: %w", err)
+				return fmt.Errorf("%w", err)
 			}
 
 			return nil

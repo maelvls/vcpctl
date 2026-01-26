@@ -54,6 +54,11 @@ type ToolContext struct {
 	AccessToken string `json:"accessToken,omitzero"`
 	PrivateKey  string `json:"privateKey,omitzero"`
 
+	// For the type "rsaKeyFederated".
+	IssuerURL string `json:"issuerURL,omitzero"`
+	Subject   string `json:"subject,omitzero"`
+	Audience  string `json:"audience,omitzero"`
+
 	// For the type "rsaKey" and "rsaKeyFederated". Not really needed for
 	// "rsaKeyFederated", but useful to know when two contexts are the "same".
 	ClientID string `json:"clientID,omitzero"`
@@ -553,67 +558,78 @@ func sameContext(a, b ToolContext) bool {
 
 // Meant for the `vcpctl login*` commands. The provided toolctx's name can be
 // left empty, in which case a name will be derived. The contextFlag can also be
-// left empty.
-func saveCurrentContext(ctx context.Context, toolctx ToolContext, contextFlag string) error {
+// left empty. Returns the name of the saved context.
+func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag string) (ToolContext, error) {
 	conf, err := loadFileConf(ctx)
 	if err != nil {
-		return fmt.Errorf("loading configuration: %w", err)
+		return ToolContext{}, fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Find an existing context that matches the current one.
-	for _, existingCtx := range conf.ToolContexts {
-		if sameContext(existingCtx, toolctx) {
-			// If found, update and set as current.
-			conf.CurrentContext = existingCtx.Name
-			return saveFileConf(conf)
-		}
-	}
-
-	// Derive context name.
+	// If --context flag was provided, use that name directly.
+	var name string
 	if contextFlag != "" {
-		// User specified --context flag, use it directly.
-		toolctx.Name = contextFlag
-	}
-	if toolctx.Name == "" {
-		toolctx.Name = generateContextName(toolctx, conf.ToolContexts)
-	}
-
-	// Check if context exists and handle auth type change warning.
-	for i := range conf.ToolContexts {
-		if sameContext(conf.ToolContexts[i], toolctx) {
-			existingCtx := conf.ToolContexts[i]
-
-			// Warn about auth type change.
-			if existingCtx.AuthenticationType != "" &&
-				existingCtx.AuthenticationType != toolctx.AuthenticationType {
-				fmt.Printf("⚠️  Warning: Changing authentication type from '%s' to '%s' for context '%s'\n",
-					existingCtx.AuthenticationType, toolctx.AuthenticationType, toolctx.Name)
-				fmt.Printf("To keep existing context unchanged, use: vcpctl login --context <new-name>\n")
-
-				proceed, err := promptYesNo(ctx, "Continue?")
-				if err != nil {
-					return err
-				}
-				if !proceed {
-					return fmt.Errorf("login cancelled")
-				}
+		name = contextFlag
+	} else {
+		// No --context was passed, let's figure out if there is an existing
+		// context that is similar to the current one.
+		for _, existingCtx := range conf.ToolContexts {
+			if sameContext(existingCtx, target) {
+				name = existingCtx.Name
 			}
+		}
+	}
+	if name == "" {
+		name = generateContextName(target, conf.ToolContexts)
+	}
+	target.Name = name
 
-			conf.CurrentContext = toolctx.Name
-			conf.ToolContexts[i] = toolctx
-			return saveFileConf(conf)
+	if target.Name == "" {
+		return ToolContext{}, errors.New("internal error: context name derivation failed")
+	}
+
+	// Find the context.
+	var existing int = -1
+	for i, existingCtx := range conf.ToolContexts {
+		if existingCtx.Name == target.Name {
+			existing = i
+			break
+		}
+	}
+	if existing == -1 {
+		// Doesn't exist in the config yet, let's add it.
+		conf.ToolContexts = append(conf.ToolContexts, target)
+		conf.CurrentContext = target.Name
+		return target, saveFileConf(conf)
+	}
+
+	existingCtx := conf.ToolContexts[existing]
+
+	// Let's make sure the user know if this context didn't have the same
+	// authentication type before.
+	if existingCtx.AuthenticationType != "" &&
+		existingCtx.AuthenticationType != target.AuthenticationType {
+		fmt.Printf("⚠️  Warning: Changing authentication type from '%s' to '%s' for context '%s'\n",
+			existingCtx.AuthenticationType, target.AuthenticationType, target.Name)
+		fmt.Printf("To keep existing context unchanged, use: vcpctl login --context <new-name>\n")
+
+		proceed, err := promptYesNo(ctx, "Continue?")
+		if err != nil {
+			return ToolContext{}, fmt.Errorf("prompting for confirmation: %w", err)
+		}
+		if !proceed {
+			return ToolContext{}, fmt.Errorf("login cancelled")
 		}
 	}
 
-	// If it doesn't exist, add it
-	conf.CurrentContext = toolctx.Name
-	conf.ToolContexts = append(conf.ToolContexts, toolctx)
-	return saveFileConf(conf)
+	conf.CurrentContext = target.Name
+	conf.ToolContexts[existing] = target
+	return target, saveFileConf(conf)
 }
 
 // Backwards compatibility alias.
 func saveCurrentTenant(ctx context.Context, toolctx ToolContext) error {
-	return saveCurrentContext(ctx, toolctx, "")
+	_, err := saveCurrentContext(ctx, toolctx, "")
+	return err
 }
 
 // generateContextName derives a Docker-style context name (e.g., "clever-alpaca") from
@@ -709,16 +725,26 @@ type ToolConf struct {
 	APIURL      string `json:"apiURL"`
 	APIKey      string `json:"apiKey"`
 	AccessToken string `json:"accessToken"`
+
+	AuthenticationType string `json:"authenticationType"`
+	ClientID           string `json:"clientID"`
+	PrivateKey         string `json:"privateKey"`
+	TenantID           string `json:"tenantID"`
+	IssuerURL          string `json:"issuerURL"`
+	Subject            string `json:"subject"`
+	Audience           string `json:"audience"`
+	ContextName        string `json:"contextName"`
 }
 
 func newAPIClient(conf ToolConf) (*api.Client, error) {
 	if conf.AccessToken != "" {
-		return api.NewAccessTokenClient(conf.APIURL, conf.AccessToken)
+		return newAccessTokenAPIClient(conf)
 	}
-	if conf.APIKey == "" {
-		return nil, fmt.Errorf("missing authentication credentials (no access token or API key)")
+	if conf.APIKey != "" {
+		return api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
 	}
-	return api.NewAPIKeyClient(conf.APIURL, conf.APIKey)
+
+	return nil, fmt.Errorf("programmer mistake: no authentication method available, AccessToken and APIKey are both empty in ToolConf")
 }
 
 // This must be used by all other commands to get the API key and API URL.
@@ -771,7 +797,8 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 			APIURL: apiURL,
 			APIKey: apiKey,
 
-			AccessToken: "",
+			AccessToken:        "",
+			AuthenticationType: "apiKey",
 		}, nil
 	}
 
@@ -811,9 +838,17 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 	}
 
 	return ToolConf{
-		APIURL:      current.APIURL,
-		APIKey:      current.APIKey,
-		AccessToken: current.AccessToken,
+		APIURL:             current.APIURL,
+		APIKey:             current.APIKey,
+		AccessToken:        current.AccessToken,
+		AuthenticationType: current.AuthenticationType,
+		ClientID:           current.ClientID,
+		PrivateKey:         current.PrivateKey,
+		TenantID:           current.TenantID,
+		IssuerURL:          current.IssuerURL,
+		Subject:            current.Subject,
+		Audience:           current.Audience,
+		ContextName:        current.Name,
 	}, nil
 }
 
@@ -1236,7 +1271,8 @@ func promptForAPIKey(ctx context.Context, current *Auth) error {
 }
 
 func saveLoginAndReport(ctx context.Context, current Auth, contextName string) error {
-	if err := saveCurrentContext(ctx, current, contextName); err != nil {
+	current, err := saveCurrentContext(ctx, current, contextName)
+	if err != nil {
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 	conf, err := loadFileConf(ctx)

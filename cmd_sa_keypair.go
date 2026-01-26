@@ -158,12 +158,13 @@ func saPutKeypairCmd() *cobra.Command {
 			(also known as 'Key Pair Authentication') Service Account in
 			CyberArk Certificate Manager, SaaS. Returns the Service Account's client ID.
 
-			To know the scopes you can assign to a Service Account, use:
+			To know the scopes you can assign to a keypair Service Account (i.e., a service
+			account for which the authenticationType is "rsaKey"), use:
 
-			  vcpctl sa scopes
+			  vcpctl sa scopes --type rsaKey
 
-			Note that you can only use the scopes that are compatible with
-			the authentication type 'rsaKey' (aka Key Pair Authentication).
+			Note that only one scope that contains the word "role" can appear in the list
+			of scopes assigned to a service account.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa put keypair <sa-name>
@@ -193,7 +194,14 @@ func saPutKeypairCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while retrieving available scopes for 'rsaKey' authentication type: %w", err)
 				}
+
+				scopes = replaceRolesWith(scopes, "platform-admin-role")
 				logutil.Debugf("Using all available scopes for 'rsaKey': %s", strings.Join(scopes, ", "))
+			}
+
+			err = checkDuplicateRoles(scopes)
+			if err != nil {
+				return err
 			}
 
 			// Does it already exist?
