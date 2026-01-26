@@ -119,25 +119,45 @@ func errHandler(w io.Writer, styles fang.Styles, err error) {
 		}
 	}
 
+	errStr := err.Error()
+
 	// Handle multiline error messages by processing each line separately to
 	// preserve the transform while maintaining line breaks.
-	//
-	// Also, don't apply the 'titleFirstWord' transform when the line start with
-	// something that looks like a flag, e.g. "--jwks-url" should not be
-	// transformed to "--Jwks-url".
-	errStr := err.Error()
-	noTitleFirstWord := styles.ErrorText.UnsetTransform()
+	noTitleCasing := styles.ErrorText.UnsetTransform()
+	noTitleCasingAndNoWrap := noTitleCasing.UnsetMaxWidth().UnsetWidth()
 	var errMsgLines []string
 	for i, line := range strings.Split(errStr, "\n") {
 		if line == "" {
 			errMsgLines = append(errMsgLines, "")
 			continue
 		}
-		if i > 0 || strings.HasPrefix(line, "-") {
-			errMsgLines = append(errMsgLines, noTitleFirstWord.Render(line))
+
+		// We only need to title-case the first line. No need to title-case
+		// subsequent lines (that's what noTransform is for: it disables the
+		// title-casing).
+		if i == 0 {
+			// Also, don't apply the 'titleFirstWord' transform when the line
+			// start with something that looks like a flag, e.g. "--jwks-url"
+			// should not be transformed to "--Jwks-url".
+			if strings.HasPrefix(line, "-") {
+				errMsgLines = append(errMsgLines, noTitleCasing.Render(line))
+				continue
+			}
+
+			errMsgLines = append(errMsgLines, styles.ErrorText.Render(line))
 			continue
 		}
-		errMsgLines = append(errMsgLines, styles.ErrorText.Render(line))
+
+		// Let's deal with the non-first lines now.
+		//
+		// If the line starts with empty spaces, don't wrap it as it's most
+		// likely a pre-formatted line (e.g. code snippet, indented list, etc).
+		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			errMsgLines = append(errMsgLines, noTitleCasingAndNoWrap.Render(line))
+			continue
+		}
+
+		errMsgLines = append(errMsgLines, noTitleCasing.Render(line))
 	}
 	errMsgRendered := strings.Join(errMsgLines, "\n")
 
