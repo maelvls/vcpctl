@@ -186,13 +186,13 @@ func confGetCmd() *cobra.Command {
 				yamlData = buf.Bytes()
 			} else if showDeps {
 				// Show all dependencies (old behavior)
-				yamlData, err = renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
+				yamlData, err = renderToYAML(cmd.Context(), saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
 				if err != nil {
 					return err
 				}
 			} else {
 				// Only show WIMConfiguration
-				wimConfig, _, _, _, err := renderToManifests(saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
+				wimConfig, _, _, _, err := renderToManifests(cmd.Context(), saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
 				if err != nil {
 					return fmt.Errorf("while rendering to manifests: %w", err)
 				}

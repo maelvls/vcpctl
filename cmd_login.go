@@ -2,10 +2,10 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
@@ -16,6 +16,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
@@ -62,15 +63,15 @@ var (
 	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
-func promptYesNo(question string) (bool, error) {
+func promptYesNo(ctx context.Context, question string) (bool, error) {
 	fmt.Printf("%s %s: ", question, subtleStyle.Render("(y/n)"))
 
 	// Try to set raw mode for immediate single-character input.
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		// Fallback to line-based input if raw mode not available.
-		reader := bufio.NewReader(os.Stdin)
-		input, err := reader.ReadString('\n')
+		stdin := bufio.NewReader(cancellablereader.New(ctx, os.Stdin))
+		input, err := stdin.ReadString('\n')
 		if err != nil {
 			return false, err
 		}
@@ -81,15 +82,16 @@ func promptYesNo(question string) (bool, error) {
 		case "n", "no":
 			return false, nil
 		}
-		fmt.Println(errorStyle.Render("✗ Please enter 'y' or 'n'"))
-		return promptYesNo(question)
+		fmt.Println(errorStyle.Render("❌  Please enter 'y' or 'n'"))
+		return promptYesNo(ctx, question)
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
 	// Read single character without waiting for Enter.
+	stdin := cancellablereader.New(ctx, os.Stdin)
 	for {
 		var buf [1]byte
-		_, err = os.Stdin.Read(buf[:])
+		_, err = stdin.Read(buf[:])
 		if err != nil {
 			term.Restore(int(os.Stdin.Fd()), oldState)
 			return false, err
@@ -110,8 +112,8 @@ func promptYesNo(question string) (bool, error) {
 	}
 }
 
-func promptString(prompt string, validate func(string) error) (string, error) {
-	reader := bufio.NewReader(os.Stdin)
+func promptString(ctx context.Context, prompt string, validate func(ctx context.Context, input string) error) (string, error) {
+	reader := bufio.NewReader(cancellablereader.New(ctx, os.Stdin))
 	for {
 		fmt.Printf("%s", prompt)
 		input, err := reader.ReadString('\n')
@@ -120,8 +122,8 @@ func promptString(prompt string, validate func(string) error) (string, error) {
 		}
 		input = strings.TrimSpace(input)
 		if validate != nil {
-			if err := validate(input); err != nil {
-				fmt.Println(errorStyle.Render("✗ " + err.Error()))
+			if err := validate(ctx, input); err != nil {
+				fmt.Println(errorStyle.Render("❌ " + err.Error()))
 				continue
 			}
 		}
@@ -233,7 +235,7 @@ func loginCmd(groupID string) *cobra.Command {
 					Username:           resp.User.Username,
 				}
 
-				err = saveCurrentContext(current, contextName)
+				err = saveCurrentContext(cmd.Context(), current, contextName)
 				if err != nil {
 					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
@@ -293,7 +295,7 @@ func loginCmd(groupID string) *cobra.Command {
 					fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
 					fmt.Println()
 
-					apiKeyInput, err := promptString("API Key: ", func(input string) error {
+					apiKeyInput, err := promptString(cmd.Context(), "API Key: ", func(ctx context.Context, input string) error {
 						if input == "" {
 							return fmt.Errorf("API key cannot be empty")
 						}
@@ -328,7 +330,7 @@ func loginCmd(groupID string) *cobra.Command {
 					current.APIKey = apiKeyInput
 				}
 
-				err = saveCurrentContext(current, contextName)
+				err = saveCurrentContext(cmd.Context(), current, contextName)
 				if err != nil {
 					return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 				}
@@ -338,7 +340,7 @@ func loginCmd(groupID string) *cobra.Command {
 			}
 
 			// Load the current configuration.
-			conf, err := loadFileConf()
+			conf, err := loadFileConf(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
@@ -347,14 +349,14 @@ func loginCmd(groupID string) *cobra.Command {
 			// If multiple contexts exist and no --context flag, inform the user
 			if len(conf.ToolContexts) > 1 && contextName == "" {
 				if current.Name != "" {
-					fmt.Printf("\n📝 Logging in using current context '%s'\n", current.Name)
+					fmt.Printf("\n📝  Logging in using current context '%s'\n", current.Name)
 					fmt.Println("\nOther available contexts:")
 					for _, ctx := range conf.ToolContexts {
 						if ctx.Name != current.Name {
 							fmt.Printf("  - %s (%s)\n", ctx.Name, ctx.TenantURL)
 						}
 					}
-					fmt.Printf("\n💡 To log in to a different context, use: vcpctl login --context <name>\n\n")
+					fmt.Printf("\n💡  To log in to a different context, use: vcpctl login --context <name>\n\n")
 				}
 			}
 
@@ -370,13 +372,13 @@ func loginCmd(groupID string) *cobra.Command {
 					fmt.Printf("\n%s\n\n", successStyle.Render("✅  You are already logged in to "+tenantURL))
 
 					// Ask if they want to add a new tenant or re-login to existing one
-					addNew, err := promptYesNo("Do you want to add a new tenant?")
+					addNew, err := promptYesNo(cmd.Context(), "Do you want to add a new tenant?")
 					if err != nil {
 						return fmt.Errorf("prompt cancelled: %w", err)
 					}
 
 					if !addNew {
-						relogin, err := promptYesNo("Do you want to re-login to " + tenantURL + "?")
+						relogin, err := promptYesNo(cmd.Context(), "Do you want to re-login to "+tenantURL+"?")
 						if err != nil {
 							return fmt.Errorf("prompt cancelled: %w", err)
 						}
@@ -406,7 +408,7 @@ func loginCmd(groupID string) *cobra.Command {
 				fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
 				fmt.Println()
 
-				tenantURL, err := promptString("Tenant URL: ", func(input string) error {
+				tenantURL, err := promptString(cmd.Context(), "Tenant URL: ", func(ctx context.Context, input string) error {
 					// Normalize tenant URL
 					input = strings.TrimRight(input, "/")
 					if !strings.HasPrefix(input, "https://") && !strings.HasPrefix(input, "http://") {
@@ -437,7 +439,7 @@ func loginCmd(groupID string) *cobra.Command {
 			fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
 			fmt.Println()
 
-			apiKeyInput, err := promptString("API Key: ", func(input string) error {
+			apiKeyInput, err := promptString(cmd.Context(), "API Key: ", func(ctx context.Context, input string) error {
 				if input == "" {
 					return fmt.Errorf("API key cannot be empty")
 				}
@@ -476,7 +478,7 @@ func loginCmd(groupID string) *cobra.Command {
 			logutil.Infof("\n%s\n", successStyle.Render("✅  You are now authenticated with the user '"+current.Email+"'."))
 
 			// Save the configuration to ~/.config/vcpctl.yaml
-			err = saveCurrentContext(current, contextName)
+			err = saveCurrentContext(cmd.Context(), current, contextName)
 			if err != nil {
 				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 			}
@@ -542,7 +544,7 @@ func apikeyCmd(groupID string) *cobra.Command {
 				logutil.Debugf("$VEN_API_KEY or --api-key has been passed but will be ignored. This command only prints the API key from the configuration file at %s", configPath)
 			}
 
-			conf, err := loadFileConf()
+			conf, err := loadFileConf(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
@@ -580,7 +582,7 @@ func apiurlCmd(groupID string) *cobra.Command {
 				logutil.Debugf("$VEN_API_URL or --api-url has been passed but will be ignored. This command only prints the API URL from the configuration file at %s", configPath)
 			}
 
-			conf, err := loadFileConf()
+			conf, err := loadFileConf(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
@@ -622,7 +624,7 @@ func tenantidCmd(groupID string) *cobra.Command {
 				logutil.Debugf("$VEN_API_URL, $VEN_API_KEY, --api-url, --api-key, or --context has been passed but will be ignored. This command only prints the tenant ID from the configuration file at %s", configPath)
 			}
 
-			conf, err := loadFileConf()
+			conf, err := loadFileConf(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
@@ -658,7 +660,7 @@ func switchCmd(groupID string) *cobra.Command {
 		SilenceUsage:  true,
 		GroupID:       groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf, err := loadFileConf()
+			conf, err := loadFileConf(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("loading configuration: %w", err)
 			}
@@ -763,8 +765,8 @@ func sameContext(a, b ToolContext) bool {
 }
 
 // Meant for the `vcpctl login*` commands.
-func saveCurrentContext(toolctx ToolContext, contextFlag string) error {
-	conf, err := loadFileConf()
+func saveCurrentContext(ctx context.Context, toolctx ToolContext, contextFlag string) error {
+	conf, err := loadFileConf(ctx)
 	if err != nil {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
@@ -799,7 +801,7 @@ func saveCurrentContext(toolctx ToolContext, contextFlag string) error {
 					existingCtx.AuthenticationType, toolctx.AuthenticationType, toolctx.Name)
 				fmt.Printf("To keep existing context unchanged, use: vcpctl login --context <new-name>\n")
 
-				proceed, err := promptYesNo("Continue?")
+				proceed, err := promptYesNo(ctx, "Continue?")
 				if err != nil {
 					return err
 				}
@@ -820,9 +822,9 @@ func saveCurrentContext(toolctx ToolContext, contextFlag string) error {
 	return saveFileConf(conf)
 }
 
-// Backwards compatibility alias
-func saveCurrentTenant(ctx ToolContext) error {
-	return saveCurrentContext(ctx, "")
+// Backwards compatibility alias.
+func saveCurrentTenant(ctx context.Context, toolctx ToolContext) error {
+	return saveCurrentContext(ctx, toolctx, "")
 }
 
 // generateContextName derives a Docker-style context name (e.g., "clever-alpaca") from
@@ -986,7 +988,7 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 
 	logutil.Debugf("none of $VEN_API_KEY, $VEN_API_URL, --api-key, or --api-url is set, using the configuration file at ~/%s", configPath)
 
-	conf, err := loadFileConf()
+	conf, err := loadFileConf(cmd.Context())
 	if err != nil {
 		return ToolConf{}, fmt.Errorf("loading configuration: %w", err)
 	}
@@ -1027,21 +1029,23 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 }
 
 // Only meant to be used by the `auth` commands.
-func loadFileConf() (FileConf, error) {
+func loadFileConf(ctx context.Context) (FileConf, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return FileConf{}, fmt.Errorf("while getting user's home directory: %w", err)
 	}
 
 	f, err := os.Open(path.Join(home, configPath))
-	if os.IsNotExist(err) {
+	switch {
+	case os.IsNotExist(err):
 		return FileConf{}, nil
-	}
-	if err != nil {
+	case err != nil:
 		return FileConf{}, fmt.Errorf("while opening ~/%s: %w", configPath, err)
+	default:
+		// All good, continue below.
 	}
 
-	bytes, err := io.ReadAll(f)
+	bytes, err := cancellablereader.ReadAllWithContext(ctx, f)
 	if err != nil {
 		return FileConf{}, fmt.Errorf("while reading ~/%s: %w", configPath, err)
 	}

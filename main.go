@@ -147,8 +147,8 @@ func errHandler(w io.Writer, styles fang.Styles, err error) {
 	_, _ = fmt.Fprintln(w)
 }
 
-func saResolver(svcAccts []api.ServiceAccountDetails) func(id openapi_types.UUID) (api.ServiceAccountDetails, error) {
-	return func(id openapi_types.UUID) (api.ServiceAccountDetails, error) {
+func saResolver(svcAccts []api.ServiceAccountDetails) func(_ context.Context, id openapi_types.UUID) (api.ServiceAccountDetails, error) {
+	return func(_ context.Context, id openapi_types.UUID) (api.ServiceAccountDetails, error) {
 		found := api.ServiceAccountDetails{}
 		for _, sa := range svcAccts {
 			if sa.Id == openapi_types.UUID(id) {
@@ -163,8 +163,8 @@ func saResolver(svcAccts []api.ServiceAccountDetails) func(id openapi_types.UUID
 	}
 }
 
-func issuingtemplateResolver(templates []api.CertificateIssuingTemplateInformation1) func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
-	return func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
+func issuingtemplateResolver(templates []api.CertificateIssuingTemplateInformation1) func(_ context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
+	return func(_ context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
 		for _, t := range templates {
 			if t.CertificateAuthorityAccountId == caAccountId && t.CertificateAuthorityProductOptionId == caProductOptionId {
 				return t, nil

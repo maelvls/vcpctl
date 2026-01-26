@@ -21,6 +21,7 @@ import (
 	"time"
 
 	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
 
@@ -217,13 +218,18 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 		return errutil.Fixable(fmt.Errorf("--sa-wif requires a JSON file path or '-' for stdin"))
 	}
 
-	var raw []byte
-	var err error
+	var reader io.Reader
 	if wifJSONPath == "-" {
-		raw, err = io.ReadAll(os.Stdin)
+		reader = os.Stdin
 	} else {
-		raw, err = os.ReadFile(wifJSONPath)
+		var err error
+		reader, err = os.Open(wifJSONPath)
+		if err != nil {
+			return fmt.Errorf("while opening %s: %w", wifJSONPath, err)
+		}
 	}
+
+	raw, err := cancellablereader.ReadAllWithContext(ctx, reader)
 	if err != nil {
 		return fmt.Errorf("while reading %s: %w", wifJSONPath, err)
 	}
@@ -302,7 +308,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 		TenantID:           info.TenantID,
 	}
 
-	if err := saveCurrentContext(current, contextName); err != nil {
+	if err := saveCurrentContext(ctx, current, contextName); err != nil {
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 

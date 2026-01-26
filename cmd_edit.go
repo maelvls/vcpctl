@@ -96,12 +96,12 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string, includeD
 
 	var yamlData []byte
 	if includeDeps {
-		yamlData, err = renderToYAML(saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
+		yamlData, err = renderToYAML(ctx, saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
 		if err != nil {
 			return err
 		}
 	} else {
-		wimConfig, _, _, _, err := renderToManifests(saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
+		wimConfig, _, _, _, err := renderToManifests(ctx, saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
 		if err != nil {
 			return fmt.Errorf("while rendering to manifests: %w", err)
 		}
@@ -126,10 +126,11 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string, includeD
 	}
 
 	return editManifestsInEditor(
+		ctx,
 		yamlData,
 		parseFn,
 		func(items []manifest.Manifest) error {
-			err := applyManifests(cl, items, false)
+			err := applyManifests(ctx, cl, items, false)
 			if err != nil {
 				return fmt.Errorf("while merging and patching Workload Identity Manager configuration: %w", err)
 			}
@@ -139,6 +140,7 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string, includeD
 }
 
 func editManifestsInEditor(
+	ctx context.Context,
 	initial []byte,
 	parse func([]byte) ([]manifest.Manifest, error),
 	apply func([]manifest.Manifest) error,

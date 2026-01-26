@@ -314,12 +314,13 @@ func saEditCmd() *cobra.Command {
 			}
 
 			return editManifestsInEditor(
+				cmd.Context(),
 				buf.Bytes(),
 				func(raw []byte) ([]manifest.Manifest, error) {
 					return parseSingleManifestOfKind(raw, kindServiceAccount)
 				},
 				func(items []manifest.Manifest) error {
-					if err := applyManifests(apiClient, items, false); err != nil {
+					if err := applyManifests(cmd.Context(), apiClient, items, false); err != nil {
 						return fmt.Errorf("sa edit: while patching ServiceAccount: %w", err)
 					}
 					return nil

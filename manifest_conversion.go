@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	api "github.com/maelvls/vcpctl/api"
@@ -9,14 +10,14 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func resolve[T any, V any](items []T, nameFunc func(T) (V, error)) ([]V, error) {
+func resolve[T any, V any](ctx context.Context, items []T, nameFunc func(context.Context, T) (V, error)) ([]V, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
 	result := make([]V, len(items))
 	for i, item := range items {
 		var err error
-		result[i], err = nameFunc(item)
+		result[i], err = nameFunc(ctx, item)
 		if err != nil {
 			return nil, fmt.Errorf("namesFrom: while getting name for #%d: %w", i+1, err)
 		}
@@ -30,13 +31,14 @@ func resolve[T any, V any](items []T, nameFunc func(T) (V, error)) ([]V, error) 
 //   - serviceAccountIds
 //   - subCaProvider.Id
 func manifestToAPIExtendedConfigurationInformation(
-	resolvePolicy func(string) (api.ExtendedPolicyInformation, error),
-	resolveSA func(string) (api.ServiceAccountDetails, error),
-	resolveSubCaProvider func(string) (api.SubCaProviderInformation, error),
+	ctx context.Context,
+	resolvePolicy func(context.Context, string) (api.ExtendedPolicyInformation, error),
+	resolveSA func(context.Context, string) (api.ServiceAccountDetails, error),
+	resolveSubCaProvider func(context.Context, string) (api.SubCaProviderInformation, error),
 	in manifest.WIMConfiguration,
 ) (api.ExtendedConfigurationInformation, error) {
-	policyIDs, err := resolve(in.PolicyNames, func(name string) (openapi_types.UUID, error) {
-		policy, err := resolvePolicy(name)
+	policyIDs, err := resolve(ctx, in.PolicyNames, func(ctx context.Context, name string) (openapi_types.UUID, error) {
+		policy, err := resolvePolicy(ctx, name)
 		if err != nil {
 			return openapi_types.UUID{}, err
 		}
@@ -45,8 +47,8 @@ func manifestToAPIExtendedConfigurationInformation(
 	if err != nil {
 		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while resolving PolicyNames to PolicyIds: %w", err)
 	}
-	serviceAccountIDs, err := resolve(in.ServiceAccountNames, func(name string) (openapi_types.UUID, error) {
-		sa, err := resolveSA(name)
+	serviceAccountIDs, err := resolve(ctx, in.ServiceAccountNames, func(ctx context.Context, name string) (openapi_types.UUID, error) {
+		sa, err := resolveSA(ctx, name)
 		if err != nil {
 			return openapi_types.UUID{}, err
 		}
@@ -55,12 +57,12 @@ func manifestToAPIExtendedConfigurationInformation(
 	if err != nil {
 		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while resolving ServiceAccountNames to ServiceAccountIds: %w", err)
 	}
-	subCaProvider, err := resolveSubCaProvider(in.SubCaProviderName)
+	subCaProvider, err := resolveSubCaProvider(ctx, in.SubCaProviderName)
 	if err != nil {
 		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while resolving SubCaProviderName to api.SubCaProviderInformation: %w", err)
 	}
 
-	clientAuthentication, err := manifestToAPIClientAuthentication(resolvePolicy, in.ClientAuthentication)
+	clientAuthentication, err := manifestToAPIClientAuthentication(ctx, resolvePolicy, in.ClientAuthentication)
 	if err != nil {
 		return api.ExtendedConfigurationInformation{}, fmt.Errorf("manifestToAPIExtendedConfigurationInformation: while converting ClientAuthentication: %w", err)
 	}
@@ -90,24 +92,28 @@ func manifestToAPIExtendedConfigurationInformation(
 	}, nil
 }
 
-func apiToManifestWIMConfiguration(resolveSA func(openapi_types.UUID) (api.ServiceAccountDetails, error), cfg api.ExtendedConfigurationInformation) (manifest.WIMConfiguration, error) {
+func apiToManifestWIMConfiguration(
+	ctx context.Context,
+	resolveSA func(context.Context, openapi_types.UUID) (api.ServiceAccountDetails, error),
+	cfg api.ExtendedConfigurationInformation,
+) (manifest.WIMConfiguration, error) {
 	clientAuthentication, err := apiToManifestClientAuthentication(cfg.ClientAuthentication)
 	if err != nil {
 		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while converting ClientAuthentication: %w", err)
 	}
 
-	serviceAccounts, err := resolve(cfg.ServiceAccountIds, resolveSA)
+	serviceAccounts, err := resolve(ctx, cfg.ServiceAccountIds, resolveSA)
 	if err != nil {
 		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while resolving ServiceAccounts from ServiceAccountIds: %w", err)
 	}
-	serviceAccountNames, err := resolve(serviceAccounts, func(sa api.ServiceAccountDetails) (string, error) {
+	serviceAccountNames, err := resolve(ctx, serviceAccounts, func(ctx context.Context, sa api.ServiceAccountDetails) (string, error) {
 		return sa.Name, nil
 	})
 	if err != nil {
 		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while resolving names from ServiceAccounts: %w", err)
 	}
 
-	policyNames, err := resolve(cfg.Policies, func(p api.PolicyInformation) (string, error) {
+	policyNames, err := resolve(ctx, cfg.Policies, func(ctx context.Context, p api.PolicyInformation) (string, error) {
 		return p.Name, nil
 	})
 	if err != nil {
@@ -180,7 +186,8 @@ func apiToManifestJwtClientInformation(in []api.JwtClientInformation) ([]manifes
 // manifestToAPIClientAuthentication converts manifest ClientAuthentication to API union type.
 // ClientAuthenticationInformation is a union type, so we use JSON marshaling to handle it.
 func manifestToAPIClientAuthentication(
-	resolvePolicy func(string) (api.ExtendedPolicyInformation, error),
+	ctx context.Context,
+	resolvePolicy func(context.Context, string) (api.ExtendedPolicyInformation, error),
 	in manifest.ClientAuthentication,
 ) (api.ClientAuthenticationInformation, error) {
 	switch in.Type {
@@ -195,7 +202,7 @@ func manifestToAPIClientAuthentication(
 		return result, nil
 	case "JWT_STANDARD_CLAIMS":
 		var result api.ClientAuthenticationInformation
-		jwtClients, err := manifestToAPIJwtClientInformation(resolvePolicy, in.Clients)
+		jwtClients, err := manifestToAPIJwtClientInformation(ctx, resolvePolicy, in.Clients)
 		if err != nil {
 			return api.ClientAuthenticationInformation{}, fmt.Errorf("manifestToAPIClientAuthentication: while converting clients for clientAuthentication type=JWT_STANDARD_CLAIMS: %w", err)
 		}
@@ -222,12 +229,16 @@ func manifestToAPIClientAuthentication(
 	}
 }
 
-func manifestToAPIJwtClientInformation(resolvePolicy func(string) (api.ExtendedPolicyInformation, error), in []manifest.ClientAuthenticationClient) ([]api.JwtClientInformation, error) {
+func manifestToAPIJwtClientInformation(
+	ctx context.Context,
+	resolvePolicy func(context.Context, string) (api.ExtendedPolicyInformation, error),
+	in []manifest.ClientAuthenticationClient,
+) ([]api.JwtClientInformation, error) {
 	var result []api.JwtClientInformation
 	for _, c := range in {
 		var allowedPolicyIDs []openapi_types.UUID
 		for _, name := range c.AllowedPolicies {
-			policy, err := resolvePolicy(name)
+			policy, err := resolvePolicy(ctx, name)
 			if err != nil {
 				return nil, err
 			}
@@ -595,10 +606,14 @@ func manifestToAPISubCa(resolveIssuingTmpl func(string) (api.CertificateIssuingT
 	}, nil
 }
 
-func apiToManifestSubCa(resolve func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error), in api.SubCaProviderInformation) (manifest.SubCa, error) {
-	tmpl, err := resolve(in.CaAccountId, in.CaProductOptionId)
+func apiToManifestSubCa(
+	ctx context.Context,
+	resolve func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	in api.SubCaProviderInformation,
+) (manifest.SubCa, error) {
+	tmpl, err := resolve(ctx, in.CaAccountId, in.CaProductOptionId)
 	if err != nil {
-		return manifest.SubCa{}, fmt.Errorf("apiToManifestSubCa: while resolving issuing template for CaAccountId=%q and CaProductOptionId=%q: %w", in.CaAccountId, in.CaProductOptionId, err)
+		return manifest.SubCa{}, fmt.Errorf("while resolving issuing template for CaAccountId=%q and CaProductOptionId=%q: %w", in.CaAccountId, in.CaProductOptionId, err)
 	}
 
 	return manifest.SubCa{

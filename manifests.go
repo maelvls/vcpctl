@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -93,8 +94,9 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 }
 
 func renderToManifests(
-	resolveSA func(openapi_types.UUID) (api.ServiceAccountDetails, error),
-	resolveIssuingTemplates func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	ctx context.Context,
+	resolveSA func(context.Context, openapi_types.UUID) (api.ServiceAccountDetails, error),
+	resolveIssuingTemplates func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
 	cfg api.ExtendedConfigurationInformation,
 ) (manifest.WIMConfiguration, []manifest.ServiceAccount, []manifest.Policy, manifest.SubCa, error) {
 	var wimConfig manifest.WIMConfiguration
@@ -102,9 +104,9 @@ func renderToManifests(
 
 	var serviceAccounts []manifest.ServiceAccount
 	for _, sa := range cfg.ServiceAccountIds {
-		resolvedSA, err := resolveSA(sa)
+		resolvedSA, err := resolveSA(ctx, sa)
 		if err != nil {
-			return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("renderToManifests: while resolving ServiceAccount ID %q: %w", sa, err)
+			return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("while resolving ServiceAccount ID %q: %w", sa, err)
 		}
 		serviceAccounts = append(serviceAccounts, apiToManifestServiceAccount(resolvedSA))
 	}
@@ -114,28 +116,29 @@ func renderToManifests(
 		policies = append(policies, apiToManifestPolicyInformation(p))
 	}
 
-	wimConfig, err := apiToManifestWIMConfiguration(resolveSA, cfg)
+	wimConfig, err := apiToManifestWIMConfiguration(ctx, resolveSA, cfg)
 	if err != nil {
-		return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("renderToManifests: while converting WIMConfiguration: %w", err)
+		return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("while converting WIMConfiguration: %w", err)
 	}
 
 	var subCa manifest.SubCa
-	subCa, err = apiToManifestSubCa(resolveIssuingTemplates, cfg.SubCaProvider)
+	subCa, err = apiToManifestSubCa(ctx, resolveIssuingTemplates, cfg.SubCaProvider)
 	if err != nil {
-		return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("renderToManifests: while converting SubCaProvider: %w", err)
+		return manifest.WIMConfiguration{}, nil, nil, manifest.SubCa{}, fmt.Errorf("while converting SubCaProvider: %w", err)
 	}
 
 	return wimConfig, serviceAccounts, policies, subCa, nil
 }
 
 func renderToYAML(
-	resolveSA func(openapi_types.UUID) (api.ServiceAccountDetails, error),
-	resolveIssuingTemplates func(caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	ctx context.Context,
+	resolveSA func(context.Context, openapi_types.UUID) (api.ServiceAccountDetails, error),
+	resolveIssuingTemplates func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
 	cfg api.ExtendedConfigurationInformation,
 ) ([]byte, error) {
 	manifests := []manifest.Manifest{}
 
-	wimConfig, serviceAccounts, policies, subCa, err := renderToManifests(resolveSA, resolveIssuingTemplates, cfg)
+	wimConfig, serviceAccounts, policies, subCa, err := renderToManifests(ctx, resolveSA, resolveIssuingTemplates, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("while rendering to manifests: %w", err)
 	}

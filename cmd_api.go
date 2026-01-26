@@ -15,6 +15,7 @@ import (
 
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/spf13/cobra"
 )
 
@@ -430,7 +431,7 @@ func magicFieldValue(ctx context.Context, v string) (any, error) {
 			fd = fdCloser
 		}
 
-		data, err = io.ReadAll(New(ctx, fd))
+		data, err = cancellablereader.ReadAllWithContext(ctx, fd)
 		if err != nil {
 			return nil, fmt.Errorf("reading file %q: %w", filename, err)
 		}

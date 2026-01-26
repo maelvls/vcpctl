@@ -133,7 +133,7 @@ func subcaGetCmd() *cobra.Command {
 					return fmt.Errorf("while getting issuing templates: %w", err)
 				}
 
-				manifestSubCa, err := apiToManifestSubCa(issuingtemplateResolver(issuingTemplates), subca)
+				manifestSubCa, err := apiToManifestSubCa(cmd.Context(), issuingtemplateResolver(issuingTemplates), subca)
 				if err != nil {
 					return fmt.Errorf("while converting to manifest: %w", err)
 				}
@@ -249,7 +249,7 @@ func subcaEditCmd() *cobra.Command {
 				return fmt.Errorf("subca edit: while getting issuing templates: %w", err)
 			}
 
-			manifestSubCa, err := apiToManifestSubCa(issuingtemplateResolver(issuingTemplates), subca)
+			manifestSubCa, err := apiToManifestSubCa(cmd.Context(), issuingtemplateResolver(issuingTemplates), subca)
 			if err != nil {
 				return fmt.Errorf("subca edit: while converting to manifest: %w", err)
 			}
@@ -266,12 +266,13 @@ func subcaEditCmd() *cobra.Command {
 			}
 
 			return editManifestsInEditor(
+				cmd.Context(),
 				buf.Bytes(),
 				func(raw []byte) ([]manifest.Manifest, error) {
 					return parseSingleManifestOfKind(raw, kindWIMSubCaProvider)
 				},
 				func(items []manifest.Manifest) error {
-					if err := applyManifests(apiClient, items, false); err != nil {
+					if err := applyManifests(cmd.Context(), apiClient, items, false); err != nil {
 						return fmt.Errorf("subca edit: while patching WIMSubCAProvider: %w", err)
 					}
 					return nil

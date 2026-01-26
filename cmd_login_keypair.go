@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
+	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
 	"github.com/spf13/cobra"
@@ -91,7 +92,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				Username:           saName,
 			}
 
-			if err := saveCurrentContext(current, contextName); err != nil {
+			if err := saveCurrentContext(ctx, current, contextName); err != nil {
 				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 			}
 
@@ -119,13 +120,18 @@ type serviceAccountTokenResponse struct {
 }
 
 func readJSONAuthKeypair(path string) (jsonAuthKeypair, error) {
-	var raw []byte
-	var err error
+	var reader io.Reader
 	if path == "-" {
-		raw, err = io.ReadAll(os.Stdin)
+		reader = cancellablereader.New(context.Background(), os.Stdin)
 	} else {
-		raw, err = os.ReadFile(path)
+		var err error
+		reader, err = os.Open(path)
+		if err != nil {
+			return jsonAuthKeypair{}, fmt.Errorf("while opening %s: %w", path, err)
+		}
 	}
+
+	raw, err := cancellablereader.ReadAllWithContext(context.Background(), reader)
 	if err != nil {
 		return jsonAuthKeypair{}, fmt.Errorf("while reading %s: %w", path, err)
 	}
