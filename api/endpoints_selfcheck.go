@@ -85,8 +85,17 @@ func SelfCheckServiceAccount(ctx context.Context, cl *Client) (saName string, _ 
 	// Expected, continue below.
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return "", HTTPErrorFrom(resp)
+	case http.StatusOK:
+		// Somewhat unexpected, but possible if the service account's name
+		// matches an existing user account.
+		var result UserAccountResponse
+		err = json.Unmarshal(body, &result)
+		if err != nil {
+			return "", fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
+		}
+		return result.User.Username, nil
 	default:
-		return "", fmt.Errorf("expected status code 500, but got: when checking service account, but got: %w", HTTPErrorFrom(resp))
+		return "", fmt.Errorf("expected status code 500 or 200, but got: when checking service account, but got: %w", HTTPErrorFrom(resp))
 	}
 
 	var result struct {
