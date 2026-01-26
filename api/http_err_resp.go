@@ -69,3 +69,19 @@ func ErrIsHTTPUnauthorized(err error) bool {
 	}
 	return false
 }
+
+func ErrIsHTTPForbidden(err error) bool {
+	var httpErr HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusForbidden
+	}
+	return false
+}
+
+func ErrIsHTTPNotFound(err error) bool {
+	var httpErr HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusNotFound
+	}
+	return false
+}

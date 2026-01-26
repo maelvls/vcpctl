@@ -77,8 +77,16 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 			// We can't run SelfCheckAPIKeys() here because it only works with
 			// API keys. But we can still know the service account name.
 			saName, err := api.SelfCheckServiceAccount(cmd.Context(), cl)
-			if err != nil {
+			switch {
+			case api.ErrIsHTTPForbidden(err):
+				// This endpoint only works when the service account has the
+				// scope 'platform-admin-role', otherwise it returns 403. Let's
+				// just ignore the error and pretend the check passed and
+				// continue below.
+			case err != nil:
 				return fmt.Errorf("while checking service account: %w", err)
+			default:
+				// Check passed, continue below.
 			}
 
 			current := Auth{
@@ -94,7 +102,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 			}
 
-			logutil.Infof("✅  You are now authenticated with the service account '%s'.", current.Username)
+			logutil.Infof("✅  You are now authenticated. Context: %s", displayContextForSelection(current))
 			return nil
 		},
 	}

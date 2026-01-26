@@ -279,7 +279,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 	// TODO: This logic should be run anytime a 401 is received, for for now,
 	// let's just do it once.
 	var accessToken string
-	retryDeadline := time.Now().Add(5 * time.Minute)
+	retryDeadline := time.Now().Add(1 * time.Minute)
 	for {
 		accessToken, err = exchangeJWTForAccessToken(ctx, info.APIURL, info.TenantID, jwtString)
 		if err == nil {
@@ -294,7 +294,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(5 * time.Second):
+		case <-time.After(1 * time.Second):
 		}
 	}
 
@@ -312,7 +312,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextName strin
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}
 
-	logutil.Infof("✅  You are now authenticated with a WIF service account")
+	logutil.Infof("✅  You are now authenticated. Context: %s", displayContextForSelection(current))
 	return nil
 }
 
