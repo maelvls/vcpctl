@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/maelvls/undent"
@@ -39,7 +38,7 @@ func attachSaCmd(groupID string) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = api.AttachSAToConf(context.Background(), apiClient, confName, saName)
+			err = api.AttachSAToConf(cmd.Context(), apiClient, confName, saName)
 			if err != nil {
 				return fmt.Errorf("%w", err)
 			}

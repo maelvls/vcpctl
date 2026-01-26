@@ -49,14 +49,12 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-
 			if len(args) < 1 {
 				return errutil.Fixable(fmt.Errorf("a file path to the JSON authentication file or '-' for stdin is required"))
 			}
 			saKeyPath := args[0]
 
-			saKey, err := readJSONAuthKeypair(saKeyPath)
+			saKey, err := readJSONAuthKeypair(cmd.Context(), saKeyPath)
 			if err != nil {
 				return err
 			}
@@ -66,7 +64,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				return fmt.Errorf("while signing JWT: %w", err)
 			}
 
-			accessToken, err := exchangeServiceAccountJWT(ctx, saKey.APIURL, signedJWT)
+			accessToken, err := exchangeServiceAccountJWT(cmd.Context(), saKey.APIURL, signedJWT)
 			if err != nil {
 				return fmt.Errorf("while exchanging JWT for access token: %w", err)
 			}
@@ -78,7 +76,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 
 			// We can't run SelfCheckAPIKeys() here because it only works with
 			// API keys. But we can still know the service account name.
-			saName, err := api.SelfCheckServiceAccount(ctx, cl)
+			saName, err := api.SelfCheckServiceAccount(cmd.Context(), cl)
 			if err != nil {
 				return fmt.Errorf("while checking service account: %w", err)
 			}
@@ -92,7 +90,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				Username:           saName,
 			}
 
-			if err := saveCurrentContext(ctx, current, contextName); err != nil {
+			if err := saveCurrentContext(cmd.Context(), current, contextName); err != nil {
 				return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 			}
 
@@ -119,10 +117,10 @@ type serviceAccountTokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func readJSONAuthKeypair(path string) (jsonAuthKeypair, error) {
+func readJSONAuthKeypair(ctx context.Context, path string) (jsonAuthKeypair, error) {
 	var reader io.Reader
 	if path == "-" {
-		reader = cancellablereader.New(context.Background(), os.Stdin)
+		reader = os.Stdin
 	} else {
 		var err error
 		reader, err = os.Open(path)
@@ -131,7 +129,7 @@ func readJSONAuthKeypair(path string) (jsonAuthKeypair, error) {
 		}
 	}
 
-	raw, err := cancellablereader.ReadAllWithContext(context.Background(), reader)
+	raw, err := cancellablereader.ReadAllWithContext(ctx, reader)
 	if err != nil {
 		return jsonAuthKeypair{}, fmt.Errorf("while reading %s: %w", path, err)
 	}

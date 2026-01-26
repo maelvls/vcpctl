@@ -63,7 +63,7 @@ func confEditCmd() *cobra.Command {
 				return fmt.Errorf("edit: %w", err)
 			}
 
-			err = confEditCmdLogic(context.Background(), client, args[0], showDeps)
+			err = confEditCmdLogic(cmd.Context(), client, args[0], showDeps)
 			if err != nil {
 				return fmt.Errorf("edit: %w", err)
 			}

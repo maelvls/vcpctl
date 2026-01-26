@@ -197,7 +197,7 @@ func AttachSAToConf(ctx context.Context, cl *Client, confName, saName string) er
 	}
 
 	// Find service accounts.
-	knownSvcaccts, err := GetServiceAccounts(context.Background(), cl)
+	knownSvcaccts, err := GetServiceAccounts(ctx, cl)
 	if err != nil {
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}

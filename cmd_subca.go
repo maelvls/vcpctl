@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -66,7 +65,7 @@ func subcaLsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			providers, err := api.GetSubCAProviders(context.Background(), apiClient)
+			providers, err := api.GetSubCAProviders(cmd.Context(), apiClient)
 			if err != nil {
 				return fmt.Errorf("while listing subCA providers: %w", err)
 			}
@@ -118,7 +117,7 @@ func subcaGetCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			subca, err := api.GetSubCAProvider(context.Background(), apiClient, nameOrID)
+			subca, err := api.GetSubCAProvider(cmd.Context(), apiClient, nameOrID)
 			if err != nil {
 				return fmt.Errorf("while getting SubCA Provider: %w", err)
 			}
@@ -128,7 +127,7 @@ func subcaGetCmd() *cobra.Command {
 				outputData = subca
 			} else {
 				// Need to resolve issuing templates like in conf get
-				issuingTemplates, err := api.GetIssuingTemplates(context.Background(), apiClient)
+				issuingTemplates, err := api.GetIssuingTemplates(cmd.Context(), apiClient)
 				if err != nil {
 					return fmt.Errorf("while getting issuing templates: %w", err)
 				}
@@ -197,7 +196,7 @@ func subcaRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = api.DeleteSubCaProvider(context.Background(), apiClient, providerNameOrID)
+			err = api.DeleteSubCaProvider(cmd.Context(), apiClient, providerNameOrID)
 			if err != nil {
 				return fmt.Errorf("rm: %w", err)
 			}
@@ -236,7 +235,7 @@ func subcaEditCmd() *cobra.Command {
 				return fmt.Errorf("subca edit: while creating API client: %w", err)
 			}
 
-			subca, err := api.GetSubCAProvider(context.Background(), apiClient, nameOrID)
+			subca, err := api.GetSubCAProvider(cmd.Context(), apiClient, nameOrID)
 			switch {
 			case errors.As(err, &errutil.NotFound{}):
 				return errutil.Fixable(fmt.Errorf("SubCA Provider '%s' not found. Please create it first using 'vcpctl apply -f <manifest.yaml>'", nameOrID))
@@ -244,7 +243,7 @@ func subcaEditCmd() *cobra.Command {
 				return fmt.Errorf("subca edit: while getting SubCA Provider: %w", err)
 			}
 
-			issuingTemplates, err := api.GetIssuingTemplates(context.Background(), apiClient)
+			issuingTemplates, err := api.GetIssuingTemplates(cmd.Context(), apiClient)
 			if err != nil {
 				return fmt.Errorf("subca edit: while getting issuing templates: %w", err)
 			}

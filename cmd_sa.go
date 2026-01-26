@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -83,7 +82,7 @@ func saLsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			svcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
+			svcaccts, err := api.GetServiceAccounts(cmd.Context(), apiClient)
 			if err != nil {
 				return fmt.Errorf("while listing service accounts: %w", err)
 			}
@@ -211,7 +210,7 @@ func saGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			sa, err := api.GetServiceAccount(context.Background(), apiClient, saName)
+			sa, err := api.GetServiceAccount(cmd.Context(), apiClient, saName)
 			if err != nil {
 				if errutil.ErrIsNotFound(err) {
 					return fmt.Errorf("service account '%s' not found", saName)
@@ -294,7 +293,7 @@ func saEditCmd() *cobra.Command {
 				return fmt.Errorf("sa edit: while creating API client: %w", err)
 			}
 
-			sa, err := api.GetServiceAccount(context.Background(), apiClient, nameOrID)
+			sa, err := api.GetServiceAccount(cmd.Context(), apiClient, nameOrID)
 			switch {
 			case errors.As(err, &errutil.NotFound{}):
 				return errutil.Fixable(fmt.Errorf("service account '%s' not found. Please create it first using 'vcpctl sa put keypair %s' or 'vcpctl sa put wif %s'", nameOrID, nameOrID, nameOrID))
@@ -360,7 +359,7 @@ func saScopesCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			scopes, err := api.GetServiceAccountScopes(context.Background(), apiClient)
+			scopes, err := api.GetServiceAccountScopes(cmd.Context(), apiClient)
 			if err != nil {
 				return fmt.Errorf("while listing scopes: %w", err)
 			}
@@ -443,7 +442,7 @@ func saRmCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("while creating API client: %w", err)
 				}
-				svcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
+				svcaccts, err := api.GetServiceAccounts(cmd.Context(), apiClient)
 				if err != nil {
 					return fmt.Errorf("while listing service accounts: %w", err)
 				}
@@ -451,7 +450,7 @@ func saRmCmd() *cobra.Command {
 				// Use a simple prompt to select the service account to remove.
 				selected := rmInteractive(svcaccts)
 				for _, saID := range selected {
-					err = api.DeleteServiceAccount(context.Background(), apiClient, saID)
+					err = api.DeleteServiceAccount(cmd.Context(), apiClient, saID)
 					if err != nil {
 						return fmt.Errorf("while removing service account '%s': %w", saID, err)
 					}
@@ -474,7 +473,7 @@ func saRmCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			err = api.DeleteServiceAccount(context.Background(), apiClient, saName)
+			err = api.DeleteServiceAccount(cmd.Context(), apiClient, saName)
 			if err != nil {
 				return fmt.Errorf("sa rm: %w", err)
 			}

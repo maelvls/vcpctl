@@ -202,7 +202,7 @@ func requireNotCalled(t *testing.T, msgAndArgs ...any) func(t *testing.T, expect
 func run(t *testing.T, givenManifests string, mock []mocksrv.Interaction) {
 	t.Helper()
 
-	_, cancel := context.WithCancelCause(t.Context())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
 	srv := mocksrv.UncheckedMock(t, mock, cancel)
 
@@ -213,7 +213,7 @@ func run(t *testing.T, givenManifests string, mock []mocksrv.Interaction) {
 	cl, err := api.NewClient(srv.URL)
 	require.NoError(t, err)
 
-	err = applyManifests(cl, manifests, dryrun)
+	err = applyManifests(ctx, cl, manifests, dryrun)
 	require.NoError(t, err)
 }
 

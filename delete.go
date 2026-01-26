@@ -27,13 +27,13 @@ func deleteManifests(ctx context.Context, cl *api.Client, manifests []manifest.M
 		var err error
 		switch {
 		case item.ServiceAccount != nil:
-			err = deleteCtx.deleteServiceAccount(*item.ServiceAccount)
+			err = deleteCtx.deleteServiceAccount(ctx, *item.ServiceAccount)
 		case item.Policy != nil:
-			err = deleteCtx.deletePolicy(*item.Policy)
+			err = deleteCtx.deletePolicy(ctx, *item.Policy)
 		case item.SubCa != nil:
-			err = deleteCtx.deleteSubCa(*item.SubCa)
+			err = deleteCtx.deleteSubCa(ctx, *item.SubCa)
 		case item.WIMConfiguration != nil:
-			err = deleteCtx.deleteConfig(*item.WIMConfiguration)
+			err = deleteCtx.deleteConfig(ctx, *item.WIMConfiguration)
 		default:
 			err = fmt.Errorf("manifest #%d: empty or unknown manifest", i+1)
 		}
@@ -63,14 +63,14 @@ func newManifestDeleteContext(ctx context.Context, cl *api.Client, ignoreNotFoun
 	}
 }
 
-func (ctx *manifestDeleteContext) deleteServiceAccount(in manifest.ServiceAccount) error {
+func (deletectx *manifestDeleteContext) deleteServiceAccount(ctx context.Context, in manifest.ServiceAccount) error {
 	if in.Name == "" {
 		return fmt.Errorf("ServiceAccount: name must be set")
 	}
 
-	err := api.DeleteServiceAccount(context.Background(), ctx.client, in.Name)
+	err := api.DeleteServiceAccount(ctx, deletectx.client, in.Name)
 	switch {
-	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+	case errutil.ErrIsNotFound(err) && deletectx.shouldIgnoreNotFound(err):
 		return nil
 	case errutil.ErrIsNotFound(err):
 		return fmt.Errorf("ServiceAccount %q not found", in.Name)
@@ -82,14 +82,14 @@ func (ctx *manifestDeleteContext) deleteServiceAccount(in manifest.ServiceAccoun
 	return nil
 }
 
-func (ctx *manifestDeleteContext) deletePolicy(in manifest.Policy) error {
+func (deletectx *manifestDeleteContext) deletePolicy(ctx context.Context, in manifest.Policy) error {
 	if in.Name == "" {
 		return fmt.Errorf("WIMIssuerPolicy: name must be set")
 	}
 
-	err := api.DeletePolicy(context.Background(), ctx.client, in.Name)
+	err := api.DeletePolicy(ctx, deletectx.client, in.Name)
 	switch {
-	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+	case errutil.ErrIsNotFound(err) && deletectx.shouldIgnoreNotFound(err):
 		return nil
 	case errutil.ErrIsNotFound(err):
 		return fmt.Errorf("WIMIssuerPolicy %q not found", in.Name)
@@ -101,14 +101,14 @@ func (ctx *manifestDeleteContext) deletePolicy(in manifest.Policy) error {
 	return nil
 }
 
-func (ctx *manifestDeleteContext) deleteSubCa(in manifest.SubCa) error {
+func (deletectx *manifestDeleteContext) deleteSubCa(ctx context.Context, in manifest.SubCa) error {
 	if in.Name == "" {
 		return fmt.Errorf("WIMSubCAProvider: name must be set")
 	}
 
-	err := api.DeleteSubCaProvider(context.Background(), ctx.client, in.Name)
+	err := api.DeleteSubCaProvider(ctx, deletectx.client, in.Name)
 	switch {
-	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+	case errutil.ErrIsNotFound(err) && deletectx.shouldIgnoreNotFound(err):
 		return nil
 	case errutil.ErrIsNotFound(err):
 		return fmt.Errorf("WIMSubCAProvider %q not found", in.Name)
@@ -120,14 +120,14 @@ func (ctx *manifestDeleteContext) deleteSubCa(in manifest.SubCa) error {
 	return nil
 }
 
-func (ctx *manifestDeleteContext) deleteConfig(in manifest.WIMConfiguration) error {
+func (deletectx *manifestDeleteContext) deleteConfig(ctx context.Context, in manifest.WIMConfiguration) error {
 	if in.Name == "" {
 		return fmt.Errorf("WIMConfiguration: name must be set")
 	}
 
-	err := api.RemoveConfig(context.Background(), ctx.client, in.Name)
+	err := api.RemoveConfig(ctx, deletectx.client, in.Name)
 	switch {
-	case errutil.ErrIsNotFound(err) && ctx.shouldIgnoreNotFound(err):
+	case errutil.ErrIsNotFound(err) && deletectx.shouldIgnoreNotFound(err):
 		return nil
 	case errutil.ErrIsNotFound(err):
 		return fmt.Errorf("WIMConfiguration %q not found", in.Name)
@@ -139,8 +139,8 @@ func (ctx *manifestDeleteContext) deleteConfig(in manifest.WIMConfiguration) err
 	return nil
 }
 
-func (ctx *manifestDeleteContext) shouldIgnoreNotFound(err error) bool {
-	if !ctx.ignoreNotFound {
+func (deletectx *manifestDeleteContext) shouldIgnoreNotFound(err error) bool {
+	if !deletectx.ignoreNotFound {
 		return false
 	}
 	var notFound errutil.NotFound

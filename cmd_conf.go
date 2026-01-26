@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -55,12 +54,12 @@ func confLsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
-			confs, err := api.GetConfigs(context.Background(), apiClient)
+			confs, err := api.GetConfigs(cmd.Context(), apiClient)
 			if err != nil {
 				return fmt.Errorf("while listing configurations: %w", err)
 			}
 
-			knownSvcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
+			knownSvcaccts, err := api.GetServiceAccounts(cmd.Context(), apiClient)
 			if err != nil {
 				return fmt.Errorf("fetching service accounts: %w", err)
 			}
@@ -162,17 +161,17 @@ func confGetCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			knownSvcaccts, err := api.GetServiceAccounts(context.Background(), apiClient)
+			knownSvcaccts, err := api.GetServiceAccounts(cmd.Context(), apiClient)
 			if err != nil {
 				return fmt.Errorf("while fetching service accounts: %w", err)
 			}
 
-			config, err := api.GetConfig(context.Background(), apiClient, idOrName)
+			config, err := api.GetConfig(cmd.Context(), apiClient, idOrName)
 			if err != nil {
 				return fmt.Errorf("while getting original Workload Identity Manager configuration: %w", err)
 			}
 
-			issuingTemplates, err := api.GetIssuingTemplates(context.Background(), apiClient)
+			issuingTemplates, err := api.GetIssuingTemplates(cmd.Context(), apiClient)
 
 			var yamlData []byte
 			if raw {
@@ -262,13 +261,13 @@ func confRmCmd() *cobra.Command {
 			}
 
 			// Remove the configuration.
-			err = api.RemoveConfig(context.Background(), apiClient, c.Id.String())
+			err = api.RemoveConfig(cmd.Context(), apiClient, c.Id.String())
 			switch {
 			case errutil.ErrIsNotFound(err):
 				logutil.Infof("Workload Identity Manager configuration '%s' does not exist or has already been deleted.", nameOrID)
 			case err != nil:
 				return fmt.Errorf("while removing Workload Identity Manager configuration '%s': %w", nameOrID, err)
-			case err == nil:
+			default:
 				logutil.Infof("Workload Identity Manager configuration '%s' removed successfully.", nameOrID)
 			}
 
@@ -281,7 +280,7 @@ func confRmCmd() *cobra.Command {
 						continue
 					case err != nil:
 						return fmt.Errorf("while deleting dependencies of the WIMConfiguration '%s': ServiceAccount '%s': %w", c.Id.String(), saID.String(), err)
-					case err == nil:
+					default:
 						logutil.Infof("ServiceAccount '%s' removed successfully.", saID.String())
 					}
 				}
