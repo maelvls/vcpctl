@@ -92,28 +92,19 @@ Example manifest consumed by `vcpctl apply`:
 
 ```yaml
 kind: ServiceAccount
-name: sa-demo
+name: demo
 authenticationType: rsaKey
 credentialLifetime: 365
-enabled: true
 scopes:
   - distributed-issuance
 ---
 kind: WIMIssuerPolicy
-name: policy-demo
+name: demo
 validityPeriod: P90D
 subject:
-  commonName: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  country: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  locality: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  organization: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  organizationalUnit: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  stateOrProvince: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  commonName: { type: OPTIONAL, maxOccurrences: 6 }
 sans:
-  dnsNames: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  ipAddresses: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  rfc822Names: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
-  uniformResourceIdentifiers: {type: OPTIONAL, allowedValues: [], defaultValues: [], minOccurrences: 0, maxOccurrences: 1}
+  dnsNames: { type: OPTIONAL, maxOccurrences: 6 }
 keyUsages:
   - digitalSignature
 extendedKeyUsages:
@@ -125,39 +116,32 @@ keyAlgorithm:
 ---
 kind: WIMSubCAProvider
 name: demo
-caType: BUILTIN
+issuingTemplateName: Default
 validityPeriod: P90D
 commonName: demo
-organization: DemoOrg
-country: US
-locality: City
-organizationalUnit: Unit
-stateOrProvince: State
+organization: foo
+country: France
+locality: Toulouse
+organizationalUnit: Engineering
+stateOrProvince: Occitanie
 keyAlgorithm: EC_P256
-pkcs11:
-  allowedClientLibraries: []
-  partitionLabel: ""
-  partitionSerialNumber: ""
-  pin: ""
-  signingEnabled: false
 ---
 kind: WIMConfiguration
-name: wim-demo
-clientAuthentication: {}
-clientAuthorization:
-  customClaimsAliases:
-    configuration: ""
-    allowAllPolicies: ""
-    allowedPolicies: ""
+name: demo
+clientAuthentication:
+  type: JWT_JWKS
+  urls:
+    - https://google.com/.well-known/jwks.json
 cloudProviders: {}
 minTlsVersion: TLS13
-subCaProvider: demo
+subCaProviderName: demo
+policyNames:
+  - demo
+serviceAccountNames:
+  - demo
 advancedSettings:
   enableIssuanceAuditLog: true
-  includeRawCertDataInAuditLog: false
-  requireFIPSCompliantBuild: false
 ```
-
 
 ## Schema of config.yaml
 
