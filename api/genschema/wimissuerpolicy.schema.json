@@ -1,97 +1,61 @@
 {
-  "title": "CyberArk Workload Identity Manager Manifests",
-  "description": "Schema describing the YAML manifests consumed by vcpctl.",
   "$comments": "Inspired by https://api.venafi.cloud/v3/api-docs/account-service and https://api.venafi.cloud/v3/api-docs/vcamanagement-service",
-  "allOf": [
-    {
-      "type": "object",
+  "$defs": {
+    "KeyAlgorithmInformation": {
+      "description": "Key algorithm",
       "properties": {
-        "apiVersion": {
-          "type": "string"
+        "allowedValues": {
+          "description": "Key algorithm allowed values",
+          "items": {
+            "enum": [
+              "RSA_2048",
+              "RSA_3072",
+              "RSA_4096",
+              "EC_P256",
+              "EC_P384",
+              "EC_P521",
+              "EC_ED25519"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
         },
-        "kind": {
-          "const": "WIMIssuerPolicy"
+        "defaultValue": {
+          "description": "Key algorithm default value",
+          "enum": [
+            "RSA_2048",
+            "RSA_3072",
+            "RSA_4096",
+            "EC_P256",
+            "EC_P384",
+            "EC_P521",
+            "EC_ED25519"
+          ],
+          "example": "RSA_4096",
+          "type": "string"
         }
       },
       "required": [
-        "kind",
-        "name"
-      ]
+        "allowedValues",
+        "defaultValue"
+      ],
+      "type": "object"
     },
-    {
-      "$ref": "#/$defs/PolicyInformation"
-    }
-  ],
-  "$defs": {
     "PolicyInformation": {
-      "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "UUID of the policy",
+        "companyId": {
+          "description": "UUID specific to your company",
+          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467",
           "format": "uuid",
-          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee"
-        },
-        "name": {
-          "description": "Name of the policy",
-          "example": "Some policy",
           "type": "string"
-        },
-        "validityPeriod": {
-          "type": "string",
-          "description": "ISO8601 Period Format",
-          "format": "PnYnMnDTnHnMnS",
-          "example": "P30D"
-        },
-        "subject": {
-          "$ref": "#/$defs/SubjectAttributesInformation"
-        },
-        "keyAlgorithm": {
-          "$ref": "#/$defs/KeyAlgorithmInformation"
         },
         "creationDate": {
           "description": "When the policy was initially created",
           "example": "2022-10-10T14:50:41.710+00:00",
           "type": "string"
         },
-        "modificationDate": {
-          "type": "string",
-          "description": "When the policy was last modified",
-          "example": "2023-12-12T20:00:10.500+00:00"
-        },
-        "companyId": {
-          "type": "string",
-          "description": "UUID specific to your company",
-          "format": "uuid",
-          "example": "03eb6e61-9806-11ed-84f2-c747fb71e467"
-        },
-        "sans": {
-          "$ref": "#/$defs/SansInformation"
-        },
-        "keyUsages": {
-          "type": "array",
-          "description": "Key usages",
-          "example": [
-            "keyEncipherment",
-            "digitalSignature"
-          ],
-          "items": {
-            "type": "string",
-            "enum": [
-              "digitalSignature",
-              "nonRepudiation",
-              "keyEncipherment",
-              "dataEncipherment",
-              "keyAgreement",
-              "keyCertSign",
-              "cRLSign",
-              "encipherOnly",
-              "decipherOnly"
-            ]
-          }
-        },
         "extendedKeyUsages": {
-          "type": "array",
           "description": "Extended key usages",
           "example": [
             "CLIENT_AUTH",
@@ -123,111 +87,102 @@
               "SMARTCARD_LOGON"
             ],
             "type": "string"
-          }
-        }
-      }
-    },
-    "SubjectAttributesInformation": {
-      "type": "object",
-      "properties": {
-        "commonName": {
-          "$ref": "#/$defs/PropertyInformation"
+          },
+          "type": "array"
         },
-        "organization": {
-          "$ref": "#/$defs/PropertyInformation"
+        "id": {
+          "description": "UUID of the policy",
+          "example": "8ae92800-b1e0-11ed-859d-b39255f965ee",
+          "format": "uuid",
+          "type": "string"
         },
-        "organizationalUnit": {
-          "$ref": "#/$defs/PropertyInformation"
+        "keyAlgorithm": {
+          "$ref": "#/$defs/KeyAlgorithmInformation"
         },
-        "locality": {
-          "$ref": "#/$defs/PropertyInformation"
+        "keyUsages": {
+          "description": "Key usages",
+          "example": [
+            "keyEncipherment",
+            "digitalSignature"
+          ],
+          "items": {
+            "enum": [
+              "digitalSignature",
+              "nonRepudiation",
+              "keyEncipherment",
+              "dataEncipherment",
+              "keyAgreement",
+              "keyCertSign",
+              "cRLSign",
+              "encipherOnly",
+              "decipherOnly"
+            ],
+            "type": "string"
+          },
+          "type": "array"
         },
-        "stateOrProvince": {
-          "$ref": "#/$defs/PropertyInformation"
+        "modificationDate": {
+          "description": "When the policy was last modified",
+          "example": "2023-12-12T20:00:10.500+00:00",
+          "type": "string"
         },
-        "country": {
-          "$ref": "#/$defs/PropertyInformation"
+        "name": {
+          "description": "Name of the policy",
+          "example": "Some policy",
+          "type": "string"
+        },
+        "sans": {
+          "$ref": "#/$defs/SansInformation"
+        },
+        "subject": {
+          "$ref": "#/$defs/SubjectAttributesInformation"
+        },
+        "validityPeriod": {
+          "description": "ISO8601 Period Format",
+          "example": "P30D",
+          "format": "PnYnMnDTnHnMnS",
+          "type": "string"
         }
       },
-      "description": "Subject attributes"
+      "type": "object"
     },
     "PropertyInformation": {
       "properties": {
+        "allowedValues": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "defaultValues": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "maxOccurrences": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "minOccurrences": {
+          "format": "int32",
+          "type": "integer"
+        },
         "type": {
-          "type": "string",
           "enum": [
             "IGNORED",
             "FORBIDDEN",
             "OPTIONAL",
             "REQUIRED",
             "LOCKED"
-          ]
-        },
-        "allowedValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "defaultValues": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "minOccurrences": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "maxOccurrences": {
-          "type": "integer",
-          "format": "int32"
+          ],
+          "type": "string"
         }
       },
       "type": "object"
     },
-    "KeyAlgorithmInformation": {
-      "required": [
-        "allowedValues",
-        "defaultValue"
-      ],
-      "type": "object",
-      "properties": {
-        "allowedValues": {
-          "description": "Key algorithm allowed values",
-          "items": {
-            "type": "string",
-            "enum": [
-              "RSA_2048",
-              "RSA_3072",
-              "RSA_4096",
-              "EC_P256",
-              "EC_P384",
-              "EC_P521",
-              "EC_ED25519"
-            ]
-          },
-          "minItems": 1,
-          "type": "array"
-        },
-        "defaultValue": {
-          "example": "RSA_4096",
-          "enum": [
-            "RSA_2048",
-            "RSA_3072",
-            "RSA_4096",
-            "EC_P256",
-            "EC_P384",
-            "EC_P521",
-            "EC_ED25519"
-          ],
-          "type": "string",
-          "description": "Key algorithm default value"
-        }
-      },
-      "description": "Key algorithm"
-    },
     "SansInformation": {
+      "description": "Subject alternative names",
       "properties": {
         "dnsNames": {
           "$ref": "#/$defs/PropertyInformation"
@@ -242,10 +197,55 @@
           "$ref": "#/$defs/PropertyInformation"
         }
       },
-      "description": "Subject alternative names",
+      "type": "object"
+    },
+    "SubjectAttributesInformation": {
+      "description": "Subject attributes",
+      "properties": {
+        "commonName": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "country": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "locality": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organization": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "organizationalUnit": {
+          "$ref": "#/$defs/PropertyInformation"
+        },
+        "stateOrProvince": {
+          "$ref": "#/$defs/PropertyInformation"
+        }
+      },
       "type": "object"
     }
   },
+  "$id": "https://example.com/wim-manifest.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/wim-manifest.schema.json"
+  "allOf": [
+    {
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "WIMIssuerPolicy"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "type": "object"
+    },
+    {
+      "$ref": "#/$defs/PolicyInformation"
+    }
+  ],
+  "description": "Schema describing the YAML manifests consumed by vcpctl.",
+  "title": "CyberArk Workload Identity Manager Manifests"
 }

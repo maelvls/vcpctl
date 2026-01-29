@@ -32,7 +32,7 @@ const (
 	unifiedOpenAPIRootURL = "https://developer.venafi.com/tlsprotectcloud/openapi/"
 )
 
-// Usage:ServiceAccountDetails
+// Usage:
 //
 //	go run ./genschema
 func main() {
@@ -244,7 +244,6 @@ func main() {
 		panic(fmt.Errorf("marshalling updated OpenAPI spec: %w", err))
 	}
 
-	// Rewrite all $ref paths to use local $defs instead of components.
 	err = os.WriteFile("openapi.json", raw, 0644)
 	if err != nil {
 		panic(fmt.Errorf("writing to openapi.json file: %w", err))
@@ -305,7 +304,8 @@ func createSchemaWithTemplate(templatePath string, defs map[string]any, onlyRefs
 	}
 	updated := bytes.ReplaceAll(raw, []byte("#/components/schemas/"), []byte("#/$defs/"))
 
-	if err := os.WriteFile(outputPath, updated, 0644); err != nil {
+	err = os.WriteFile(outputPath, updated, 0644)
+	if err != nil {
 		panic(fmt.Errorf("writing to %s file: %w", outputPath, err))
 	}
 
