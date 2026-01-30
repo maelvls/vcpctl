@@ -45,21 +45,57 @@ func SelfCheckAPIKey(ctx context.Context, cl *Client) (_ UserAccountResponse, te
 		return UserAccountResponse{}, "", fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
 	}
 
-	// Workaround the fact that all devstacks are created with the
-	// URL prefix "stack" instead of "ui-stack-devXXX". For now,
-	// let's just use the API URL, which looks like this:
-	//   https://api-dev210.qa.venafi.io
-	// and turn it into the tenant URL, like this:
-	//   https://ui-stack-dev210.qa.venafi.io
-	//
-	// See:
-	// https://gitlab.com/venafi/vaas/test-enablement/vaas-auto/-/merge_requests/738/diffs#note_2579353788
-	tenantURL = fmt.Sprintf("https://%s.venafi.cloud", result.Company.UrlPrefix)
-	if tenantURL == "stack" {
-		tenantURL = strings.Replace(cl.Server, "api-", "ui-stack-", 1)
+	urlPrefix, err := fixURLPrefix(result.Company.UrlPrefix, cl.Server)
+	if err != nil {
+		return UserAccountResponse{}, "", fmt.Errorf("while fixing URL prefix: %w", err)
 	}
 
+	tenantURL = fmt.Sprintf("https://%s.%s", urlPrefix, result.Company.Domains[0])
+
 	return result, tenantURL, nil
+}
+
+// Workaround the fact that all devstacks are created with the URL prefix
+// "stack" instead of "ui-stack-devXXX". For example, /v1/useraccounts will
+// return:
+//
+//	$ curl https://api-dev247.qa.venafi.io/v1/useraccounts
+//	{
+//	  "company": {
+//	    "id": "81a097b0-fd28-11f0-b61b-15194c3359c5",
+//	    "name": "qa.venafi.io",
+//	    "urlPrefix": "stack",
+//	    "domains": ["qa.venafi.io"]
+//	  }
+//	}
+//
+// Instead of "stack", urlPrefix should have been "ui-stack-devXXX". The
+// only way to guess what the devXXX is to extract it from the API URL. For
+// example, from "https://api-dev210.qa.venafi.io", we want "dev210".
+//
+// See:
+// https://gitlab.com/venafi/vaas/test-enablement/vaas-auto/-/merge_requests/738/diffs#note_2579353788
+func fixURLPrefix(urlPrefix, apiURL string) (string, error) {
+	if urlPrefix != "stack" {
+		return urlPrefix, nil
+	}
+
+	apiURLParts := strings.SplitN(apiURL, ".", 2)
+	if len(apiURLParts) != 2 {
+		return "", fmt.Errorf("unexpected API URL format. Expected a URL with a dot somewhere, but got: %q", apiURL)
+	}
+	devstack := apiURLParts[0]                      // e.g. "https://api-dev210"
+	devstack = rmProtocolPrefix(devstack)           // e.g. "api-dev210"
+	devstack = strings.TrimPrefix(devstack, "api-") // e.g. "dev210"
+	urlPrefix = "ui-stack-" + devstack              // e.g. "ui-stack-dev210"
+
+	return urlPrefix, nil
+}
+
+func rmProtocolPrefix(s string) string {
+	s = strings.TrimPrefix(s, "https://")
+	s = strings.TrimPrefix(s, "http://")
+	return s
 }
 
 // When authenticating as key pair ("rsaKey") service accounts, the backend
