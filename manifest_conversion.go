@@ -101,7 +101,7 @@ func apiToManifestWIMConfiguration(
 	// GET and POST, but the generated client has no way to handle optional
 	// union types. So we have a specialized 'isZero' function.
 	var clientAuthentication manifest.ClientAuthentication
-	if !isZero(cfg.ClientAuthentication) {
+	if !api.IsZero(cfg.ClientAuthentication) {
 		var err error
 		clientAuthentication, err = apiToManifestClientAuthentication(cfg.ClientAuthentication)
 		if err != nil {
@@ -138,24 +138,6 @@ func apiToManifestWIMConfiguration(
 		AdvancedSettings:     apiToManifestAdvancedSettings(cfg.AdvancedSettings),
 		ServiceAccountNames:  serviceAccountNames,
 	}, nil
-}
-
-// We can't check if api.ClientAuthenticationInformation is empty by doing:
-//
-//	v != (api.ClientAuthenticationInformation{})
-//
-// because this struct contains a private field 'union'. So let's use JSON to
-// check it.
-func isZero(in api.ClientAuthenticationInformation) bool {
-	bytes, err := in.MarshalJSON()
-	if err != nil {
-		return false
-	}
-	if string(bytes) == "null" {
-		return true
-	}
-
-	return false
 }
 
 func apiToManifestClientAuthentication(in api.ClientAuthenticationInformation) (manifest.ClientAuthentication, error) {

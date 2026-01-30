@@ -185,23 +185,23 @@ func TestDiffToPatchConfig_ImmutableFieldErrors(t *testing.T) {
 	}
 }
 
-func TestDiffToPatchConfig_RequiredFieldsAreCopied(t *testing.T) {
+func TestDiffToPatchConfig_ClientAuthenticationRequiredFieldsAreCopied(t *testing.T) {
 	existing := baseConfig(t)
 	desired := existing
 
-	desired.Name = "new-name"
+	// Change one field within ClientAuthentication
+	desired.ClientAuthentication = clientAuthJwks(t, []string{"https://jwks.changed.example.com"})
 
 	patch, changed, err := DiffToPatchConfig(existing, desired)
 	require.NoError(t, err)
 	require.True(t, changed)
 
-	assert.Equal(t, "new-name", patch.Name)
-
+	// When ClientAuthentication changes, all required fields should be copied
 	patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
 	require.NoError(t, err)
 	patchJwks, ok := patchAuth.(JwtJwksAuthenticationInformation)
 	require.True(t, ok)
-	assert.Equal(t, []string{"https://jwks.example.com"}, patchJwks.Urls)
+	assert.Equal(t, []string{"https://jwks.changed.example.com"}, patchJwks.Urls)
 }
 
 func TestDiffToPatchConfig_ClientAuthenticationError(t *testing.T) {
