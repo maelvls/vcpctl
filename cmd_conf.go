@@ -130,19 +130,23 @@ func confGetCmd() *cobra.Command {
 	var showDeps bool
 	var raw bool
 	cmd := &cobra.Command{
-		Use:   "get <config-name>",
+		Use:   "get <config-name-or-id>",
 		Short: "Export a WIM configuration",
 		Long: undent.Undent(`
 			Get a WIM (Workload Identity Manager, formerly Firefly) configuration
-			from CyberArk Certificate Manager, SaaS. By default, displays the
-			configuration as a manifest.WIMConfiguration. Use --raw to display
-			the raw API response. The configuration is written to stdout in YAML
+			from CyberArk Certificate Manager, SaaS.
+
+			By default, displays the configuration as a manifest.WIMConfiguration. Use --raw
+			to display the raw API response. The configuration is written to stdout in YAML
 			format.
+
+			By default, only the WIMConfiguration is displayed. Use --deps to include
+			dependencies such as service accounts, policies, and Sub CA provider.
 		`),
 		Example: undent.Undent(`
-			vcpctl conf get <config-name>
-			vcpctl conf get <config-name> --deps
-			vcpctl conf get <config-name> --raw
+			vcpctl conf get <config-name-or-id>
+			vcpctl conf get <config-name-or-id> --deps
+			vcpctl conf get <config-name-or-id> --raw
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -168,7 +172,7 @@ func confGetCmd() *cobra.Command {
 
 			config, err := api.GetConfig(cmd.Context(), apiClient, idOrName)
 			if err != nil {
-				return fmt.Errorf("while getting original Workload Identity Manager configuration: %w", err)
+				return fmt.Errorf("while getting Workload Identity Manager configuration: %w", err)
 			}
 
 			issuingTemplates, err := api.GetIssuingTemplates(cmd.Context(), apiClient)
@@ -223,7 +227,7 @@ func confGetCmd() *cobra.Command {
 func confRmCmd() *cobra.Command {
 	var deleteDeps bool
 	cmd := &cobra.Command{
-		Use:   "rm <config-name>",
+		Use:   "rm <config-name-or-id>",
 		Short: "Remove a WIM configuration",
 		Long: undent.Undent(`
 			Remove a WIM (Workload Identity Manager, formerly Firefly)
@@ -338,7 +342,7 @@ func deprecatedLsCmd() *cobra.Command {
 func deprecatedGetCmd() *cobra.Command {
 	var showDeps bool
 	cmd := &cobra.Command{
-		Use:           "get <config-name>",
+		Use:           "get <config-name-or-id>",
 		Short:         "Export a WIM configuration (deprecated: use 'vcpctl conf get')",
 		Hidden:        true,
 		Deprecated:    "use 'vcpctl conf get' instead",
@@ -355,7 +359,7 @@ func deprecatedGetCmd() *cobra.Command {
 func deprecatedRmCmd() *cobra.Command {
 	var deleteDeps bool
 	cmd := &cobra.Command{
-		Use:           "rm <config-name>",
+		Use:           "rm <config-name-or-id>",
 		Short:         "Remove a WIM configuration (deprecated: use 'vcpctl conf rm')",
 		Hidden:        true,
 		Deprecated:    "use 'vcpctl conf rm' instead",

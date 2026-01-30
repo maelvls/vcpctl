@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -224,9 +223,21 @@ func saGetCmd() *cobra.Command {
 
 			// Convert to manifest unless --raw is specified.
 			var outputData interface{}
+			var ownerComment string
 			if raw {
 				outputData = sa
 			} else {
+				// Fetch owner name for comment.
+				if sa.Owner.String() != "" {
+					ownerName, err := api.GetOwnerName(cmd.Context(), apiClient, sa.Owner)
+					if err != nil {
+						// Don't fail the command if we can't fetch the owner name.
+						logutil.Debugf("while fetching owner name: %v", err)
+					} else {
+						ownerComment = ownerName
+					}
+				}
+
 				outputData = serviceAccountManifest{
 					Kind:           kindServiceAccount,
 					ServiceAccount: apiToManifestServiceAccount(sa),
@@ -235,7 +246,7 @@ func saGetCmd() *cobra.Command {
 
 			switch format {
 			case "yaml":
-				bytes, err := yaml.Marshal(outputData)
+				bytes, err := marshalYAMLWithOwnerComment(outputData, ownerComment)
 				if err != nil {
 					return fmt.Errorf("while marshaling service account to YAML: %w", err)
 				}
@@ -301,20 +312,32 @@ func saEditCmd() *cobra.Command {
 				return fmt.Errorf("while getting service account: %w", err)
 			}
 
+			// Fetch owner name for annotating the 'owner' field (which is an
+			// ID) with the actual name for convenience.
+			var owner string
+			if sa.Owner.String() != "" {
+				ownerName, err := api.GetOwnerName(cmd.Context(), apiClient, sa.Owner)
+				if err != nil {
+					// Don't fail the command if we can't fetch the owner name.
+					logutil.Debugf("while fetching owner name: %v", err)
+				} else {
+					owner = ownerName
+				}
+			}
+
 			saManifest := serviceAccountManifest{
 				Kind:           kindServiceAccount,
 				ServiceAccount: apiToManifestServiceAccount(sa),
 			}
 
-			var buf bytes.Buffer
-			enc := yaml.NewEncoder(&buf)
-			if err := enc.Encode(saManifest); err != nil {
+			yamlBytes, err := marshalYAMLWithOwnerComment(saManifest, owner)
+			if err != nil {
 				return fmt.Errorf("while encoding ServiceAccount to YAML: %w", err)
 			}
 
 			return editManifestsInEditor(
 				cmd.Context(),
-				buf.Bytes(),
+				yamlBytes,
 				func(raw []byte) ([]manifest.Manifest, error) {
 					return parseSingleManifestOfKind(raw, kindServiceAccount)
 				},
@@ -483,4 +506,29 @@ func saRmCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively select the service account to remove.")
 	return cmd
+}
+
+// marshalYAMLWithOwnerComment marshals the data to YAML and adds a comment to
+// the 'owner' field.
+func marshalYAMLWithOwnerComment(data interface{}, owner string) ([]byte, error) {
+	// If we don't have an owner comment, just marshal normally.
+	if owner == "" {
+		return yaml.Marshal(data)
+	}
+
+	// Let's make sure the comment starts with a space.
+	if !strings.HasPrefix(owner, " ") {
+		owner = " " + owner
+	}
+
+	// Create a comment map to add a line comment to the owner field. The path
+	// is "$.owner" which refers to the top-level 'owner' field.
+	commentMap := yaml.CommentMap{
+		"$.owner": []*yaml.Comment{
+			yaml.LineComment(owner),
+		},
+	}
+
+	// Marshal with the comment option.
+	return yaml.MarshalWithOptions(data, yaml.WithComment(commentMap))
 }
