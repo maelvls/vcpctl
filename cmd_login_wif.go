@@ -270,8 +270,11 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag strin
 		return fmt.Errorf("while signing JWT: %w", err)
 	}
 
-	cl := http.Client{Transport: api.LogTransport}
-	info, err := api.GetTenantInfoFromTenantURL(cl, input.TenantURL)
+	anonClient, err := api.NewAnonymousClient()
+	if err != nil {
+		return fmt.Errorf("while creating unauthenticated API client: %w", err)
+	}
+	info, err := api.GetTenantInfo(anonClient.Client, input.TenantURL)
 	if err != nil {
 		return fmt.Errorf("while getting tenant info: %w", err)
 	}

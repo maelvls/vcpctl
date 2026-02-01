@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -120,6 +119,10 @@ func loginCmd(groupID string) *cobra.Command {
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			anonymousClient, err := api.NewAnonymousClient()
+			if err != nil {
+				return err
+			}
 			warnIgnoredLoginEnvVars()
 
 			tenantURLArgProvided := len(args) > 0
@@ -127,7 +130,7 @@ func loginCmd(groupID string) *cobra.Command {
 				if apiURL != "" {
 					logutil.Infof("⚠️  Warning: --api-url will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
 				}
-				return loginWithTenantURL(cmd.Context(), args[0], apiKey, contextName)
+				return loginWithTenantURL(cmd.Context(), anonymousClient.Client, args[0], apiKey, contextName)
 			}
 
 			if apiURL != "" {
@@ -144,19 +147,21 @@ func loginCmd(groupID string) *cobra.Command {
 	return cmd
 }
 
-func loginWithTenantURL(ctx context.Context, tenantURL, apiKey, contextName string) error {
+// The 'cl' must be an unauthenticated client.
+func loginWithTenantURL(ctx context.Context, anonymousClient api.HttpRequestDoer, tenantURL, apiKey, contextName string) error {
 	tenantURL = normalizeURL(tenantURL)
 	if tenantURL == "" {
 		return fmt.Errorf("tenant URL cannot be empty")
 	}
-	info, err := tenantInfoFromURL(tenantURL)
+
+	info, err := api.GetTenantInfo(anonymousClient, tenantURL)
 	if err != nil {
 		return err
 	}
 
 	current := Auth{
 		AuthenticationType: "apiKey",
-		TenantURL:          info.TenantURL,
+		TenantURL:          tenantURL,
 		TenantID:           info.TenantID,
 		APIURL:             info.APIURL,
 	}
@@ -204,6 +209,11 @@ func loginInteractive(ctx context.Context, apiKey, contextName string) error {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
 	current, _ := currentFrom(conf)
+
+	anonClient, err := api.NewAnonymousClient()
+	if err != nil {
+		return fmt.Errorf("while creating unauthenticated API client: %w", err)
+	}
 
 	if len(conf.ToolContexts) > 1 && contextName == "" {
 		if current.Name != "" {
@@ -264,7 +274,7 @@ func loginInteractive(ctx context.Context, apiKey, contextName string) error {
 	current.AuthenticationType = "apiKey"
 
 	if !skipTenantPrompt {
-		if err := promptForTenantURL(ctx, &current); err != nil {
+		if err := promptForTenantURL(ctx, anonClient.Client, &current); err != nil {
 			return err
 		}
 		fmt.Println()
@@ -1190,19 +1200,6 @@ func normalizeURL(raw string) string {
 	return url
 }
 
-func tenantInfoFromURL(tenantURL string) (api.TenantInfo, error) {
-	httpCl := http.Client{Transport: api.LogTransport}
-	info, err := api.GetTenantInfoFromTenantURL(httpCl, tenantURL)
-	switch {
-	case err == nil:
-		return info, nil
-	case errors.As(err, &errutil.NotFound{}):
-		return api.TenantInfo{}, fmt.Errorf("URL '%s' doesn't seem to be a valid tenant. Please check the URL and try again.", tenantURL)
-	default:
-		return api.TenantInfo{}, fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
-	}
-}
-
 func populateFromAPIKey(ctx context.Context, current *Auth, apiKey string) error {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
@@ -1228,7 +1225,8 @@ func populateFromAPIKey(ctx context.Context, current *Auth, apiKey string) error
 	return nil
 }
 
-func promptForTenantURL(ctx context.Context, current *Auth) error {
+// Unauthenticated client is fine here.
+func promptForTenantURL(ctx context.Context, anonClient api.HttpRequestDoer, current *Auth) error {
 	fmt.Println(subtleStyle.Render("Enter the URL you use to log into CyberArk Certificate Manager, SaaS"))
 	fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
 	fmt.Println()
@@ -1238,13 +1236,14 @@ func promptForTenantURL(ctx context.Context, current *Auth) error {
 		if input == "" {
 			return fmt.Errorf("tenant URL cannot be empty")
 		}
-		info, err := tenantInfoFromURL(input)
+
+		tenant, err := api.GetTenantInfo(anonClient, input)
 		if err != nil {
 			return err
 		}
-		current.TenantURL = info.TenantURL
-		current.TenantID = info.TenantID
-		current.APIURL = info.APIURL
+		current.TenantURL = input
+		current.TenantID = tenant.TenantID
+		current.APIURL = tenant.APIURL
 		return nil
 	})
 	if err != nil {

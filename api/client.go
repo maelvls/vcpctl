@@ -32,13 +32,14 @@ func NewAccessTokenClient(apiURL, accessToken string, opts ...ClientOption) (*Cl
 }
 
 // Useful for /v1/companies/{urlPrefix}/loginconfig which does not require
-// authentication.
-func NewUnauthenticatedClient(apiURL string, opts ...ClientOption) (*Client, error) {
+// authentication nor requires an explicit API URL. The api.Client's Server is
+// left empty, the user must provide full URLs to the endpoints.
+func NewAnonymousClient(opts ...ClientOption) (*Client, error) {
 	opts = append(opts,
 		WithHTTPClient(&http.Client{Transport: LogTransport}),
 		withUserAgent(),
 	)
-	return NewClient(apiURL, opts...)
+	return NewClient("", opts...)
 }
 
 // withTpplAPIKey returns a copy of the provided http.Client that adds the
