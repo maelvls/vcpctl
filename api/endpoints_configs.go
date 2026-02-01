@@ -341,9 +341,13 @@ func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (Conf
 		smthChanged = true
 	}
 
-	// Compare ShortLivedCertCount.
 	if desired.ShortLivedCertCount != 0 && desired.ShortLivedCertCount != existing.ShortLivedCertCount {
 		return ConfigurationUpdateRequest{}, false, fmt.Errorf("cannot change the 'shortLivedCertCount' field of an existing configuration")
+	}
+
+	if len(desired.ServiceAccountIds) > 0 && !slicesEqual(desired.ServiceAccountIds, existing.ServiceAccountIds) {
+		patch.ServiceAccountIds = desired.ServiceAccountIds
+		smthChanged = true
 	}
 
 	_, changed, _ := DiffToPatchSubCAProvider(existing.SubCaProvider, desired.SubCaProvider)
@@ -360,10 +364,6 @@ func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (Conf
 	}
 
 	return patch, smthChanged, nil
-}
-
-func ptr[T any](v T) *T {
-	return &v
 }
 
 func DiffToPatchCloudProviders(existing, desired CloudProvidersInformation) (CloudProvidersInformation, bool) {

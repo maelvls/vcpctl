@@ -4,238 +4,477 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/oapi-codegen/nullable"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestDiffToPatchConfig_NoChanges(t *testing.T) {
-	existing := baseConfig(t)
-	desired := existing
-
-	patch, changed, err := DiffToPatchConfig(existing, desired)
-	require.NoError(t, err)
-	assert.False(t, changed)
-	assert.Equal(t, ConfigurationUpdateRequest{}, patch)
-}
-
-func TestDiffToPatchConfig_AllowedFieldChanges(t *testing.T) {
-	existing := baseConfig(t)
-	desired := existing
-
-	desired.AdvancedSettings.EnableIssuanceAuditLog = true
-	desired.AdvancedSettings.IncludeRawCertDataInAuditLog = true
-	desired.AdvancedSettings.RequireFIPSCompliantBuild = true
-
-	desired.ClientAuthentication = clientAuthJwks(t, []string{"https://jwks.changed.example.com"})
-	desired.ClientAuthorization = ClientAuthorizationInformation{
-		CustomClaimsAliases: CustomClaimsAliasesInformation{
-			Configuration:    "cfg",
-			AllowAllPolicies: "allow-all",
-			AllowedPolicies:  "allowed",
-		},
-	}
-
-	desired.CloudProviders = CloudProvidersInformation{
-		Aws: AwsCloudProviderInformation{
-			AccountIds: []string{"999999999999"},
-			Regions:    []AwsCloudProviderInformationRegions{AwsCloudProviderInformationRegionsUsEast1},
-		},
-	}
-
-	desired.MinTlsVersion = ExtendedConfigurationInformationMinTlsVersionTLS13
-	desired.Name = "new-name"
-	desired.PolicyIds = []openapi_types.UUID{mustUUID(t, "11111111-1111-1111-1111-111111111111")}
-
-	patch, changed, err := DiffToPatchConfig(existing, desired)
-	require.NoError(t, err)
-	require.True(t, changed)
-
-	assertEqual(t, true, patch.AdvancedSettings.EnableIssuanceAuditLog)
-	assertEqual(t, true, patch.AdvancedSettings.IncludeRawCertDataInAuditLog)
-	assertEqual(t, true, patch.AdvancedSettings.RequireFIPSCompliantBuild)
-
-	patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
-	require.NoError(t, err)
-	patchJwks, ok := patchAuth.(JwtJwksAuthenticationInformation)
-	require.True(t, ok)
-	assert.Equal(t, []string{"https://jwks.changed.example.com"}, patchJwks.Urls)
-
-	assert.Equal(t, "cfg", patch.ClientAuthorization.CustomClaimsAliases.Configuration)
-	assert.Equal(t, "allow-all", patch.ClientAuthorization.CustomClaimsAliases.AllowAllPolicies)
-	assert.Equal(t, "allowed", patch.ClientAuthorization.CustomClaimsAliases.AllowedPolicies)
-
-	assert.Equal(t, []string{"999999999999"}, patch.CloudProviders.Aws.AccountIds)
-	assert.Equal(t, []AwsCloudProviderInformationRegions{AwsCloudProviderInformationRegionsUsEast1}, patch.CloudProviders.Aws.Regions)
-
-	assert.Equal(t, ConfigurationUpdateRequestMinTlsVersionTLS13, patch.MinTlsVersion)
-	assert.Equal(t, "new-name", patch.Name)
-	assert.Equal(t, []openapi_types.UUID{mustUUID(t, "11111111-1111-1111-1111-111111111111")}, patch.PolicyIds)
-}
-
-func assertEqual[V any](t *testing.T, expected V, actual nullable.Nullable[V]) {
-	t.Helper()
-
-	val, err := actual.Get()
-	require.NoError(t, err)
-	assert.Equal(t, expected, val)
-}
-
-func TestDiffToPatchConfig_ImmutableFieldErrors(t *testing.T) {
+func TestDiffToPatchConfig(t *testing.T) {
 	tests := []struct {
-		name   string
-		mutate func(ExtendedConfigurationInformation) ExtendedConfigurationInformation
+		name          string
+		existing      ExtendedConfigurationInformation
+		desired       ExtendedConfigurationInformation
+		expect        func(t *testing.T, patch ConfigurationUpdateRequest)
+		expectChanged bool
+		expectErr     string // empty string means no error expected
 	}{
 		{
-			name: "companyId",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.CompanyId = mustUUID(t, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-				return cfg
+			name:          "No changes",
+			existing:      ExtendedConfigurationInformation{},
+			desired:       ExtendedConfigurationInformation{},
+			expect:        patch(ConfigurationUpdateRequest{}),
+			expectChanged: false,
+		},
+
+		// ServiceAccountIds tests.
+		{
+			name: "ServiceAccountIds added",
+			existing: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
 			},
+			desired: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+					id("22222222-2222-2222-2222-222222222222"),
+				},
+			},
+			expect: patch(ConfigurationUpdateRequest{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+					id("22222222-2222-2222-2222-222222222222"),
+				},
+			}),
+			expectChanged: true,
 		},
 		{
-			name: "controllerAllowedPolicyIds",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.ControllerAllowedPolicyIds = []openapi_types.UUID{mustUUID(t, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")}
-				return cfg
+			name: "ServiceAccountIds removed",
+			existing: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+					id("22222222-2222-2222-2222-222222222222"),
+				},
 			},
+			desired: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
+			},
+			expect: patch(ConfigurationUpdateRequest{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
+			}),
+			expectChanged: true,
 		},
 		{
-			name: "creationDate",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.CreationDate = "2025-01-01T00:00:00Z"
-				return cfg
+			name: "ServiceAccountIds unchanged",
+			existing: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
 			},
+			desired: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
+			},
+			expect:        patch(ConfigurationUpdateRequest{}),
+			expectChanged: false,
 		},
 		{
-			name: "id",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.Id = mustUUID(t, "cccccccc-cccc-cccc-cccc-cccccccccccc")
-				return cfg
+			name: "ServiceAccountIds empty to non-empty",
+			existing: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{},
 			},
+			desired: ExtendedConfigurationInformation{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
+			},
+			expect: patch(ConfigurationUpdateRequest{
+				ServiceAccountIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
+			}),
+			expectChanged: true,
+		},
+
+		// AdvancedSettings tests.
+		{
+			name:     "AdvancedSettings EnableIssuanceAuditLog changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				AdvancedSettings: AdvancedSettingsInformation{
+					EnableIssuanceAuditLog: true,
+				},
+			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				t.Helper()
+				val, err := patch.AdvancedSettings.EnableIssuanceAuditLog.Get()
+				require.NoError(t, err)
+				assert.True(t, val)
+			},
+			expectChanged: true,
 		},
 		{
-			name: "longLivedCertCount",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.LongLivedCertCount = 1
-				return cfg
+			name:     "AdvancedSettings IncludeRawCertDataInAuditLog changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				AdvancedSettings: AdvancedSettingsInformation{
+					IncludeRawCertDataInAuditLog: true,
+				},
 			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				val, err := patch.AdvancedSettings.IncludeRawCertDataInAuditLog.Get()
+				require.NoError(t, err)
+				assert.True(t, val)
+			},
+			expectChanged: true,
 		},
 		{
-			name: "modificationDate",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.ModificationDate = "2025-01-02T00:00:00Z"
-				return cfg
+			name:     "AdvancedSettings RequireFIPSCompliantBuild changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				AdvancedSettings: AdvancedSettingsInformation{
+					RequireFIPSCompliantBuild: true,
+				},
 			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				val, err := patch.AdvancedSettings.RequireFIPSCompliantBuild.Get()
+				require.NoError(t, err)
+				assert.True(t, val)
+			},
+			expectChanged: true,
 		},
 		{
-			name: "policies",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.Policies = []PolicyInformation{{Name: "policy"}}
-				return cfg
+			name:     "AdvancedSettings all fields changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				AdvancedSettings: AdvancedSettingsInformation{
+					EnableIssuanceAuditLog:       true,
+					IncludeRawCertDataInAuditLog: true,
+					RequireFIPSCompliantBuild:    true,
+				},
 			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				val1, err := patch.AdvancedSettings.EnableIssuanceAuditLog.Get()
+				require.NoError(t, err)
+				assert.True(t, val1)
+				val2, err := patch.AdvancedSettings.IncludeRawCertDataInAuditLog.Get()
+				require.NoError(t, err)
+				assert.True(t, val2)
+				val3, err := patch.AdvancedSettings.RequireFIPSCompliantBuild.Get()
+				require.NoError(t, err)
+				assert.True(t, val3)
+			},
+			expectChanged: true,
+		},
+
+		// ClientAuthentication tests.
+		{
+			name:     "ClientAuthentication changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				ClientAuthentication: clientAuthJwks(t, []string{"https://jwks.changed.example.com"}),
+			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
+				require.NoError(t, err)
+				patchJwks, ok := patchAuth.(JwtJwksAuthenticationInformation)
+				require.True(t, ok)
+				assert.Equal(t, []string{"https://jwks.changed.example.com"}, patchJwks.Urls)
+			},
+			expectChanged: true,
 		},
 		{
-			name: "policyDefinitions",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.PolicyDefinitions = []PolicyInformation{{Name: "policy-def"}}
-				return cfg
+			name:     "ClientAuthentication required fields copied",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				ClientAuthentication: clientAuthJwks(t, []string{"https://jwks.changed.example.com"}),
 			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
+				require.NoError(t, err)
+				patchJwks, ok := patchAuth.(JwtJwksAuthenticationInformation)
+				require.True(t, ok)
+				assert.Equal(t, []string{"https://jwks.changed.example.com"}, patchJwks.Urls)
+			},
+			expectChanged: true,
 		},
 		{
-			name: "shortLivedCertCount",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.ShortLivedCertCount = 1
-				return cfg
+			name:     "ClientAuthentication zero-valued",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				ClientAuthentication: ClientAuthenticationInformation{},
 			},
+			expect:        patch(ConfigurationUpdateRequest{}),
+			expectChanged: false,
+		},
+
+		// ClientAuthorization tests.
+		{
+			name:     "ClientAuthorization changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				ClientAuthorization: ClientAuthorizationInformation{
+					CustomClaimsAliases: CustomClaimsAliasesInformation{
+						Configuration:    "cfg",
+						AllowAllPolicies: "allow-all",
+						AllowedPolicies:  "allowed",
+					},
+				},
+			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				assert.Equal(t, "cfg", patch.ClientAuthorization.CustomClaimsAliases.Configuration)
+				assert.Equal(t, "allow-all", patch.ClientAuthorization.CustomClaimsAliases.AllowAllPolicies)
+				assert.Equal(t, "allowed", patch.ClientAuthorization.CustomClaimsAliases.AllowedPolicies)
+			},
+			expectChanged: true,
+		},
+
+		// CloudProviders tests.
+		{
+			name:     "CloudProviders AWS changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				CloudProviders: CloudProvidersInformation{
+					Aws: AwsCloudProviderInformation{
+						AccountIds: []string{"999999999999"},
+						Regions:    []AwsCloudProviderInformationRegions{AwsCloudProviderInformationRegionsUsEast1},
+					},
+				},
+			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				assert.Equal(t, []string{"999999999999"}, patch.CloudProviders.Aws.AccountIds)
+				assert.Equal(t, []AwsCloudProviderInformationRegions{AwsCloudProviderInformationRegionsUsEast1}, patch.CloudProviders.Aws.Regions)
+			},
+			expectChanged: true,
+		},
+
+		// MinTlsVersion tests.
+		{
+			name:     "MinTlsVersion changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				MinTlsVersion: ExtendedConfigurationInformationMinTlsVersionTLS13,
+			},
+			expect: patch(ConfigurationUpdateRequest{
+				MinTlsVersion: ConfigurationUpdateRequestMinTlsVersionTLS13,
+			}),
+			expectChanged: true,
+		},
+
+		// Name tests.
+		{
+			name:     "Name changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				Name: "new-name",
+			},
+			expect: patch(ConfigurationUpdateRequest{
+				Name: "new-name",
+			}),
+			expectChanged: true,
+		},
+
+		// PolicyIds tests.
+		{
+			name:     "PolicyIds changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				PolicyIds: []openapi_types.UUID{id("11111111-1111-1111-1111-111111111111")},
+			},
+			expect: patch(ConfigurationUpdateRequest{
+				PolicyIds: []openapi_types.UUID{
+					id("11111111-1111-1111-1111-111111111111"),
+				},
+			}),
+			expectChanged: true,
+		},
+
+		// Multiple fields changed.
+		{
+			name:     "Multiple fields changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				AdvancedSettings: AdvancedSettingsInformation{
+					EnableIssuanceAuditLog:       true,
+					IncludeRawCertDataInAuditLog: true,
+					RequireFIPSCompliantBuild:    true,
+				},
+				ClientAuthentication: clientAuthJwks(t, []string{"https://jwks.changed.example.com"}),
+				ClientAuthorization: ClientAuthorizationInformation{
+					CustomClaimsAliases: CustomClaimsAliasesInformation{
+						Configuration:    "cfg",
+						AllowAllPolicies: "allow-all",
+						AllowedPolicies:  "allowed",
+					},
+				},
+				CloudProviders: CloudProvidersInformation{
+					Aws: AwsCloudProviderInformation{
+						AccountIds: []string{"999999999999"},
+						Regions:    []AwsCloudProviderInformationRegions{AwsCloudProviderInformationRegionsUsEast1},
+					},
+				},
+				MinTlsVersion: ExtendedConfigurationInformationMinTlsVersionTLS13,
+				Name:          "new-name",
+				PolicyIds:     []openapi_types.UUID{id("11111111-1111-1111-1111-111111111111")},
+			},
+			expect: func(t *testing.T, patch ConfigurationUpdateRequest) {
+				val1, err := patch.AdvancedSettings.EnableIssuanceAuditLog.Get()
+				require.NoError(t, err)
+				assert.True(t, val1)
+				val2, err := patch.AdvancedSettings.IncludeRawCertDataInAuditLog.Get()
+				require.NoError(t, err)
+				assert.True(t, val2)
+				val3, err := patch.AdvancedSettings.RequireFIPSCompliantBuild.Get()
+				require.NoError(t, err)
+				assert.True(t, val3)
+
+				patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
+				require.NoError(t, err)
+				patchJwks, ok := patchAuth.(JwtJwksAuthenticationInformation)
+				require.True(t, ok)
+				assert.Equal(t, []string{"https://jwks.changed.example.com"}, patchJwks.Urls)
+
+				assert.Equal(t, "cfg", patch.ClientAuthorization.CustomClaimsAliases.Configuration)
+				assert.Equal(t, "allow-all", patch.ClientAuthorization.CustomClaimsAliases.AllowAllPolicies)
+				assert.Equal(t, "allowed", patch.ClientAuthorization.CustomClaimsAliases.AllowedPolicies)
+
+				assert.Equal(t, []string{"999999999999"}, patch.CloudProviders.Aws.AccountIds)
+				assert.Equal(t, []AwsCloudProviderInformationRegions{AwsCloudProviderInformationRegionsUsEast1}, patch.CloudProviders.Aws.Regions)
+
+				assert.Equal(t, ConfigurationUpdateRequestMinTlsVersionTLS13, patch.MinTlsVersion)
+				assert.Equal(t, "new-name", patch.Name)
+				assert.Equal(t, []openapi_types.UUID{id("11111111-1111-1111-1111-111111111111")}, patch.PolicyIds)
+			},
+			expectChanged: true,
+		},
+
+		// Immutable field error tests.
+		{
+			name:     "companyId cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				CompanyId: id("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+			},
+			expectErr: "cannot change the 'companyId' field",
 		},
 		{
-			name: "subCaProvider",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.SubCaProvider = SubCaProviderInformation{Name: "changed"}
-				return cfg
+			name:     "controllerAllowedPolicyIds cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				ControllerAllowedPolicyIds: []openapi_types.UUID{id("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")},
 			},
+			expectErr: "cannot change the 'controllerAllowedPolicyIds' field",
 		},
 		{
-			name: "ultraShortLivedCertCount",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.UltraShortLivedCertCount = 1
-				return cfg
+			name:     "creationDate cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				CreationDate: "2025-01-01T00:00:00Z",
 			},
+			expectErr: "cannot change the 'creationDate' field",
 		},
 		{
-			name: "unixSocketAllowedPolicyIds",
-			mutate: func(cfg ExtendedConfigurationInformation) ExtendedConfigurationInformation {
-				cfg.UnixSocketAllowedPolicyIds = []openapi_types.UUID{mustUUID(t, "dddddddd-dddd-dddd-dddd-dddddddddddd")}
-				return cfg
+			name:     "id cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				Id: id("cccccccc-cccc-cccc-cccc-cccccccccccc"),
 			},
+			expectErr: "cannot change the 'id' field",
+		},
+		{
+			name:     "longLivedCertCount cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				LongLivedCertCount: 1,
+			},
+			expectErr: "cannot change the 'longLivedCertCount' field",
+		},
+		{
+			name:     "modificationDate cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				ModificationDate: "2025-01-02T00:00:00Z",
+			},
+			expectErr: "cannot change ModificationDate",
+		},
+		{
+			name:     "policies cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				Policies: []PolicyInformation{{Name: "policy"}},
+			},
+			expectErr: "cannot change the 'policies' field",
+		},
+		{
+			name:     "policyDefinitions cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				PolicyDefinitions: []PolicyInformation{{Name: "policy-def"}},
+			},
+			expectErr: "cannot change the 'policyDefinitions' field",
+		},
+		{
+			name:     "shortLivedCertCount cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				ShortLivedCertCount: 1,
+			},
+			expectErr: "cannot change the 'shortLivedCertCount' field",
+		},
+		{
+			name:     "subCaProvider cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				SubCaProvider: SubCaProviderInformation{Name: "changed"},
+			},
+			expectErr: "cannot change the 'subCaProvider' field",
+		},
+		{
+			name:     "ultraShortLivedCertCount cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				UltraShortLivedCertCount: 1,
+			},
+			expectErr: "cannot change the 'ultraShortLivedCertCount' field",
+		},
+		{
+			name:     "unixSocketAllowedPolicyIds cannot be changed",
+			existing: ExtendedConfigurationInformation{},
+			desired: ExtendedConfigurationInformation{
+				UnixSocketAllowedPolicyIds: []openapi_types.UUID{id("dddddddd-dddd-dddd-dddd-dddddddddddd")},
+			},
+			expectErr: "cannot change the 'unixSocketAllowedPolicyIds' field",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			existing := baseConfig(t)
-			desired := tt.mutate(existing)
+			patch, changed, err := DiffToPatchConfig(tt.existing, tt.desired)
 
-			_, changed, err := DiffToPatchConfig(existing, desired)
-			require.Error(t, err)
-			assert.False(t, changed)
+			if tt.expectErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectErr)
+				assert.False(t, changed)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectChanged, changed)
+				if tt.expect != nil {
+					tt.expect(t, patch)
+				}
+			}
 		})
 	}
 }
 
-func TestDiffToPatchConfig_ClientAuthenticationRequiredFieldsAreCopied(t *testing.T) {
-	existing := baseConfig(t)
-	desired := existing
-
-	// Change one field within ClientAuthentication
-	desired.ClientAuthentication = clientAuthJwks(t, []string{"https://jwks.changed.example.com"})
-
-	patch, changed, err := DiffToPatchConfig(existing, desired)
-	require.NoError(t, err)
-	require.True(t, changed)
-
-	// When ClientAuthentication changes, all required fields should be copied
-	patchAuth, err := patch.ClientAuthentication.ValueByDiscriminator()
-	require.NoError(t, err)
-	patchJwks, ok := patchAuth.(JwtJwksAuthenticationInformation)
-	require.True(t, ok)
-	assert.Equal(t, []string{"https://jwks.changed.example.com"}, patchJwks.Urls)
-}
-
-func TestDiffToPatchConfig_ClientAuthenticationError(t *testing.T) {
-	existing := baseConfig(t)
-	desired := existing
-	desired.ClientAuthentication = ClientAuthenticationInformation{}
-
-	_, changed, err := DiffToPatchConfig(existing, desired)
-	require.Error(t, err)
-	assert.False(t, changed)
-}
-
-func baseConfig(t *testing.T) ExtendedConfigurationInformation {
-	t.Helper()
-
-	return ExtendedConfigurationInformation{
-		AdvancedSettings: AdvancedSettingsInformation{
-			EnableIssuanceAuditLog:       false,
-			IncludeRawCertDataInAuditLog: false,
-			RequireFIPSCompliantBuild:    false,
-		},
-		ClientAuthentication: clientAuthJwks(t, []string{"https://jwks.example.com"}),
-		ClientAuthorization: ClientAuthorizationInformation{
-			CustomClaimsAliases: CustomClaimsAliasesInformation{},
-		},
-		CloudProviders: CloudProvidersInformation{
-			Aws: AwsCloudProviderInformation{
-				AccountIds: []string{"123456789012"},
-				Regions:    []AwsCloudProviderInformationRegions{AwsCloudProviderInformationRegionsUsWest2},
-			},
-		},
-		MinTlsVersion: ExtendedConfigurationInformationMinTlsVersionTLS12,
-		Name:          "base-name",
-		PolicyIds:     []openapi_types.UUID{mustUUID(t, "00000000-0000-0000-0000-000000000001")},
+func patch(expected ConfigurationUpdateRequest) func(t *testing.T, actual ConfigurationUpdateRequest) {
+	return func(t *testing.T, actual ConfigurationUpdateRequest) {
+		t.Helper()
+		assert.Equal(t, expected, actual)
 	}
 }
 
@@ -248,7 +487,6 @@ func clientAuthJwks(t *testing.T, urls []string) ClientAuthenticationInformation
 	return info
 }
 
-func mustUUID(t *testing.T, s string) openapi_types.UUID {
-	t.Helper()
+func id(s string) openapi_types.UUID {
 	return openapi_types.UUID(uuid.MustParse(s))
 }
