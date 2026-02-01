@@ -97,9 +97,6 @@ func LogRequest(req *http.Request) {
 	body = strings.Join(strings.Fields(body), " ")
 	if body == "" {
 		body = ", no body"
-	} else if len(body) > 100 {
-		// Truncate long bodies for readability.
-		body = ", body:" + body[:100] + "..."
 	} else {
 		body = ", body:" + body
 	}
@@ -134,9 +131,6 @@ func LogResponse(resp *http.Response) {
 
 	if body == "" {
 		body = ", no body"
-	} else if len(body) > 100 {
-		// Truncate long bodies for readability.
-		body = ", body:" + body[:100] + "..."
 	} else {
 		body = ", body:" + body
 	}
