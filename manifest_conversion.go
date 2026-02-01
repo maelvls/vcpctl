@@ -198,6 +198,13 @@ func manifestToAPIClientAuthentication(
 	in manifest.ClientAuthentication,
 ) (api.ClientAuthenticationInformation, error) {
 	switch in.Type {
+	case "":
+		// It is possible to leave the 'clientAuthentication' field empty.
+		// But if any other field is set, we should error.
+		if len(in.URLs) > 0 || in.Audience != "" || in.BaseURL != "" || len(in.Clients) > 0 {
+			return api.ClientAuthenticationInformation{}, fmt.Errorf("'clientAuthentication.type' should be set when other clientAuthentication fields are specified")
+		}
+		return api.ClientAuthenticationInformation{}, nil
 	case "JWT_JWKS":
 		var result api.ClientAuthenticationInformation
 		err := result.MergeJwtJwksAuthenticationInformation(api.JwtJwksAuthenticationInformation{
