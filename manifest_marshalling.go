@@ -40,7 +40,7 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 		case errors.Is(err, io.EOF):
 			return manifests, nil
 		case err != nil:
-			return nil, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
+			return nil, fmt.Errorf("while decoding manifest #%d: %w", i+1, errutil.Fixable(err))
 		}
 
 		// An empty document (e.g. only comments). Skip it. If a document contains
@@ -49,7 +49,7 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 			var raw map[string]any
 			err = decForReal.Decode(&raw)
 			if err != nil {
-				return nil, fmt.Errorf("while decoding manifest #%d: %w", i+1, err)
+				return nil, fmt.Errorf("while decoding manifest #%d: %w", i+1, errutil.Fixable(err))
 			}
 			if len(raw) == 0 {
 				continue
@@ -62,7 +62,7 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 			var parsed serviceAccountManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
-				return nil, fmt.Errorf("while decoding ServiceAccount manifest #%d: %w", i+1, err)
+				return nil, fmt.Errorf("while decoding ServiceAccount manifest #%d: %w", i+1, errutil.Fixable(err))
 			}
 
 			manifests = append(manifests, manifest.Manifest{ServiceAccount: &parsed.ServiceAccount})
@@ -70,21 +70,21 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 			var parsed policyManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
-				return nil, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", i+1, err)
+				return nil, fmt.Errorf("while decoding WIMIssuerPolicy manifest #%d: %w", i+1, errutil.Fixable(err))
 			}
 			manifests = append(manifests, manifest.Manifest{Policy: &parsed.Policy})
 		case kindWIMSubCaProvider:
 			var parsed subCaProviderManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
-				return nil, fmt.Errorf("while decoding WIMSubCAProvider manifest #%d: %w", i+1, err)
+				return nil, fmt.Errorf("while decoding WIMSubCAProvider manifest #%d: %w", i+1, errutil.Fixable(err))
 			}
 			manifests = append(manifests, manifest.Manifest{SubCa: &parsed.SubCa})
 		case kindConfiguration:
 			var parsed configurationManifest
 			err = decForReal.Decode(&parsed)
 			if err != nil {
-				return nil, fmt.Errorf("while decoding WIMConfiguration manifest #%d: %w", i+1, err)
+				return nil, fmt.Errorf("while decoding WIMConfiguration manifest #%d: %w", i+1, errutil.Fixable(err))
 			}
 			manifests = append(manifests, manifest.Manifest{WIMConfiguration: &parsed.WIMConfiguration})
 		default:
@@ -186,7 +186,7 @@ func renderToYAML(
 
 		err := enc.Encode(toEncode)
 		if err != nil {
-			return nil, fmt.Errorf("while encoding manifest #%d to YAML: %w", i+1, err)
+			return nil, fmt.Errorf("while encoding manifest #%d to YAML: %w", i+1, errutil.Fixable(err))
 		}
 	}
 

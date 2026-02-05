@@ -893,7 +893,7 @@ func loadFileConf(ctx context.Context) (FileConf, error) {
 
 	err = yaml.Unmarshal(bytes, &conf)
 	if err != nil {
-		return FileConf{}, fmt.Errorf("while decoding ~/%s: %w", configPath, err)
+		return FileConf{}, fmt.Errorf("while decoding ~/%s: %w", configPath, errutil.Fixable(err))
 	}
 
 	// Check if this is an old format config that needs conversion Old format
