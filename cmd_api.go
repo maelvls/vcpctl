@@ -113,7 +113,7 @@ Request body:
 	cmd.Flags().StringArrayVarP(&opts.headers, "header", "H", nil, "Add a request header (key:value)")
 	cmd.Flags().BoolVarP(&opts.showResponseHeaders, "include", "i", false, "Include HTTP response headers in output")
 
-	// Track if method was explicitly set
+	// Track if method was explicitly set.
 	cmd.Flags().Lookup("method").Changed = false
 	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
 		opts.methodPassed = cmd.Flags().Changed("method")
@@ -123,10 +123,11 @@ Request body:
 	return cmd
 }
 
-// listEndpoints parses the embedded OpenAPI schema and lists all available endpoints.
+// listEndpoints parses the embedded OpenAPI schema and lists all available
+// endpoints.
 func listEndpoints() error {
 	var schema struct {
-		Paths map[string]map[string]interface{} `json:"paths"`
+		Paths map[string]map[string]any `json:"paths"`
 	}
 
 	if err := json.Unmarshal(openapiSchema, &schema); err != nil {
@@ -190,7 +191,8 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 
 	var requestBody any = params
 	if opts.requestInputFile != "" {
-		// When using --input, read body from file and add fields as query params
+		// When using --input, read body from file and add fields as query
+		// params.
 		file, err := openUserFile(opts.requestInputFile)
 		if err != nil {
 			return err
@@ -216,19 +218,16 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		fmt.Fprintf(os.Stderr, "\r\n")
 	}
 
-	// Output response body (skip for 204 No Content).
-	if resp.StatusCode != http.StatusNoContent {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("reading response body: %w", err)
-		}
+	var last byte
+	tee := io.TeeReader(resp.Body, &lastByteWriter{&last})
 
-		os.Stdout.Write(body)
-
-		// Add a newline if the output doesn't end with one.
-		if len(body) > 0 && body[len(body)-1] != '\n' {
-			fmt.Println()
-		}
+	// Stream response body to stdout.
+	_, err = io.Copy(os.Stdout, tee)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+	if last != '\n' {
+		fmt.Fprintln(os.Stdout)
 	}
 
 	// Exit with error for non-2xx status codes.
@@ -374,14 +373,15 @@ func addParamsSlice(m map[string]any, prevkey, newkey string) (map[string]any, e
 				lastItem := existSlice[len(existSlice)-1]
 				if lastMap, ok := lastItem.(map[string]any); ok {
 					if _, keyExists := lastMap[newkey]; !keyExists {
-						// Key doesn't exist in last map, reuse it
+						// Key doesn't exist in last map, reuse it.
 						return lastMap, nil
 					} else if existVal, ok := lastMap[newkey].([]any); ok {
-						// Key exists and is an array, reuse the map to append to the array
+						// Key exists and is an array, reuse the map to append
+						// to the array.
 						_ = existVal // just to use the variable
 						return lastMap, nil
 					}
-					// Key exists but is not an array, need a new map element
+					// Key exists but is not an array, need a new map element.
 				}
 			}
 			newMap := make(map[string]any)
@@ -438,12 +438,12 @@ func magicFieldValue(ctx context.Context, v string) (any, error) {
 		return string(data), nil
 	}
 
-	// Integer conversion
+	// Integer conversion.
 	if n, err := strconv.Atoi(v); err == nil {
 		return n, nil
 	}
 
-	// Boolean and null literals
+	// Boolean and null literals.
 	switch v {
 	case "true":
 		return true, nil
@@ -453,7 +453,7 @@ func magicFieldValue(ctx context.Context, v string) (any, error) {
 		return nil, nil
 	}
 
-	// Default: return as string
+	// Default: return as string.
 	return v, nil
 }
 
@@ -605,4 +605,15 @@ func New(ctx context.Context, r io.Reader) *CancelableReader {
 	}
 	go c.begin()
 	return c
+}
+
+type lastByteWriter struct {
+	last *byte
+}
+
+func (w *lastByteWriter) Write(p []byte) (int, error) {
+	if len(p) > 0 {
+		*w.last = p[len(p)-1]
+	}
+	return len(p), nil
 }
