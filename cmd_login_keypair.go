@@ -180,12 +180,12 @@ func signServiceAccountJWT(clientID, privateKeyPEM, apiURL string, validity time
 	}
 	logutil.Debugf("Signing JWT for API URL: %s", apiURL)
 
-	audience := fmt.Sprintf("%s/v1/oauth/token/serviceaccount", strings.TrimPrefix(strings.TrimSuffix(apiURL, "/"), "https://"))
-	logutil.Debugf("Using audience: %s", audience)
 	claims := jwt.MapClaims{
+		// This audience is hardcoded in the SaaS API and doesn't depend on what
+		// the actual API URL is.
+		"aud": "api.venafi.cloud/v1/oauth/token/serviceaccount",
 		"iss": clientID,
 		"sub": clientID,
-		"aud": audience,
 		"iat": jwt.NewNumericDate(time.Now()),
 		"exp": jwt.NewNumericDate(time.Now().Add(validity)),
 
