@@ -48,6 +48,9 @@ func saGenkeypairCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		ValidArgsFunction: completeSANameOrID(func(sa api.ServiceAccountDetails) bool {
+			return sa.AuthenticationType == "rsaKey"
+		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expects a single argument (the service account name), got: %s", args)

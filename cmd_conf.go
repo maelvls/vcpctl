@@ -148,8 +148,9 @@ func confGetCmd() *cobra.Command {
 			vcpctl conf get <config-name-or-id> --deps
 			vcpctl conf get <config-name-or-id> --raw
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeWIMConfNameOrID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)
@@ -239,8 +240,9 @@ func confRmCmd() *cobra.Command {
 			vcpctl conf rm 03931ba6-3fc5-11f0-85b8-9ee29ab248f0
 			vcpctl conf rm my-config --deps
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeWIMConfNameOrID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the WIM configuration name or ID), got %s", args)
@@ -371,4 +373,30 @@ func deprecatedRmCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&deleteDeps, "deps", false, "Delete dependencies (service accounts, policies, and Sub CA)")
 	return cmd
+}
+
+func completeWIMConfNameOrID(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	conf, err := getToolConfig(cmd)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	apiClient, err := newAPIClient(conf)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	confs, err := api.GetConfigs(cmd.Context(), apiClient)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	var suggestions []string
+	for _, c := range confs {
+		if strings.HasPrefix(c.Name, toComplete) {
+			suggestions = append(suggestions, c.Name)
+		} else if strings.HasPrefix(c.Id.String(), toComplete) {
+			suggestions = append(suggestions, c.Id.String())
+		}
+	}
+
+	return suggestions, cobra.ShellCompDirectiveNoFileComp
 }

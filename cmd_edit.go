@@ -46,8 +46,9 @@ func confEditCmd() *cobra.Command {
 			vcpctl conf edit <config-name>
 			vcpctl conf edit <config-name> --deps
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeWIMConfNameOrID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)

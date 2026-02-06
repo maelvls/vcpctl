@@ -139,12 +139,49 @@ func saGenCmd() *cobra.Command {
 			vcpctl sa gen keypair <sa-name> -ojson
 			vcpctl sa gen wif <sa-name> -ojson
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeSANameOrID(noFilter),
 	}
 	cmd.AddCommand(saGenkeypairCmd())
 	cmd.AddCommand(saGenWifCmd())
 	return cmd
+}
+
+var (
+	noFilter = func(api.ServiceAccountDetails) bool { return true }
+)
+
+// Filter can be left nil.
+func completeSANameOrID(filter func(api.ServiceAccountDetails) bool) func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		conf, err := getToolConfig(cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		apiClient, err := newAPIClient(conf)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		svcaccts, err := api.GetServiceAccounts(cmd.Context(), apiClient)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
+		var completions []cobra.Completion
+		for _, sa := range svcaccts {
+			if filter != nil && !filter(sa) {
+				continue
+			}
+			if strings.HasPrefix(sa.Name, toComplete) {
+				completions = append(completions, cobra.Completion(sa.Name))
+			}
+			if strings.HasPrefix(sa.Id.String(), toComplete) {
+				completions = append(completions, cobra.Completion(sa.Id.String()))
+			}
+		}
+		return completions, cobra.ShellCompDirectiveNoFileComp
+	}
 }
 
 func saPutCmd() *cobra.Command {
@@ -286,8 +323,9 @@ func saEditCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl sa edit <sa-name>
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeSANameOrID(noFilter),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the service account name or ID), got: %s", args)
@@ -370,8 +408,9 @@ func saScopesCmd() *cobra.Command {
 			vcpctl sa scopes --type rsaKey
 			vcpctl sa scopes --type rsaKeyFederated -o table
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeSANameOrID(noFilter),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
@@ -448,8 +487,9 @@ func saRmCmd() *cobra.Command {
 			vcpctl sa rm <sa-name>
 			vcpctl sa rm -i
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeSANameOrID(noFilter),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if interactive {
 				if len(args) > 0 {
