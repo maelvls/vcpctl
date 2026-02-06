@@ -48,7 +48,7 @@ func saGenkeypairCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		ValidArgsFunction: completeSANameOrID(func(sa api.ServiceAccountDetails) bool {
+		ValidArgsFunction: completeSAName(func(sa api.ServiceAccountDetails) bool {
 			return sa.AuthenticationType == "rsaKey"
 		}),
 		RunE: func(cmd *cobra.Command, args []string) error {

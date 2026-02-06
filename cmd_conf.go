@@ -150,7 +150,7 @@ func confGetCmd() *cobra.Command {
 		`),
 		SilenceErrors:     true,
 		SilenceUsage:      true,
-		ValidArgsFunction: completeWIMConfNameOrID,
+		ValidArgsFunction: completeWIMConfName,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)
@@ -242,7 +242,7 @@ func confRmCmd() *cobra.Command {
 		`),
 		SilenceErrors:     true,
 		SilenceUsage:      true,
-		ValidArgsFunction: completeWIMConfNameOrID,
+		ValidArgsFunction: completeWIMConfName,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the WIM configuration name or ID), got %s", args)
@@ -375,7 +375,7 @@ func deprecatedRmCmd() *cobra.Command {
 	return cmd
 }
 
-func completeWIMConfNameOrID(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func completeWIMConfName(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	conf, err := getToolConfig(cmd)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
@@ -393,8 +393,6 @@ func completeWIMConfNameOrID(cmd *cobra.Command, args []string, toComplete strin
 	for _, c := range confs {
 		if strings.HasPrefix(c.Name, toComplete) {
 			suggestions = append(suggestions, c.Name)
-		} else if strings.HasPrefix(c.Id.String(), toComplete) {
-			suggestions = append(suggestions, c.Id.String())
 		}
 	}
 

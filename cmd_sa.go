@@ -141,7 +141,7 @@ func saGenCmd() *cobra.Command {
 		`),
 		SilenceErrors:     true,
 		SilenceUsage:      true,
-		ValidArgsFunction: completeSANameOrID(noFilter),
+		ValidArgsFunction: completeSAName(noFilter),
 	}
 	cmd.AddCommand(saGenkeypairCmd())
 	cmd.AddCommand(saGenWifCmd())
@@ -153,7 +153,7 @@ var (
 )
 
 // Filter can be left nil.
-func completeSANameOrID(filter func(api.ServiceAccountDetails) bool) func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+func completeSAName(filter func(api.ServiceAccountDetails) bool) func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		conf, err := getToolConfig(cmd)
 		if err != nil {
@@ -175,9 +175,6 @@ func completeSANameOrID(filter func(api.ServiceAccountDetails) bool) func(cmd *c
 			}
 			if strings.HasPrefix(sa.Name, toComplete) {
 				completions = append(completions, cobra.Completion(sa.Name))
-			}
-			if strings.HasPrefix(sa.Id.String(), toComplete) {
-				completions = append(completions, cobra.Completion(sa.Id.String()))
 			}
 		}
 		return completions, cobra.ShellCompDirectiveNoFileComp
@@ -325,7 +322,7 @@ func saEditCmd() *cobra.Command {
 		`),
 		SilenceErrors:     true,
 		SilenceUsage:      true,
-		ValidArgsFunction: completeSANameOrID(noFilter),
+		ValidArgsFunction: completeSAName(noFilter),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the service account name or ID), got: %s", args)
@@ -410,7 +407,7 @@ func saScopesCmd() *cobra.Command {
 		`),
 		SilenceErrors:     true,
 		SilenceUsage:      true,
-		ValidArgsFunction: completeSANameOrID(noFilter),
+		ValidArgsFunction: completeSAName(noFilter),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
@@ -489,7 +486,7 @@ func saRmCmd() *cobra.Command {
 		`),
 		SilenceErrors:     true,
 		SilenceUsage:      true,
-		ValidArgsFunction: completeSANameOrID(noFilter),
+		ValidArgsFunction: completeSAName(noFilter),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if interactive {
 				if len(args) > 0 {

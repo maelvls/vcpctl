@@ -45,7 +45,7 @@ func saGenWifCmd() *cobra.Command {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		ValidArgsFunction: completeSANameOrID(func(sad api.ServiceAccountDetails) bool {
+		ValidArgsFunction: completeSAName(func(sad api.ServiceAccountDetails) bool {
 			return sad.AuthenticationType == "rsaKeyFederated"
 		}),
 		Args: cobra.ExactArgs(1),
