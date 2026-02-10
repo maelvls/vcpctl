@@ -45,15 +45,32 @@ func SelfCheckAPIKey(ctx context.Context, cl *Client) (_ UserAccountResponse, te
 		return UserAccountResponse{}, "", fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
 	}
 
-	urlPrefix, err := actualTenantURLPrefixFromRegisteredTenantURLPrefix(result.Company.UrlPrefix, cl.Server)
+	actualURLPrefix, err := actualTenantURLPrefixFromRegisteredTenantURLPrefix(result.Company.UrlPrefix, cl.Server)
 	if err != nil {
 		return UserAccountResponse{}, "", fmt.Errorf("while fixing URL prefix: %w", err)
 	}
 
-	tenantURL = fmt.Sprintf("https://%s.%s", urlPrefix, result.Company.Domains[0])
+	tenantURL, err = GetBaseEnv(cl.Client, cl.Server, actualURLPrefix)
+	if err != nil {
+		return UserAccountResponse{}, "", fmt.Errorf("while getting actual tenant URL: %w", err)
+	}
 
 	return result, tenantURL, nil
 }
+
+// At first, I was using the company.domains[0] value returned by
+// /v1/useraccounts, but this field doesn't actually correspond to the tenant
+// URL domain suffix (e.g., "venafi.cloud"). Examples:
+//
+//  |        tenant URL domain         |    company.domains[0]     |   |
+//  |----------------------------------|---------------------------|---|
+//  | ui-stack-dev210.qa.venafi.io     | qa.venafi.io              | ✅ |
+//  | glow-in-the-dark.venafi.cloud    | venafi.cloud              | ✅ |
+//  | ven-tlspk.venafi.cloud           | tlspk.qa.venafi.io        | ❌ |
+//  | ven-cert-manager-uk.venafi.cloud | cert-manager.qa.venafi.io | ❌ |
+//
+// Don't use company.domains[0] to guess what the tenant URL is! Prefer using
+// GetEnvBase instead.
 
 // When authenticating as key pair ("rsaKey") service accounts, the backend
 // responds with a 500:

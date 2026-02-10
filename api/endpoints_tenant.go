@@ -160,6 +160,9 @@ type BaseEnvironment struct {
 // Endpoint: <tenant-url>/single-spa-root-config/baseEnvironment.json.
 // Unauthenticated. Gets the tenant hostname and API URL for the given tenant
 // URL. Client's Server must be set to the tenant URL.
+//
+// $ curl --fail-with-body https://api-dev210.qa.venafi.io/v1/companies/stack/baseenv
+// {"apiBaseUrl":"https://api-dev210.qa.venafi.io","uiHost":"ui-stack-dev210.qa.venafi.io"}
 func GetBaseEnvironment(client HttpRequestDoer, tenantURL string) (BaseEnvironment, error) {
 	url := fmt.Sprintf("%s/single-spa-root-config/baseEnvironment.json", tenantURL)
 	req, err := http.NewRequest("GET", url, nil)
@@ -353,7 +356,7 @@ func registeredTenantURLPrefixFromTenantURL(tenantURL string) (string, error) {
 //	    "name": "qa.venafi.io",
 //	    "urlPrefix": "stack",             <-- The 'registered' tenant URL prefix
 //	    ...                                   does not match with the 'actual'
-//											  tenant URL (see below).
+//	                                          tenant URL (see below).
 //
 // In the above example, "ui-stack-dev247" is the 'actual' tenant URL prefix,
 // even though its 'registered' tenant URL prefix is "stack".
@@ -370,8 +373,8 @@ func registeredTenantURLPrefixFromTenantURL(tenantURL string) (string, error) {
 //	                                           prefix.
 //
 // For example, "ui-stack-dev247" is the actual tenant URL prefix for the
-// devstack running at 'api-dev247.qa.venafi.io', but its 'registered' tenant URL
-// prefix is "stack".
+// devstack running at 'api-dev247.qa.venafi.io', but its 'registered' tenant
+// URL prefix is "stack".
 //
 // Examples:
 //
@@ -389,10 +392,10 @@ func actualTenantURLPrefixFromRegisteredTenantURLPrefix(registeredTenantURLPrefi
 	if len(apiURLParts) != 2 {
 		return "", fmt.Errorf("unexpected API URL format. Expected a URL with a dot somewhere, but got: %q", apiURL)
 	}
-	devstack := apiURLParts[0]                             // e.g. "https://api-dev210"
-	devstack = rmProtocolPrefix(devstack)                  // e.g. "api-dev210"
-	devstack = strings.TrimPrefix(devstack, "api-")        // e.g. "dev210"
-	registeredTenantURLPrefix = "ui-stack-" + devstack     // e.g. "ui-stack-dev210"
+	devstack := apiURLParts[0]                         // e.g. "https://api-dev210"
+	devstack = rmProtocolPrefix(devstack)              // e.g. "api-dev210"
+	devstack = strings.TrimPrefix(devstack, "api-")    // e.g. "dev210"
+	registeredTenantURLPrefix = "ui-stack-" + devstack // e.g. "ui-stack-dev210"
 	return registeredTenantURLPrefix, nil
 }
 
@@ -491,22 +494,23 @@ func GetTenantURLPrefixFromTenantID(cl Client, tenantID string) (string, error) 
 	return urlPrefixResponse.URLPrefix, nil
 }
 
-// Example responses for reference:
+// Unauthenticated. Example responses for reference:
 //
 //	$ curl https://api-dev247.qa.venafi.io/v1/companies/stack/baseenv
 //	{"apiBaseUrl":"https://api-dev247.qa.venafi.io","uiHost":"ui-stack-dev247.qa.venafi.io"}
 //
 //	$ curl https://api.venafi.cloud/v1/companies/prod/baseenv
 //	{"apiBaseUrl":"https://api.venafi.cloud","uiHost":"prod.venafi.cloud"}
-func GetBaseEnv(cl Client, registeredTenantURLPrefix string) (apiURL string, tenantURL string, err error) {
-	url := fmt.Sprintf("%s/v1/companies/%s/baseenv", cl.Server, registeredTenantURLPrefix)
+func GetBaseEnv(anonCl HttpRequestDoer, apiURL, registeredTenantURLPrefix string) (tenantURL string, err error) {
+	apiURL = strings.TrimSuffix(apiURL, "/")
+	url := fmt.Sprintf("%s/v1/companies/%s/baseenv", apiURL, registeredTenantURLPrefix)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return "", "", fmt.Errorf("while creating request to get tenant info for tenant ID '%s': %w", registeredTenantURLPrefix, err)
+		return "", fmt.Errorf("while creating request to get tenant info for tenant ID '%s': %w", registeredTenantURLPrefix, err)
 	}
-	resp, err := cl.Client.Do(req)
+	resp, err := anonCl.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("while getting tenant info for tenant ID '%s': %w", registeredTenantURLPrefix, err)
+		return "", fmt.Errorf("while getting tenant info for tenant ID '%s': %w", registeredTenantURLPrefix, err)
 	}
 	defer resp.Body.Close()
 
@@ -514,14 +518,14 @@ func GetBaseEnv(cl Client, registeredTenantURLPrefix string) (apiURL string, ten
 	case http.StatusOK:
 		// Continue below.
 	case http.StatusNotFound:
-		return "", "", errutil.NotFound{NameOrID: registeredTenantURLPrefix}
+		return "", errutil.NotFound{NameOrID: registeredTenantURLPrefix}
 	default:
-		return "", "", HTTPErrorFrom(resp)
+		return "", HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", fmt.Errorf("reading baseenv response body: %w", err)
+		return "", fmt.Errorf("reading baseenv response body: %w", err)
 	}
 
 	var baseEnv struct {
@@ -530,9 +534,9 @@ func GetBaseEnv(cl Client, registeredTenantURLPrefix string) (apiURL string, ten
 	}
 	err = json.Unmarshal(body, &baseEnv)
 	if err != nil {
-		return "", "", fmt.Errorf("while unmarshalling baseenv response body: %w", err)
+		return "", fmt.Errorf("while unmarshalling baseenv response body: %w", err)
 	}
 
 	tenantURL = fmt.Sprintf("https://%s", baseEnv.UIHost)
-	return baseEnv.APIBaseURL, tenantURL, nil
+	return tenantURL, nil
 }
