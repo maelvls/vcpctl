@@ -129,9 +129,12 @@ type TenantInfo struct {
 	TenantID string // e.g., "e74f4140-12a6-42f9-9f81-a6b538fa6804"
 }
 
-// Unauthenticated. Gets the API URL, tenant ID, and 'registered' tenant URL prefix for
-// the given tenant URL. May return errutil.NotFound if the tenant does not
-// exist. Client's Server must be set to the API URL.
+// Unauthenticated. Gets the API URL, tenant ID, and 'registered' tenant URL
+// prefix for the given tenant URL. May return errutil.NotFound if the tenant
+// does not exist. Client's Server must be set to the API URL.
+//
+// The 'actual' tenant URL prefix is the first segment of the tenant URL used in
+// practice by users to open the web UI.
 func GetTenantInfo(anonClient HttpRequestDoer, tenantURL string) (TenantInfo, error) {
 	tenantURL = strings.TrimSuffix(tenantURL, "/")
 
@@ -234,7 +237,9 @@ type LoginInfo struct {
 // Unauthenticated. Gets the tenant ID (company ID) for the given tenant URL.
 func GetLoginInfo(client HttpRequestDoer, apiURL, tenantURL string) (LoginInfo, error) {
 	// We already have the 'actual' tenantURLPrefix (it's the subdomain of the
-	// tenant URL). But what we actually need is the 'registered' tenantURLPrefix.
+	// tenant URL). But what we actually need is the 'registered'
+	// tenantURLPrefix. See the `registeredTenantURLPrefixFromTenantURL` func to
+	// learn more.
 	registeredTenantURLPrefix, err := registeredTenantURLPrefixFromTenantURL(tenantURL)
 	if err != nil {
 		return LoginInfo{}, fmt.Errorf("while getting tenant URL prefix from tenant URL '%s': %w", tenantURL, err)
@@ -494,13 +499,10 @@ func GetTenantURLPrefixFromTenantID(cl Client, tenantID string) (string, error) 
 	return urlPrefixResponse.URLPrefix, nil
 }
 
-// Unauthenticated. Example responses for reference:
-//
-//	$ curl https://api-dev247.qa.venafi.io/v1/companies/stack/baseenv
-//	{"apiBaseUrl":"https://api-dev247.qa.venafi.io","uiHost":"ui-stack-dev247.qa.venafi.io"}
-//
-//	$ curl https://api.venafi.cloud/v1/companies/prod/baseenv
-//	{"apiBaseUrl":"https://api.venafi.cloud","uiHost":"prod.venafi.cloud"}
+// Unauthenticated. You must pass the 'registered' tenant URL prefix (not the
+// 'actual' tenant URL prefix) to this func. You can read more about the
+// difference between 'registered' and 'actual' tenant URL prefixes in the
+// comment of the `registeredTenantURLPrefixFromTenantURL` func.
 func GetBaseEnv(anonCl HttpRequestDoer, apiURL, registeredTenantURLPrefix string) (tenantURL string, err error) {
 	apiURL = strings.TrimSuffix(apiURL, "/")
 	url := fmt.Sprintf("%s/v1/companies/%s/baseenv", apiURL, registeredTenantURLPrefix)
@@ -513,6 +515,14 @@ func GetBaseEnv(anonCl HttpRequestDoer, apiURL, registeredTenantURLPrefix string
 		return "", fmt.Errorf("while getting tenant info for tenant ID '%s': %w", registeredTenantURLPrefix, err)
 	}
 	defer resp.Body.Close()
+
+	// Example responses for reference:
+	//
+	//  $ curl https://api-dev247.qa.venafi.io/v1/companies/stack/baseenv
+	//  {"apiBaseUrl":"https://api-dev247.qa.venafi.io","uiHost":"ui-stack-dev247.qa.venafi.io"}
+	//
+	//  $ curl https://api.venafi.cloud/v1/companies/prod/baseenv
+	//  {"apiBaseUrl":"https://api.venafi.cloud","uiHost":"prod.venafi.cloud"}
 
 	switch resp.StatusCode {
 	case http.StatusOK:

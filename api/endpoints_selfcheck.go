@@ -45,12 +45,8 @@ func SelfCheckAPIKey(ctx context.Context, cl *Client) (_ UserAccountResponse, te
 		return UserAccountResponse{}, "", fmt.Errorf("while decoding response body: %w, body was: %s", err, string(body))
 	}
 
-	actualURLPrefix, err := actualTenantURLPrefixFromRegisteredTenantURLPrefix(result.Company.UrlPrefix, cl.Server)
-	if err != nil {
-		return UserAccountResponse{}, "", fmt.Errorf("while fixing URL prefix: %w", err)
-	}
-
-	tenantURL, err = GetBaseEnv(cl.Client, cl.Server, actualURLPrefix)
+	registeredURLPrefix := result.Company.UrlPrefix
+	tenantURL, err = GetBaseEnv(cl.Client, cl.Server, registeredURLPrefix)
 	if err != nil {
 		return UserAccountResponse{}, "", fmt.Errorf("while getting actual tenant URL: %w", err)
 	}
