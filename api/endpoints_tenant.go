@@ -30,7 +30,7 @@ var venafiRegions = []string{
 //	       'actual' tenantURLPrefix
 //
 // Use errutil.IsNotFound to check if the tenant was not found.
-func GetTenantID(ctx context.Context, actualTenantURLPrefix string) (tenantID string, _ error) {
+func GetTenantID(ctx context.Context, anonClient http.Client, actualTenantURLPrefix string) (tenantID string, _ error) {
 	type result struct {
 		res    CompanyLoginConfigResponse
 		status int
@@ -41,77 +41,47 @@ func GetTenantID(ctx context.Context, actualTenantURLPrefix string) (tenantID st
 
 	for _, apiURL := range venafiRegions {
 		go func(apiURL string) {
-			anonClient, err := NewAnonymousClient()
+			registeredTenantURLPrefix, err := actualToRegistered(actualTenantURLPrefix)
 			if err != nil {
-				// In the sequential version we just "continue", i.e. ignore this region.
-				// We still report the error so we can maybe return *some* error if all fail.
 				resultsCh <- result{
-					err: fmt.Errorf("while creating client for %s: %w", apiURL, err),
+					err: fmt.Errorf("while extracting registered tenant URL prefix from actual tenant URL prefix '%s' and API URL '%s': %w",
+						actualTenantURLPrefix, apiURL, err),
 				}
 				return
 			}
 
-			resp, err := anonClient.GetV1CompaniesByUrlPrefixLoginconfig(ctx, actualTenantURLPrefix)
+			resp, err := GetLoginInfo(ctx, anonClient, apiURL, registeredTenantURLPrefix)
 			if err != nil {
 				resultsCh <- result{
 					err: fmt.Errorf("while looking up tenant ID for '%s' in %s: %w", actualTenantURLPrefix, apiURL, err),
 				}
 				return
 			}
-			defer resp.Body.Close()
-
-			switch resp.StatusCode {
-			case http.StatusOK:
-				var res CompanyLoginConfigResponse
-
-				bytes, err := io.ReadAll(resp.Body)
-				if err != nil {
-					resultsCh <- result{
-						err: fmt.Errorf("while reading response body from %s: %w", apiURL, err),
-					}
-					return
-				}
-				if err := json.Unmarshal(bytes, &res); err != nil {
-					resultsCh <- result{
-						err: fmt.Errorf("while unmarshaling response body from %s: %w", apiURL, err),
-					}
-					return
-				}
-				resultsCh <- result{
-					res:    res,
-					status: http.StatusOK,
-				}
-
-			case http.StatusNotFound:
-				// Just signal "not found" for this region.
-				resultsCh <- result{
-					status: http.StatusNotFound,
-				}
-
-			default:
-				resultsCh <- result{
-					status: resp.StatusCode,
-					err: fmt.Errorf("while looking up tenant ID for '%s' in %s: received unexpected status code %d",
-						actualTenantURLPrefix, apiURL, resp.StatusCode),
-				}
+			resultsCh <- result{
+				res:    resp,
+				status: http.StatusOK,
 			}
 		}(apiURL)
 	}
 
 	var firstErr error
 
-	// Collect results from all regions.
+	// Collect results from all regions. Stop if context is canceled to avoid
+	// waiting for all regions to respond.
 	for range venafiRegions {
-		r := <-resultsCh
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case r := <-resultsCh:
+			// If any region finds the tenant, return it immediately.
+			if r.status == http.StatusOK && r.err == nil {
+				return r.res.CompanyId.String(), nil
+			}
 
-		// If any region finds the tenant, return it immediately.
-		if r.status == http.StatusOK && r.err == nil {
-			return r.res.CompanyId.String(), nil
-		}
-
-		// Remember the first non-OK error in case they all fail.
-		if r.err != nil && firstErr == nil {
-			firstErr = r.err
+			// Remember the first non-OK error in case they all fail.
+			if r.err != nil && firstErr == nil {
+				firstErr = r.err
+			}
 		}
 	}
 
@@ -135,26 +105,40 @@ type TenantInfo struct {
 //
 // The 'actual' tenant URL prefix is the first segment of the tenant URL used in
 // practice by users to open the web UI.
-func GetTenantInfo(anonClient HttpRequestDoer, tenantURL string) (TenantInfo, error) {
+func GetTenantInfo(ctx context.Context, anonClient http.Client, tenantURL string) (TenantInfo, error) {
 	tenantURL = strings.TrimSuffix(tenantURL, "/")
 
-	baseEnv, err := GetBaseEnvironment(anonClient, tenantURL)
+	baseEnv, err := GetBaseEnvironmentJSON(ctx, anonClient, tenantURL)
 	if err != nil {
 		return TenantInfo{}, fmt.Errorf("while getting base environment for tenant '%s': %w", tenantURL, err)
 	}
 
-	loginInfo, err := GetLoginInfo(anonClient, baseEnv.APIBaseURL, tenantURL)
+	// We already have the 'actual' tenantURLPrefix (it's the subdomain of the
+	// tenant URL). But what we actually need is the 'registered'
+	// tenantURLPrefix. See the `registeredTenantURLPrefixFromTenantURL` func to
+	// learn more.
+	actualTenantURLPrefix, err := prefixOf(tenantURL)
+	if err != nil {
+		return TenantInfo{}, fmt.Errorf("while extracting actual tenant URL prefix from tenant URL '%s': %w", tenantURL, err)
+	}
+
+	registeredTenantURLPrefix, err := actualToRegistered(actualTenantURLPrefix)
+	if err != nil {
+		return TenantInfo{}, fmt.Errorf("while extracting registered tenant URL prefix from tenant URL '%s': %w", tenantURL, err)
+	}
+
+	loginInfo, err := GetLoginInfo(ctx, anonClient, baseEnv.APIBaseURL, registeredTenantURLPrefix)
 	if err != nil {
 		return TenantInfo{}, fmt.Errorf("while getting login info for tenant '%s': %w", tenantURL, err)
 	}
 
 	return TenantInfo{
 		APIURL:   baseEnv.APIBaseURL,
-		TenantID: loginInfo.CompanyID,
+		TenantID: loginInfo.CompanyId.String(),
 	}, nil
 }
 
-type BaseEnvironment struct {
+type BaseEnvironmentJSON struct {
 	APIBaseURL string `json:"apiBaseUrl"` // e.g., "https://api.venafi.cloud"
 	UIHost     string `json:"uiHost"`     // e.g., "glow-in-the-dark.venafi.cloud"
 	Region     string `json:"region"`     // e.g., "us"
@@ -162,20 +146,18 @@ type BaseEnvironment struct {
 
 // Endpoint: <tenant-url>/single-spa-root-config/baseEnvironment.json.
 // Unauthenticated. Gets the tenant hostname and API URL for the given tenant
-// URL. Client's Server must be set to the tenant URL.
-//
-// $ curl --fail-with-body https://api-dev210.qa.venafi.io/v1/companies/stack/baseenv
-// {"apiBaseUrl":"https://api-dev210.qa.venafi.io","uiHost":"ui-stack-dev210.qa.venafi.io"}
-func GetBaseEnvironment(client HttpRequestDoer, tenantURL string) (BaseEnvironment, error) {
+// URL. Client's Server must be set to the tenant URL. To create the client, use
+// NewAnonymousClient as the 'Server' field must be left empty.
+func GetBaseEnvironmentJSON(ctx context.Context, anonClient http.Client, tenantURL string) (BaseEnvironmentJSON, error) {
 	url := fmt.Sprintf("%s/single-spa-root-config/baseEnvironment.json", tenantURL)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return BaseEnvironment{}, fmt.Errorf("while creating request to get API URL for tenant '%s': %w", tenantURL, err)
+		return BaseEnvironmentJSON{}, fmt.Errorf("while creating request to get API URL for tenant '%s': %w", tenantURL, err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := anonClient.Do(req)
 	if err != nil {
-		return BaseEnvironment{}, fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
+		return BaseEnvironmentJSON{}, fmt.Errorf("while getting API URL for tenant '%s': %w", tenantURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -183,14 +165,14 @@ func GetBaseEnvironment(client HttpRequestDoer, tenantURL string) (BaseEnvironme
 	case http.StatusOK:
 		// Continue below.
 	case http.StatusNotFound:
-		return BaseEnvironment{}, errutil.NotFound{NameOrID: tenantURL}
+		return BaseEnvironmentJSON{}, errutil.NotFound{NameOrID: tenantURL}
 	default:
-		return BaseEnvironment{}, HTTPErrorFrom(resp)
+		return BaseEnvironmentJSON{}, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return BaseEnvironment{}, fmt.Errorf("reading response body: %w", err)
+		return BaseEnvironmentJSON{}, fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Example 1 (production):
@@ -222,38 +204,24 @@ func GetBaseEnvironment(client HttpRequestDoer, tenantURL string) (BaseEnvironme
 	}
 	err = json.Unmarshal(body, &baseEnvironment)
 	if err != nil {
-		return BaseEnvironment{}, fmt.Errorf("while unmarshalling response body: %w", err)
+		return BaseEnvironmentJSON{}, fmt.Errorf("while unmarshalling response body: %w", err)
 	}
 
 	return baseEnvironment, nil
 }
 
-type LoginInfo struct {
-	CompanyID string `json:"companyId"`
-	SSOLogin  bool   `json:"ssoLogin"`
-}
-
 // Call: <api-url>/v1/companies/<registered-tenant-url-prefix>/loginconfig
 // Unauthenticated. Gets the tenant ID (company ID) for the given tenant URL.
-func GetLoginInfo(client HttpRequestDoer, apiURL, tenantURL string) (LoginInfo, error) {
-	// We already have the 'actual' tenantURLPrefix (it's the subdomain of the
-	// tenant URL). But what we actually need is the 'registered'
-	// tenantURLPrefix. See the `registeredTenantURLPrefixFromTenantURL` func to
-	// learn more.
-	registeredTenantURLPrefix, err := registeredTenantURLPrefixFromTenantURL(tenantURL)
-	if err != nil {
-		return LoginInfo{}, fmt.Errorf("while getting tenant URL prefix from tenant URL '%s': %w", tenantURL, err)
-	}
-
+func GetLoginInfo(ctx context.Context, client http.Client, apiURL, registeredTenantURLPrefix string) (CompanyLoginConfigResponse, error) {
 	url := fmt.Sprintf("%s/v1/companies/%s/loginconfig", apiURL, registeredTenantURLPrefix)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return LoginInfo{}, fmt.Errorf("while creating request to get tenant ID for tenant '%s': %w", tenantURL, err)
+		return CompanyLoginConfigResponse{}, fmt.Errorf("while creating request to get tenant ID for tenant '%s': %w", registeredTenantURLPrefix, err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return LoginInfo{}, fmt.Errorf("while getting tenant ID for tenant '%s': %w", tenantURL, err)
+		return CompanyLoginConfigResponse{}, fmt.Errorf("while getting tenant ID for tenant '%s': %w", registeredTenantURLPrefix, err)
 	}
 	defer resp.Body.Close()
 
@@ -261,20 +229,20 @@ func GetLoginInfo(client HttpRequestDoer, apiURL, tenantURL string) (LoginInfo, 
 	case http.StatusOK:
 		// Continue below.
 	case http.StatusNotFound:
-		return LoginInfo{}, errutil.NotFound{NameOrID: tenantURL}
+		return CompanyLoginConfigResponse{}, errutil.NotFound{NameOrID: registeredTenantURLPrefix}
 	default:
-		return LoginInfo{}, HTTPErrorFrom(resp)
+		return CompanyLoginConfigResponse{}, HTTPErrorFrom(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return LoginInfo{}, fmt.Errorf("reading loginconfig response body: %w", err)
+		return CompanyLoginConfigResponse{}, fmt.Errorf("reading loginconfig response body: %w", err)
 	}
 
-	var loginInfo LoginInfo
+	var loginInfo CompanyLoginConfigResponse
 	err = json.Unmarshal(body, &loginInfo)
 	if err != nil {
-		return LoginInfo{}, fmt.Errorf("while unmarshalling loginconfig response body: %w", err)
+		return CompanyLoginConfigResponse{}, fmt.Errorf("while unmarshalling loginconfig response body: %w", err)
 	}
 
 	return loginInfo, nil
@@ -315,16 +283,9 @@ func GetLoginInfo(client HttpRequestDoer, apiURL, tenantURL string) (LoginInfo, 
 //
 // Examples:
 //
-//	registeredTenantURLPrefixFromTenantURL("https://glow-in-the-dark.venafi.cloud") -> "glow-in-the-dark"
-//	registeredTenantURLPrefixFromTenantURL("https://ui-stack-dev210.qa.venafi.io")  -> "stack"
-func registeredTenantURLPrefixFromTenantURL(tenantURL string) (string, error) {
-	parts := strings.SplitN(tenantURL, ".", 2)
-	if len(parts) == 0 {
-		return "", fmt.Errorf("could not extract URL prefix from tenant URL, could not find a dot in '%s'", tenantURL)
-	}
-	actualTenantURLPrefix := rmProtocolPrefix(parts[0])
-	actualTenantURLPrefix = strings.TrimSuffix(actualTenantURLPrefix, "/")
-
+//	actualToRegistered("https://glow-in-the-dark.venafi.cloud") -> "glow-in-the-dark"
+//	actualToRegistered("https://ui-stack-dev210.qa.venafi.io")  -> "stack"
+func actualToRegistered(actualTenantURLPrefix string) (registeredTenantURLPrefix string, _ error) {
 	// For dev environments, the 'actual' tenantURLPrefix might be something
 	// like "ui-stack-dev210". The 'registered' tenantURLPrefix is always just "stack".
 	if strings.HasPrefix(actualTenantURLPrefix, "ui-stack-") {
@@ -336,7 +297,7 @@ func registeredTenantURLPrefixFromTenantURL(tenantURL string) (string, error) {
 	return actualTenantURLPrefix, nil
 }
 
-// actualTenantURLPrefixFromRegisteredTenantURLPrefix computes the 'actual' UI
+// registeredToActual computes the 'actual' UI
 // tenant URL prefix from the 'registered' UI tenant URL prefix and the API URL.
 //
 // For dev environments, the 'registered' tenant URL prefix is always "stack",
@@ -383,12 +344,12 @@ func registeredTenantURLPrefixFromTenantURL(tenantURL string) (string, error) {
 //
 // Examples:
 //
-//	actualTenantURLPrefixFromRegisteredTenantURLPrefix("stack", "https://api-dev210.qa.venafi.io") -> "ui-stack-dev210"
-//	actualTenantURLPrefixFromRegisteredTenantURLPrefix("glow-in-the-dark", "https://api.venafi.cloud") -> "glow-in-the-dark"
+//	registeredToActual("stack", "https://api-dev210.qa.venafi.io") -> "ui-stack-dev210"
+//	registeredToActual("glow-in-the-dark", "https://api.venafi.cloud") -> "glow-in-the-dark"
 //
 // See:
 // https://gitlab.com/venafi/vaas/test-enablement/vaas-auto/-/merge_requests/738/diffs#note_2579353788
-func actualTenantURLPrefixFromRegisteredTenantURLPrefix(registeredTenantURLPrefix, apiURL string) (string, error) {
+func registeredToActual(registeredTenantURLPrefix, apiURL string) (actualTenantURLPrefix string, _ error) {
 	if registeredTenantURLPrefix != "stack" {
 		return registeredTenantURLPrefix, nil
 	}
@@ -408,6 +369,16 @@ func rmProtocolPrefix(s string) string {
 	s = strings.TrimPrefix(s, "https://")
 	s = strings.TrimPrefix(s, "http://")
 	return s
+}
+
+func prefixOf(tenantURL string) (string, error) {
+	parts := strings.SplitN(tenantURL, ".", 2)
+	if len(parts) == 0 {
+		return "", fmt.Errorf("could not extract URL prefix from tenant URL, could not find a dot in '%s'", tenantURL)
+	}
+	urlPrefix := rmProtocolPrefix(parts[0])
+	urlPrefix = strings.TrimSuffix(urlPrefix, "/")
+	return urlPrefix, nil
 }
 
 // GetTenantIDFromUsername gets the tenant ID (company ID) for the given

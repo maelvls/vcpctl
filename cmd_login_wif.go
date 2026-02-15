@@ -274,7 +274,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag strin
 	if err != nil {
 		return fmt.Errorf("while creating unauthenticated API client: %w", err)
 	}
-	info, err := api.GetTenantInfo(anonClient.Client, input.TenantURL)
+	info, err := api.GetTenantInfo(ctx, anonClient, input.TenantURL)
 	if err != nil {
 		return fmt.Errorf("while getting tenant info: %w", err)
 	}

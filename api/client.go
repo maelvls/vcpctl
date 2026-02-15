@@ -3,10 +3,11 @@ package api
 import (
 	"context"
 	"net/http"
+	"runtime/debug"
 )
 
-const (
-	UserAgent = "vcpctl/v0.0.1"
+var (
+	UserAgent = "vcpctl/" + buildVersion()
 )
 
 // Configures the User-Agent and tppl-api-key headers as well as logging. Prefer
@@ -34,12 +35,8 @@ func NewAccessTokenClient(apiURL, accessToken string, opts ...ClientOption) (*Cl
 // Useful for /v1/companies/{urlPrefix}/loginconfig which does not require
 // authentication nor requires an explicit API URL. The api.Client's Server is
 // left empty, the user must provide full URLs to the endpoints.
-func NewAnonymousClient(opts ...ClientOption) (*Client, error) {
-	opts = append(opts,
-		WithHTTPClient(&http.Client{Transport: LogTransport}),
-		withUserAgent(),
-	)
-	return NewClient("", opts...)
+func NewAnonymousClient() (http.Client, error) {
+	return http.Client{Transport: &transportWithUserAgent{transport: LogTransport}}, nil
 }
 
 // withTpplAPIKey returns a copy of the provided http.Client that adds the
@@ -74,4 +71,44 @@ func withUserAgent() ClientOption {
 		})
 		return nil
 	}
+}
+
+const shaLen = 7
+
+func buildVersion() string {
+	commit := ""
+	version := ""
+	if version == "" {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Sum != "" {
+			version = info.Main.Version
+			commit = getKey(info, "vcs.revision")
+		} else {
+			version = "unknown (built from source)"
+		}
+	}
+	if len(commit) >= shaLen {
+		version += " (" + commit[:shaLen] + ")"
+	}
+	return version
+}
+
+func getKey(info *debug.BuildInfo, key string) string {
+	if info == nil {
+		return ""
+	}
+	for _, iter := range info.Settings {
+		if iter.Key == key {
+			return iter.Value
+		}
+	}
+	return ""
+}
+
+type transportWithUserAgent struct {
+	transport http.RoundTripper
+}
+
+func (t *transportWithUserAgent) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", UserAgent)
+	return t.transport.RoundTrip(req)
 }

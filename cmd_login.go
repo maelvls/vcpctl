@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -130,7 +131,7 @@ func loginCmd(groupID string) *cobra.Command {
 				if apiURL != "" {
 					logutil.Infof("⚠️  Warning: --api-url will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
 				}
-				return loginWithTenantURL(cmd.Context(), anonymousClient.Client, args[0], apiKey, contextName)
+				return loginWithTenantURL(cmd.Context(), &anonymousClient, args[0], apiKey, contextName)
 			}
 
 			if apiURL != "" {
@@ -148,13 +149,13 @@ func loginCmd(groupID string) *cobra.Command {
 }
 
 // The 'cl' must be an unauthenticated client.
-func loginWithTenantURL(ctx context.Context, anonymousClient api.HttpRequestDoer, tenantURL, apiKey, contextName string) error {
+func loginWithTenantURL(ctx context.Context, anonymousClient *http.Client, tenantURL, apiKey, contextName string) error {
 	tenantURL = normalizeURL(tenantURL)
 	if tenantURL == "" {
 		return fmt.Errorf("tenant URL cannot be empty")
 	}
 
-	info, err := api.GetTenantInfo(anonymousClient, tenantURL)
+	info, err := api.GetTenantInfo(ctx, *anonymousClient, tenantURL)
 	if err != nil {
 		return err
 	}
@@ -274,7 +275,7 @@ func loginInteractive(ctx context.Context, apiKey, contextName string) error {
 	current.AuthenticationType = "apiKey"
 
 	if !skipTenantPrompt {
-		if err := promptForTenantURL(ctx, anonClient.Client, &current); err != nil {
+		if err := promptForTenantURL(ctx, anonClient, &current); err != nil {
 			return err
 		}
 		fmt.Println()
@@ -1226,7 +1227,7 @@ func populateFromAPIKey(ctx context.Context, current *Auth, apiKey string) error
 }
 
 // Unauthenticated client is fine here.
-func promptForTenantURL(ctx context.Context, anonClient api.HttpRequestDoer, current *Auth) error {
+func promptForTenantURL(ctx context.Context, anonClient http.Client, current *Auth) error {
 	fmt.Println(subtleStyle.Render("Enter the URL you use to log into CyberArk Certificate Manager, SaaS"))
 	fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
 	fmt.Println()
@@ -1237,7 +1238,7 @@ func promptForTenantURL(ctx context.Context, anonClient api.HttpRequestDoer, cur
 			return fmt.Errorf("tenant URL cannot be empty")
 		}
 
-		tenant, err := api.GetTenantInfo(anonClient, input)
+		tenant, err := api.GetTenantInfo(ctx, anonClient, input)
 		if err != nil {
 			return err
 		}

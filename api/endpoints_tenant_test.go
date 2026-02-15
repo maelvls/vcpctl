@@ -77,7 +77,15 @@ func Test_registeredTenantURLPrefixFromTenantURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := registeredTenantURLPrefixFromTenantURL(tt.tenantURL)
+			actualTenantURLPrefix, err := prefixOf(tt.tenantURL)
+			if err != nil {
+				if !tt.wantErr {
+					t.Fatalf("unexpected error extracting actual tenant URL prefix: %v", err)
+				}
+				return
+			}
+
+			got, err := actualToRegistered(actualTenantURLPrefix)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -170,7 +178,7 @@ func Test_actualTenantURLPrefixFromRegisteredTenantURLPrefix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := actualTenantURLPrefixFromRegisteredTenantURLPrefix(tt.tenantName, tt.apiURL)
+			got, err := registeredToActual(tt.tenantName, tt.apiURL)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
