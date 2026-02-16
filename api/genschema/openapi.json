@@ -20858,7 +20858,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get api keys",
-            "name": "clm.api_key.get"
+            "name": "ngts.api_key.get"
           },
           "roles": [
             "PKIAdmin",
@@ -20931,7 +20931,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create api keys",
-            "name": "clm.api_key.create"
+            "name": "ngts.api_key.create"
           },
           "roles": [
             "PKIAdmin",
@@ -21006,7 +21006,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get api keys",
-            "name": "clm.api_key.get"
+            "name": "ngts.api_key.get"
           },
           "roles": [
             "PKIAdmin",
@@ -21071,7 +21071,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to rotate api keys",
-            "name": "clm.api_key.rotate"
+            "name": "ngts.api_key.rotate"
           },
           "roles": [
             "PKIAdmin",
@@ -21146,7 +21146,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to rotate api keys",
-            "name": "clm.api_key.rotate"
+            "name": "ngts.api_key.rotate"
           },
           "roles": [
             "PKIAdmin",
@@ -21221,7 +21221,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to rotate api keys",
-            "name": "clm.api_key.rotate"
+            "name": "ngts.api_key.rotate"
           },
           "roles": [
             "PKIAdmin",
@@ -23217,7 +23217,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get the company object",
-            "name": "clm.company.get"
+            "name": "ngts.company.get"
           },
           "roles": [
             "PKIAdmin",
@@ -24847,7 +24847,10 @@
             "name": "clm.issuer_intermediate_certificate.get"
           },
           "roles": [
-            "PKIAdmin"
+            "PKIAdmin",
+            "PlatformAdmin",
+            "ResourceOwner",
+            "Guest"
           ]
         }
       }
@@ -28577,7 +28580,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get notification configurations",
-            "name": "clm.notification_configuration.get"
+            "name": "ngts.notification_configuration.get"
           },
           "roles": [
             "PKIAdmin",
@@ -28658,7 +28661,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get notification configurations",
-            "name": "clm.notification_configuration.get"
+            "name": "ngts.notification_configuration.get"
           },
           "roles": [
             "PKIAdmin",
@@ -28735,7 +28738,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete notification configurations",
-            "name": "clm.notification_configuration.delete"
+            "name": "ngts.notification_configuration.delete"
           },
           "roles": [
             "PKIAdmin"
@@ -28814,7 +28817,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get notification configurations",
-            "name": "clm.notification_configuration.get"
+            "name": "ngts.notification_configuration.get"
           },
           "roles": [
             "PKIAdmin",
@@ -28905,7 +28908,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update notification configurations",
-            "name": "clm.notification_configuration.update"
+            "name": "ngts.notification_configuration.update"
           },
           "roles": [
             "PKIAdmin",
@@ -29413,7 +29416,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get user preferences",
-            "name": "clm.user_preference.get"
+            "name": "ngts.user_preference.get"
           },
           "roles": [
             "PKIAdmin",
@@ -29491,7 +29494,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create a user preference",
-            "name": "clm.user_preference.create"
+            "name": "ngts.user_preference.create"
           },
           "roles": [
             "PKIAdmin",
@@ -29572,7 +29575,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get user preferences",
-            "name": "clm.user_preference.get"
+            "name": "ngts.user_preference.get"
           },
           "roles": [
             "PKIAdmin",
@@ -29649,7 +29652,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete user preferences",
-            "name": "clm.user_preference.delete"
+            "name": "ngts.user_preference.delete"
           },
           "roles": [
             "PKIAdmin",
@@ -29731,7 +29734,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get user preferences",
-            "name": "clm.user_preference.get"
+            "name": "ngts.user_preference.get"
           },
           "roles": [
             "PKIAdmin",
@@ -29822,7 +29825,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update user preferences",
-            "name": "clm.user_preference.update"
+            "name": "ngts.user_preference.update"
           },
           "roles": [
             "PKIAdmin",
@@ -30339,7 +30342,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to read sso configurations",
-            "name": "clm.sso_configuration.get"
+            "name": "ngts.sso_configuration.get"
           }
         }
       },
@@ -30411,7 +30414,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create sso configurations",
-            "name": "clm.sso_configuration.create"
+            "name": "ngts.sso_configuration.create"
           }
         }
       }
@@ -30486,7 +30489,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete sso configurations",
-            "name": "clm.sso_configuration.delete"
+            "name": "ngts.sso_configuration.delete"
           }
         }
       },
@@ -30569,7 +30572,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update sso configurations",
-            "name": "clm.sso_configuration.update"
+            "name": "ngts.sso_configuration.update"
           }
         }
       }
@@ -31755,7 +31758,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to read teams",
-            "name": "clm.team.get"
+            "name": "ngts.team.get"
           },
           "roles": [
             "PKIAdmin",
@@ -31823,7 +31826,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create teams",
-            "name": "clm.team.create"
+            "name": "ngts.team.create"
           },
           "roles": [
             "PKIAdmin",
@@ -31889,7 +31892,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete teams",
-            "name": "clm.team.delete"
+            "name": "ngts.team.delete"
           },
           "roles": [
             "PKIAdmin",
@@ -31960,7 +31963,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to read teams",
-            "name": "clm.team.get"
+            "name": "ngts.team.get"
           },
           "roles": [
             "PKIAdmin",
@@ -32041,7 +32044,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update teams",
-            "name": "clm.team.update"
+            "name": "ngts.team.update"
           },
           "roles": [
             "PKIAdmin",
@@ -32123,7 +32126,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update teams",
-            "name": "clm.team.update"
+            "name": "ngts.team.update"
           },
           "roles": [
             "PKIAdmin",
@@ -32203,7 +32206,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update teams",
-            "name": "clm.team.update"
+            "name": "ngts.team.update"
           },
           "roles": [
             "PKIAdmin",
@@ -32285,7 +32288,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update teams",
-            "name": "clm.team.update"
+            "name": "ngts.team.update"
           },
           "roles": [
             "PKIAdmin",
@@ -32365,7 +32368,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update teams",
-            "name": "clm.team.update"
+            "name": "ngts.team.update"
           },
           "roles": [
             "PKIAdmin",
@@ -32538,7 +32541,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to read your user account information",
-            "name": "clm.user_account.get"
+            "name": "ngts.user_account.get"
           },
           "roles": [
             "PKIAdmin",
@@ -32935,7 +32938,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create user invitations",
-            "name": "clm.user_invitation.create"
+            "name": "ngts.user_invitation.create"
           },
           "roles": [
             "PKIAdmin",
@@ -33068,7 +33071,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to make changes to your user account",
-            "name": "clm.user_account.update"
+            "name": "ngts.user_account.update"
           },
           "roles": [
             "PKIAdmin",
@@ -33256,7 +33259,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to read users",
-            "name": "clm.user.get"
+            "name": "ngts.user.get"
           },
           "roles": [
             "PKIAdmin",
@@ -33337,7 +33340,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to read users",
-            "name": "clm.user.get"
+            "name": "ngts.user.get"
           },
           "roles": [
             "PKIAdmin",
@@ -33474,7 +33477,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete users",
-            "name": "clm.user.delete"
+            "name": "ngts.user.delete"
           }
         }
       },
@@ -33550,7 +33553,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to read users",
-            "name": "clm.user.get"
+            "name": "ngts.user.get"
           },
           "roles": [
             "PKIAdmin",
@@ -33643,7 +33646,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update user account type",
-            "name": "clm.user_accounttype.update"
+            "name": "ngts.user_accounttype.update"
           },
           "roles": [
             "PKIAdmin",
@@ -33736,7 +33739,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update user disabled status",
-            "name": "clm.user_disabled.update"
+            "name": "ngts.user_disabled.update"
           }
         }
       }
@@ -33823,7 +33826,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update user local login",
-            "name": "clm.user_locallogin.update"
+            "name": "ngts.user_locallogin.update"
           }
         }
       }
@@ -33910,7 +33913,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update user force local password expiration",
-            "name": "clm.user_forcelocalpasswordexpiration.update"
+            "name": "ngts.user_forcelocalpasswordexpiration.update"
           }
         }
       }
@@ -33997,7 +34000,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update user roles",
-            "name": "clm.user_role.update"
+            "name": "ngts.user_role.update"
           },
           "roles": [
             "PKIAdmin"
@@ -34054,7 +34057,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get api keys",
-            "name": "clm.api_key.get"
+            "name": "ngts.api_key.get"
           },
           "roles": [
             "PKIAdmin",
@@ -34140,7 +34143,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create api keys",
-            "name": "clm.api_key.create"
+            "name": "ngts.api_key.create"
           },
           "roles": [
             "PKIAdmin",
