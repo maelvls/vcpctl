@@ -168,12 +168,24 @@ advancedSettings:
   enableIssuanceAuditLog: true
 ```
 
+## Shell completion
+
+You can enable shell completion for `vcpctl` with:
+
+```bash
+source <(vcpctl completion bash) # for bash
+source <(vcpctl completion zsh)  # for zsh
+```
+
+The resource names are suggested for all of the commands that expect a resource
+name as an argument (like `vcpctl sa edit <sa-name>`).
+
 ## Schema of config.yaml
 
 In VSCode or any other editor supporting the YAML LSP, you can add the following
 comment to the top of your `config.yaml` file to enable schema validation:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/genschema/schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/maelvls/vcpctl/refs/heads/main/api/genschema/schema.json
 name: test
 ```

@@ -225,8 +225,9 @@ func saGetCmd() *cobra.Command {
 			vcpctl sa get <sa-name-or-id> -o id
 			vcpctl sa get <sa-name-or-id> -o clientid
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeSAName(noFilter),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := getToolConfig(cmd)
 			if err != nil {
