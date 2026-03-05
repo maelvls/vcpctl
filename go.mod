@@ -20,7 +20,7 @@ require (
 	github.com/motemen/go-loghttp v0.0.0-20231107055348-29ae44b293f4
 	github.com/njayp/ophis v1.1.0
 	github.com/oapi-codegen/nullable v1.1.0
-	github.com/oapi-codegen/runtime v1.1.2
+	github.com/oapi-codegen/runtime v1.2.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/sjson v1.2.5
