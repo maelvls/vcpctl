@@ -47,14 +47,14 @@ type ToolContext struct {
 	// switch`.
 	TenantURL string `yaml:"url,omitzero"` // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
 
-	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey"
+	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey", "bearerToken"
 
 	// For the type "apiKey".
 	APIKey string `json:"apiKey,omitzero"`
 	Email  string `json:"email,omitzero"`  // Not really used. Just there to help the user identify the context.
 	UserID string `json:"userID,omitzero"` // Only used to identify when two contexts are the "same".
 
-	// For the types "rsaKeyFederated" and "rsaKey".
+	// For the types "rsaKeyFederated", "rsaKey" and "bearerToken".
 	AccessToken string `json:"accessToken,omitzero"`
 	PrivateKey  string `json:"privateKey,omitzero"`
 
@@ -324,6 +324,26 @@ func loginWifCmd(groupID string) *cobra.Command {
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return loginWithWIFJSON(cmd.Context(), args[0], contextName)
+		},
+	}
+	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
+	return cmd
+}
+
+func loginBearerCmd(groupID string) *cobra.Command {
+	var contextName string
+	cmd := &cobra.Command{
+		Use:           "login-bearer <tenant-url> <bearer-token>",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ExactArgs(2),
+		Short:         "Authenticate to a CyberArk Certificate Manager, SaaS tenant using a Bearer token.",
+		Long: undent.Undent(`
+			Authenticate to a CyberArk Certificate Manager, SaaS tenant using a Bearer token.
+		`),
+		GroupID: groupID,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return loginWithBearerToken(cmd.Context(), args[0], args[1], contextName)
 		},
 	}
 	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
