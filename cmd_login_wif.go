@@ -207,10 +207,6 @@ type wifJSON struct {
 	Iss        string `json:"iss"`
 	Aud        string `json:"aud"`
 	Sub        string `json:"sub"`
-
-	// Optional. Useful because it lets us fill in the tenant URL in
-	// ~/.config/vcpctl.yaml.
-	TenantURL string `json:"tenant_url"`
 }
 
 func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag string) error {
