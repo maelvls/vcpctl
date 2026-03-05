@@ -114,18 +114,6 @@ func saGenkeypairCmd() *cobra.Command {
 			}
 			logutil.Debugf("Client ID: %s", existingSA.Id.String())
 
-			// At this point, we need to know the tenant URL; if we are
-			// authenticated using an API key, then we can fetch it.
-			var tenantURL string
-			if conf.APIKey != "" {
-				_, tenantURL, err = api.SelfCheckAPIKey(cmd.Context(), apiClient)
-				if err != nil {
-					return fmt.Errorf("while getting tenant URL from API key: %w", err)
-				}
-			} else {
-				return fmt.Errorf("can only use an API key to generate WIF credentials. This is because we need to determine the tenant URL, but /v1/useraccounts is only available for API key authentication, not when using an access token tied to a service account")
-			}
-
 			switch outputFormat {
 			case "pem":
 				fmt.Println(ecKey)
@@ -135,7 +123,6 @@ func saGenkeypairCmd() *cobra.Command {
 					ClientID:   existingSA.Id.String(),
 					PrivateKey: ecKey,
 					APIURL:     conf.APIURL,
-					TenantURL:  tenantURL,
 				}, "", "  ")
 				if err != nil {
 					return fmt.Errorf("while marshaling JSON: %w", err)
