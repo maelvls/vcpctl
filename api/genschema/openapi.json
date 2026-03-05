@@ -24407,7 +24407,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get issuer configuration",
-            "name": "clm.issuer_configuration.get"
+            "name": "ngts.issuer_configuration.get"
           },
           "roles": [
             "PKIAdmin",
@@ -24474,7 +24474,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create issuer configuration",
-            "name": "clm.issuer_configuration.create"
+            "name": "ngts.issuer_configuration.create"
           },
           "roles": [
             "PKIAdmin"
@@ -24511,7 +24511,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get supported cloud provider region",
-            "name": "clm.supported_cloud_provider_regions.get"
+            "name": "ngts.supported_cloud_provider_regions.get"
           },
           "roles": [
             "PKIAdmin",
@@ -24592,7 +24592,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete issuer configuration",
-            "name": "clm.issuer_configuration.delete"
+            "name": "ngts.issuer_configuration.delete"
           },
           "roles": [
             "PKIAdmin"
@@ -24668,7 +24668,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get issuer configuration",
-            "name": "clm.issuer_configuration.get"
+            "name": "ngts.issuer_configuration.get"
           },
           "roles": [
             "PKIAdmin",
@@ -24787,7 +24787,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update issuer configuration",
-            "name": "clm.issuer_configuration.update"
+            "name": "ngts.issuer_configuration.update"
           },
           "roles": [
             "PKIAdmin"
@@ -24844,7 +24844,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get issuer intermediate certificate",
-            "name": "clm.issuer_intermediate_certificate.get"
+            "name": "ngts.issuer_intermediate_certificate.get"
           },
           "roles": [
             "PKIAdmin",
@@ -24925,7 +24925,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get issuer intermediate certificate",
-            "name": "clm.issuer_intermediate_certificate.get"
+            "name": "ngts.issuer_intermediate_certificate.get"
           },
           "roles": [
             "PKIAdmin",
@@ -24985,7 +24985,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get workload issuance policy",
-            "name": "clm.workload_issuance_policy.get"
+            "name": "ngts.workload_issuance_policy.get"
           },
           "roles": [
             "PKIAdmin",
@@ -25052,7 +25052,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create workload issuance policy",
-            "name": "clm.workload_issuance_policy.create"
+            "name": "ngts.workload_issuance_policy.create"
           },
           "roles": [
             "PKIAdmin"
@@ -25130,7 +25130,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete workload issuance policy",
-            "name": "clm.workload_issuance_policy.delete"
+            "name": "ngts.workload_issuance_policy.delete"
           },
           "roles": [
             "PKIAdmin"
@@ -25206,7 +25206,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get workload issuance policy",
-            "name": "clm.workload_issuance_policy.get"
+            "name": "ngts.workload_issuance_policy.get"
           },
           "roles": [
             "PKIAdmin",
@@ -25294,7 +25294,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update workload issuance policy",
-            "name": "clm.workload_issuance_policy.update"
+            "name": "ngts.workload_issuance_policy.update"
           },
           "roles": [
             "PKIAdmin"
@@ -25379,7 +25379,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get sub CA provider",
-            "name": "clm.sub_ca_provider.get"
+            "name": "ngts.sub_ca_provider.get"
           },
           "roles": [
             "PKIAdmin",
@@ -25478,7 +25478,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to create sub CA provider",
-            "name": "clm.sub_ca_provider.create"
+            "name": "ngts.sub_ca_provider.create"
           },
           "roles": [
             "PKIAdmin"
@@ -25556,7 +25556,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to delete sub CA provider",
-            "name": "clm.sub_ca_provider.delete"
+            "name": "ngts.sub_ca_provider.delete"
           },
           "roles": [
             "PKIAdmin"
@@ -25656,7 +25656,7 @@
           "permissions": {
             "access_type": "read",
             "description": "Ability to get sub CA provider",
-            "name": "clm.sub_ca_provider.get"
+            "name": "ngts.sub_ca_provider.get"
           },
           "roles": [
             "PKIAdmin",
@@ -25752,7 +25752,7 @@
           "permissions": {
             "access_type": "write",
             "description": "Ability to update sub CA provider",
-            "name": "clm.sub_ca_provider.update"
+            "name": "ngts.sub_ca_provider.update"
           },
           "roles": [
             "PKIAdmin"
