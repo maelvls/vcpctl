@@ -117,8 +117,10 @@ type jsonAuthKeypair struct {
 	PrivateKey string `json:"private_key"`
 	APIURL     string `json:"api_url"`
 
-	// Optional. Useful because it lets us fill in the tenant URL in
-	// ~/.config/vcpctl.yaml.
+	// Optional. Only useful when using Venafi Cloud, but not required even when
+	// using Venafi Cloud. It is used to fill in the `tenantURL` field in
+	// ~/.config/vcpctl.yaml, which allows us to display the UI URL when running
+	// `vcpctl switch`.
 	TenantURL string `json:"tenant_url,omitzero"`
 }
 

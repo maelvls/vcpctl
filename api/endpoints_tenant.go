@@ -30,7 +30,7 @@ var venafiRegions = []string{
 //	       'actual' tenantURLPrefix
 //
 // Use errutil.IsNotFound to check if the tenant was not found.
-func GetTenantID(ctx context.Context, anonClient http.Client, actualTenantURLPrefix string) (tenantID string, _ error) {
+func GetRegisteredTenantURLPrefix(ctx context.Context, anonClient http.Client, actualTenantURLPrefix string) (registeredTenantURLPrefix string, _ error) {
 	type result struct {
 		res    CompanyLoginConfigResponse
 		status int
@@ -92,6 +92,11 @@ func GetTenantID(ctx context.Context, anonClient http.Client, actualTenantURLPre
 
 	// All regions either 404'd or were skipped without detailed errors.
 	return "", errutil.NotFound{NameOrID: actualTenantURLPrefix}
+}
+
+// TODO: To be figured out.
+func IsVenafiCloudAPIURL(apiURL string) bool {
+	return false
 }
 
 type TenantInfo struct {

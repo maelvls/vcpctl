@@ -38,10 +38,14 @@ type FileConf struct {
 type ToolContext struct {
 	Name string `yaml:"name"` // Derived from tenant URL domain with numeric suffix
 
-	TenantID  string `json:"tenantID,omitzero"` // The tenant ID (company ID).
-	TenantURL string `yaml:"url,omitzero"`      // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
-	APIURL    string `json:"apiURL,omitzero"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
-	Username  string `json:"username,omitzero"` // Not really used. Just there to help the user identify the context.
+	TenantID string `json:"tenantID,omitzero"` // The tenant ID (company ID).
+	APIURL   string `json:"apiURL,omitzero"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	Username string `json:"username,omitzero"` // Not really used. Just there to help the user identify the context.
+
+	// Optional. Only useful when using Venafi Cloud, but not required even when
+	// using Venafi Cloud. It is used to display the UI URL when running `vcpctl
+	// switch`.
+	TenantURL string `yaml:"url,omitzero"` // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
 
 	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey"
 
