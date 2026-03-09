@@ -116,10 +116,6 @@ type jsonAuthKeypair struct {
 	ClientID   string `json:"client_id"`
 	PrivateKey string `json:"private_key"`
 	APIURL     string `json:"api_url"`
-
-	// Optional. Useful because it lets us fill in the tenant URL in
-	// ~/.config/vcpctl.yaml.
-	TenantURL string `json:"tenant_url,omitzero"`
 }
 
 type serviceAccountTokenResponse struct {
