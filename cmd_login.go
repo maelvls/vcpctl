@@ -66,6 +66,10 @@ type ToolContext struct {
 	// For the type "rsaKey" and "rsaKeyFederated". Not really needed for
 	// "rsaKeyFederated", but useful to know when two contexts are the "same".
 	ClientID string `json:"clientID,omitzero"`
+
+	// For the type "tsg".
+	ClientSecret string `json:"clientSecret,omitzero"`
+	AuthURL      string `json:"authURL,omitzero"` // OAuth2 token endpoint base URL
 }
 
 func deprecatedAuthCmd(_ string) *cobra.Command {
@@ -709,7 +713,9 @@ func generateContextName(toolctx ToolContext, existing []ToolContext) string {
 		return "user-" + toolctx.UserID
 	}
 
-	panic("why do you have so many contexts? I give up")
+	// If we don't even have a user ID, let's just do "context-<random-suffix>".
+	randomSuffix := fmt.Sprintf("%x", sha256.Sum256([]byte(toolctx.TenantURL+toolctx.ClientID+toolctx.UserID)))[:6]
+	return "context-" + randomSuffix
 }
 
 // extractDomainFromURL extracts the domain name from a given URL.
@@ -769,6 +775,8 @@ type ToolConf struct {
 	Subject            string `json:"subject"`
 	Audience           string `json:"audience"`
 	ContextName        string `json:"contextName"`
+	ClientSecret       string `json:"clientSecret"`
+	AuthURL            string `json:"authURL"`
 }
 
 func newAPIClient(conf ToolConf) (*api.Client, error) {
@@ -884,6 +892,8 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		Subject:            current.Subject,
 		Audience:           current.Audience,
 		ContextName:        current.Name,
+		ClientSecret:       current.ClientSecret,
+		AuthURL:            current.AuthURL,
 	}, nil
 }
 

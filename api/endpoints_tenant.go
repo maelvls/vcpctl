@@ -94,9 +94,10 @@ func GetRegisteredTenantURLPrefix(ctx context.Context, anonClient http.Client, a
 	return "", errutil.NotFound{NameOrID: actualTenantURLPrefix}
 }
 
-// TODO: To be figured out.
+// If the domain ends with 'venafi.io' or 'venafi.cloud', we consider it a
+// Venafi Cloud API URL.
 func IsVenafiCloudAPIURL(apiURL string) bool {
-	return false
+	return strings.HasSuffix(apiURL, "venafi.io") || strings.HasSuffix(apiURL, "venafi.cloud")
 }
 
 type TenantInfo struct {

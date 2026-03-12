@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/maelvls/undent"
 	"github.com/maelvls/vcpctl/errutil"
+	"github.com/maelvls/vcpctl/logutil"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func GetServiceAccounts(ctx context.Context, cl *Client) ([]ServiceAccountDetails, error) {
@@ -188,22 +190,22 @@ func GetServiceAccountByID(ctx context.Context, cl *Client, id string) (ServiceA
 // Owner can be left empty, in which case the first team will be used as the
 // owner.
 func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccountDetails) (CreateServiceAccountResponseBody, error) {
-	// If no owner is specified, let's just use the first team we can find.
-	/*
-		if desired.Owner == (openapi_types.UUID{}) {
-			teams, err := GetTeams(ctx, cl)
-			if err != nil {
-				return CreateServiceAccountResponseBody{}, fmt.Errorf("while getting teams: %w", err)
-			}
-			if len(teams) == 0 {
-				return CreateServiceAccountResponseBody{}, fmt.Errorf("no teams found, please specify an owner")
-			}
-			ownerUUID := teams[0].Id
+	// An owner is mandatory in Venafi Cloud but not in NGTS. In Venafi Cloud,
+	// if no owner is specified, let's just use the first team we can find.
 
-			logutil.Debugf("No owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].Id)
-			desired.Owner = ownerUUID
+	if IsVenafiCloudAPIURL(cl.Server) && desired.Owner == (openapi_types.UUID{}) {
+		teams, err := GetTeams(ctx, cl)
+		if err != nil {
+			return CreateServiceAccountResponseBody{}, fmt.Errorf("while getting teams: %w", err)
 		}
-	*/
+		if len(teams) == 0 {
+			return CreateServiceAccountResponseBody{}, fmt.Errorf("no teams found, please specify an owner")
+		}
+		ownerUUID := teams[0].Id
+
+		logutil.Debugf("No owner specified, using the first team '%s' (%s) as the owner.", teams[0].Name, teams[0].Id)
+		desired.Owner = ownerUUID
+	}
 
 	resp, err := cl.CreateV1Serviceaccounts(ctx, APIToAPICreateServiceAccountRequestBody(desired))
 	if err != nil {
