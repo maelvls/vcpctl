@@ -115,7 +115,7 @@ func saGenkeypairCmd() *cobra.Command {
 			logutil.Debugf("Client ID: %s", existingSA.Id.String())
 
 			// The tenant URL only makes sense in the context of Venafi Cloud,
-			// and is only used for display purposes (in `vctll switch`), but it
+			// and is only used for display purposes (in `vcpctl switch`), but it
 			// is not strictly needed for authentication or API calls.
 			var tenantURL string
 			if api.IsVenafiCloudAPIURL(conf.APIURL) {
@@ -125,7 +125,7 @@ func saGenkeypairCmd() *cobra.Command {
 						return fmt.Errorf("while getting tenant URL from API key: %w", err)
 					}
 				} else {
-					return fmt.Errorf("can only use an API key to generate WIF credentials. This is because we need to determine the tenant URL, but /v1/useraccounts is only available for API key authentication, not when using an access token tied to a service account")
+					return fmt.Errorf("can only use an API key to generate keypair credentials. This is because we need to determine the tenant URL, but /v1/useraccounts is only available for API key authentication, not when using an access token tied to a service account")
 				}
 			}
 

@@ -110,7 +110,7 @@ func saGenWifCmd() *cobra.Command {
 			}
 
 			// The tenant URL only makes sense in the context of Venafi Cloud,
-			// and is only used for display purposes (in `vctll switch`), but it
+			// and is only used for display purposes (in `vcpctl switch`), but it
 			// is not strictly needed for authentication or API calls.
 			var tenantURL string
 			if api.IsVenafiCloudAPIURL(conf.APIURL) {
