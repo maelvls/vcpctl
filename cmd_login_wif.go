@@ -208,8 +208,10 @@ type wifJSON struct {
 	Aud        string `json:"aud"`
 	Sub        string `json:"sub"`
 
-	// Optional. Useful because it lets us fill in the tenant URL in
-	// ~/.config/vcpctl.yaml.
+	// Optional. Only useful when using Venafi Cloud, but not required even when
+	// using Venafi Cloud. It is used to fill in the `tenantURL` field in
+	// ~/.config/vcpctl.yaml, which allows us to display the UI URL when running
+	// `vcpctl switch`.
 	TenantURL string `json:"tenant_url"`
 }
 
@@ -244,7 +246,6 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag strin
 
 	input.ClientID = strings.TrimSpace(input.ClientID)
 	input.PrivateKey = strings.TrimSpace(input.PrivateKey)
-	input.TenantURL = strings.TrimSpace(input.TenantURL)
 
 	if input.PrivateKey == "" {
 		return errutil.Fixable(fmt.Errorf("missing 'private_key' in JSON"))
@@ -252,11 +253,12 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag strin
 	if input.ClientID == "" {
 		return errutil.Fixable(fmt.Errorf("missing 'client_id' in JSON"))
 	}
-	if input.TenantURL == "" {
-		return errutil.Fixable(fmt.Errorf("missing 'tenant_url' in JSON"))
-	}
-	if !strings.HasPrefix(input.TenantURL, "https://") && !strings.HasPrefix(input.TenantURL, "http://") {
-		input.TenantURL = "https://" + input.TenantURL
+
+	if input.TenantURL != "" {
+		input.TenantURL = strings.TrimSpace(input.TenantURL)
+		if !strings.HasPrefix(input.TenantURL, "https://") && !strings.HasPrefix(input.TenantURL, "http://") {
+			input.TenantURL = "https://" + input.TenantURL
+		}
 	}
 
 	privKey, kid, err := parseWIFPrivateKey(input.PrivateKey)

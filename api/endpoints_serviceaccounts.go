@@ -190,8 +190,10 @@ func GetServiceAccountByID(ctx context.Context, cl *Client, id string) (ServiceA
 // Owner can be left empty, in which case the first team will be used as the
 // owner.
 func CreateServiceAccount(ctx context.Context, cl *Client, desired ServiceAccountDetails) (CreateServiceAccountResponseBody, error) {
-	// If no owner is specified, let's just use the first team we can find.
-	if desired.Owner == (openapi_types.UUID{}) {
+	// An owner is mandatory in Venafi Cloud but not in NGTS. In Venafi Cloud,
+	// if no owner is specified, let's just use the first team we can find.
+
+	if IsVenafiCloudAPIURL(cl.Server) && desired.Owner == (openapi_types.UUID{}) {
 		teams, err := GetTeams(ctx, cl)
 		if err != nil {
 			return CreateServiceAccountResponseBody{}, fmt.Errorf("while getting teams: %w", err)
