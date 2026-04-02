@@ -150,7 +150,7 @@ func jwkThumbprintEC(pub *ecdsa.PublicKey) string {
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
-func uploadJWKS0x0(jwks []byte) (string, error) {
+func uploadJWKS(uploadURL string, jwks []byte) (string, error) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("file", "jwks.json")
@@ -164,7 +164,7 @@ func uploadJWKS0x0(jwks []byte) (string, error) {
 		return "", fmt.Errorf("while closing multipart writer: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "https://0x0.st", &body)
+	req, err := http.NewRequest(http.MethodPost, uploadURL, &body)
 	if err != nil {
 		return "", fmt.Errorf("while creating request: %w", err)
 	}
@@ -180,15 +180,15 @@ func uploadJWKS0x0(jwks []byte) (string, error) {
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("while reading 0x0.st response: %w", err)
+		return "", fmt.Errorf("while reading response from %s: %w", uploadURL, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("0x0.st returned %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return "", fmt.Errorf("%s returned %s: %s", uploadURL, resp.Status, strings.TrimSpace(string(respBody)))
 	}
 
 	url := strings.TrimSpace(string(respBody))
 	if url == "" {
-		return "", fmt.Errorf("0x0.st returned an empty URL")
+		return "", fmt.Errorf("%s returned an empty URL", uploadURL)
 	}
 	return url, nil
 }

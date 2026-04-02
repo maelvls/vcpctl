@@ -16,12 +16,14 @@ import (
 
 func saGenWifCmd() *cobra.Command {
 	var outputFormat string
+	var uploadURL string
 	cmd := &cobra.Command{
 		Use:   "wif <sa-name>",
-		Short: "Generates an EC private key, creates JWKS, uploads it to 0x0.st, and creates/updates a WIF Service Account",
+		Short: "Generates an EC private key, creates JWKS, uploads it to a file hosting service, and creates/updates a WIF Service Account",
 		Long: undent.Undent(`
 			Generates an EC private key, creates a JWKS (JSON Web Key Set), uploads
-			it to 0x0.st, and creates or updates a Workload Identity Federation Service Account.
+			it to a file hosting service, and creates or updates a Workload Identity
+			Federation Service Account.
 
 			This command is useful for setting up Workload Identity Federation authentication.
 			The output can be piped directly to 'vcpctl login --sa-wif'.
@@ -62,9 +64,9 @@ func saGenWifCmd() *cobra.Command {
 				return fmt.Errorf("while generating key pair: %w", err)
 			}
 
-			jwksURL, err := uploadJWKS0x0(jwksPayload)
+			jwksURL, err := uploadJWKS(uploadURL, jwksPayload)
 			if err != nil {
-				return fmt.Errorf("while uploading JWKS to 0x0.st: %w", err)
+				return fmt.Errorf("while uploading JWKS to %s: %w", uploadURL, err)
 			}
 			logutil.Debugf("JWKS uploaded to: %s", jwksURL)
 
@@ -150,6 +152,7 @@ func saGenWifCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (only 'json' is supported)")
+	cmd.Flags().StringVar(&uploadURL, "upload-url", "https://0x0.st", "URL of the file hosting service to upload the JWKS to (must accept multipart/form-data POST with a 'file' field and return the URL as plain text)")
 	return cmd
 }
 
