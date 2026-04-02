@@ -38,19 +38,23 @@ type FileConf struct {
 type ToolContext struct {
 	Name string `yaml:"name"` // Derived from tenant URL domain with numeric suffix
 
-	TenantID  string `json:"tenantID,omitzero"` // The tenant ID (company ID).
-	TenantURL string `yaml:"url,omitzero"`      // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
-	APIURL    string `json:"apiURL,omitzero"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
-	Username  string `json:"username,omitzero"` // Not really used. Just there to help the user identify the context.
+	TenantID string `json:"tenantID,omitzero"` // The tenant ID (company ID).
+	APIURL   string `json:"apiURL,omitzero"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	Username string `json:"username,omitzero"` // Not really used. Just there to help the user identify the context.
 
-	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey"
+	// Optional. Only useful when using Venafi Cloud, but not required even when
+	// using Venafi Cloud. It is used to display the UI URL when running `vcpctl
+	// switch`.
+	TenantURL string `yaml:"url,omitzero"` // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+
+	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey", "bearerToken"
 
 	// For the type "apiKey".
 	APIKey string `json:"apiKey,omitzero"`
 	Email  string `json:"email,omitzero"`  // Not really used. Just there to help the user identify the context.
 	UserID string `json:"userID,omitzero"` // Only used to identify when two contexts are the "same".
 
-	// For the types "rsaKeyFederated" and "rsaKey".
+	// For the types "rsaKeyFederated", "rsaKey" and "bearerToken".
 	AccessToken string `json:"accessToken,omitzero"`
 	PrivateKey  string `json:"privateKey,omitzero"`
 
@@ -62,6 +66,10 @@ type ToolContext struct {
 	// For the type "rsaKey" and "rsaKeyFederated". Not really needed for
 	// "rsaKeyFederated", but useful to know when two contexts are the "same".
 	ClientID string `json:"clientID,omitzero"`
+
+	// For the type "tsg".
+	ClientSecret string `json:"clientSecret,omitzero"`
+	AuthURL      string `json:"authURL,omitzero"` // OAuth2 token endpoint base URL.
 }
 
 func deprecatedAuthCmd(_ string) *cobra.Command {
@@ -685,7 +693,9 @@ func generateContextName(toolctx ToolContext, existing []ToolContext) string {
 		return "user-" + toolctx.UserID
 	}
 
-	panic("why do you have so many contexts? I give up")
+	// If we don't even have a user ID, let's just do "context-<random-suffix>".
+	randomSuffix := fmt.Sprintf("%x", sha256.Sum256([]byte(toolctx.TenantURL+toolctx.ClientID+toolctx.UserID)))[:6]
+	return "context-" + randomSuffix
 }
 
 // extractDomainFromURL extracts the domain name from a given URL.
@@ -745,6 +755,8 @@ type ToolConf struct {
 	Subject            string `json:"subject"`
 	Audience           string `json:"audience"`
 	ContextName        string `json:"contextName"`
+	ClientSecret       string `json:"clientSecret"`
+	AuthURL            string `json:"authURL"`
 }
 
 func newAPIClient(conf ToolConf) (*api.Client, error) {
@@ -860,6 +872,8 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		Subject:            current.Subject,
 		Audience:           current.Audience,
 		ContextName:        current.Name,
+		ClientSecret:       current.ClientSecret,
+		AuthURL:            current.AuthURL,
 	}, nil
 }
 

@@ -11,7 +11,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -126,6 +128,10 @@ func buildAccessTokenRefresher(conf ToolConf) func(context.Context) (string, err
 	case "rsaKey":
 		return func(ctx context.Context) (string, error) {
 			return refreshKeypairAccessToken(ctx, conf)
+		}
+	case "tsg":
+		return func(ctx context.Context) (string, error) {
+			return refreshTSGAccessToken(ctx, conf)
 		}
 	default:
 		return nil
@@ -375,4 +381,87 @@ func publicKeyFromPrivateKeyPEM(privateKeyPEM string) (interface{}, error) {
 	}
 
 	return nil, fmt.Errorf("no PEM block found in private key")
+}
+
+func refreshTSGAccessToken(ctx context.Context, conf ToolConf) (string, error) {
+	if conf.ClientID == "" {
+		return "", fmt.Errorf("missing client ID for TSG authentication")
+	}
+	if conf.ClientSecret == "" {
+		return "", fmt.Errorf("missing client secret for TSG authentication")
+	}
+	if conf.AuthURL == "" {
+		return "", fmt.Errorf("missing auth URL for TSG authentication")
+	}
+
+	// Extract TSG ID from client ID
+	tsgID, err := extractTSGIDForRefresh(conf.ClientID)
+	if err != nil {
+		return "", err
+	}
+
+	accessToken, err := fetchTSGAccessTokenForRefresh(ctx, conf.AuthURL, conf.ClientID, conf.ClientSecret, tsgID)
+	if err != nil {
+		return "", fmt.Errorf("while refreshing TSG access token: %w", err)
+	}
+
+	persistAccessToken(ctx, conf, accessToken)
+	return accessToken, nil
+}
+
+func extractTSGIDForRefresh(clientID string) (string, error) {
+	// Regex to extract TSG ID from email like: user@1526746475.iam.panserviceaccount.com
+	matches := strings.Split(clientID, "@")
+	if len(matches) != 2 {
+		return "", fmt.Errorf("invalid client ID format: %s", clientID)
+	}
+	domainParts := strings.Split(matches[1], ".")
+	if len(domainParts) < 4 || domainParts[1] != "iam" || domainParts[2] != "panserviceaccount" {
+		return "", fmt.Errorf("invalid TSG service account format: %s", clientID)
+	}
+	return domainParts[0], nil
+}
+
+func fetchTSGAccessTokenForRefresh(ctx context.Context, authURL, clientID, clientSecret, tsgID string) (string, error) {
+	authURL = strings.TrimRight(authURL, "/")
+	endpoint := fmt.Sprintf("%s/oauth2/access_token", authURL)
+
+	form := url.Values{
+		"grant_type": []string{"client_credentials"},
+		"scope":      []string{fmt.Sprintf("tsg_id:%s", tsgID)},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("while creating token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", api.UserAgent)
+	req.SetBasicAuth(clientID, clientSecret)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("while sending token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("while reading token response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", newTokenExchangeError(resp.StatusCode, resp.Status, body)
+	}
+
+	var parsed struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("while parsing token response: %w", err)
+	}
+	if parsed.AccessToken == "" {
+		return "", fmt.Errorf("token response missing access_token")
+	}
+	return parsed.AccessToken, nil
 }

@@ -21,13 +21,7 @@ var venafiRegions = []string{
 	"https://api.sg.venafi.cloud",
 }
 
-// This doesn't need an authenticated client. The 'actual' tenant URL prefix is
-// the first segment of the URL used when a customer opens the UI. E.g., with
-// the UI at URL:
-//
-//	https://ven-cert-manager-uk.venafi.cloud
-//	        <----------------->
-//	       'actual' tenantURLPrefix
+// This doesn't need an authenticated client. The tenant ID is a UUID.
 //
 // Use errutil.IsNotFound to check if the tenant was not found.
 func GetTenantID(ctx context.Context, anonClient http.Client, actualTenantURLPrefix string) (tenantID string, _ error) {
@@ -92,6 +86,12 @@ func GetTenantID(ctx context.Context, anonClient http.Client, actualTenantURLPre
 
 	// All regions either 404'd or were skipped without detailed errors.
 	return "", errutil.NotFound{NameOrID: actualTenantURLPrefix}
+}
+
+// If the domain ends with 'venafi.io' or 'venafi.cloud', we consider it a
+// Venafi Cloud API URL.
+func IsVenafiCloudAPIURL(apiURL string) bool {
+	return strings.HasSuffix(apiURL, "venafi.io") || strings.HasSuffix(apiURL, "venafi.cloud")
 }
 
 type TenantInfo struct {
