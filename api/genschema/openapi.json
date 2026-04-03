@@ -13545,6 +13545,9 @@
           "newConfigEnabled": {
             "type": "boolean"
           },
+          "optionalEmailEnabled": {
+            "type": "boolean"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -24885,7 +24888,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse11"
                 }
               }
             },
@@ -24895,7 +24898,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse11"
                 }
               }
             },
@@ -24905,7 +24908,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse11"
                 }
               }
             },
@@ -24919,21 +24922,8 @@
         ],
         "summary": "Get an Issuer intermediate certificate",
         "tags": [
-          "Issuer Intermediate Certificates"
-        ],
-        "x-rbac": {
-          "permissions": {
-            "access_type": "read",
-            "description": "Ability to get issuer intermediate certificate",
-            "name": "ngts.issuer_intermediate_certificate.get"
-          },
-          "roles": [
-            "PKIAdmin",
-            "PlatformAdmin",
-            "ResourceOwner",
-            "Guest"
-          ]
-        }
+          "Workload Identity Manager Intermediate Certificates"
+        ]
       }
     },
     "/v1/distributedissuers/policies": {
