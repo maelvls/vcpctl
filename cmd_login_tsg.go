@@ -18,8 +18,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type envURLs struct {
+	authURL string
+	apiURL  string
+}
+
+var envURLMap = map[string]envURLs{
+	"prod": {
+		authURL: "https://auth.apps.paloaltonetworks.com",
+		apiURL:  "https://api.strata.paloaltonetworks.com",
+	},
+	"qa": {
+		authURL: "https://auth.qa.appsvc.paloaltonetworks.com",
+		apiURL:  "https://qa.api.sase.paloaltonetworks.com",
+	},
+	"dev": {
+		authURL: "https://auth.dev.appsvc.paloaltonetworks.com",
+		apiURL:  "https://dev.api.sase.paloaltonetworks.com",
+	},
+}
+
 func loginTSGCmd(groupID string) *cobra.Command {
-	var contextFlag, authURL, apiURL, clientSecret string
+	var contextFlag, authURL, apiURL, clientSecret, env string
 	cmd := &cobra.Command{
 		Use:           "login-tsg <client-id>",
 		SilenceErrors: true,
@@ -32,12 +52,16 @@ func loginTSGCmd(groupID string) *cobra.Command {
 			mael@1526746475.iam.panserviceaccount.com.
 
 			The TSG ID is extracted from the client ID automatically.
+
+			Use --env to select the environment (prod, qa, dev). The --auth-url and
+			--api-url flags override the environment defaults.
 		`),
 		Example: undent.Undent(`
 			vcpctl login-tsg mael@1526746475.iam.panserviceaccount.com \
-			  --auth-url https://auth.apps.paloaltonetworks.com \
-			  --api-url https://api.sase.paloaltonetworks.com \
 			  --client-secret <secret>
+
+			vcpctl login-tsg mael@1526746475.iam.panserviceaccount.com \
+			  --env qa --client-secret <secret>
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,11 +69,15 @@ func loginTSGCmd(groupID string) *cobra.Command {
 			if clientSecret == "" {
 				return errutil.Fixable(fmt.Errorf("--client-secret is required"))
 			}
+			urls, ok := envURLMap[env]
+			if !ok {
+				return errutil.Fixable(fmt.Errorf("unknown --env %q; valid values: prod, qa, dev", env))
+			}
 			if authURL == "" {
-				return errutil.Fixable(fmt.Errorf("--auth-url is required"))
+				authURL = urls.authURL
 			}
 			if apiURL == "" {
-				return errutil.Fixable(fmt.Errorf("--api-url is required"))
+				apiURL = urls.apiURL
 			}
 			apiURL = strings.TrimRight(apiURL, "/")
 			if !strings.HasSuffix(apiURL, "/ngts") {
@@ -58,13 +86,14 @@ func loginTSGCmd(groupID string) *cobra.Command {
 			return loginWithTSG(cmd.Context(), clientID, clientSecret, authURL, apiURL, contextFlag)
 		},
 	}
-	cmd.Flags().StringVar(&authURL, "auth-url", "", "The OAuth2 authorization server URL (required)")
-	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL for making API calls. '/ngts' is appended if not already present (required)")
+	cmd.Flags().StringVar(&env, "env", "prod", "Environment to use: prod, qa, or dev")
+	cmd.Flags().StringVar(&authURL, "auth-url", "", "Override the OAuth2 authorization server URL")
+	cmd.Flags().StringVar(&apiURL, "api-url", "", "Override the API URL ('/ngts' is appended if not already present)")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "The client secret for the service account (required)")
 	cmd.Flags().StringVar(&contextFlag, "context", "", "Context name to create or update")
-	_ = cmd.MarkFlagRequired("auth-url")
-	_ = cmd.MarkFlagRequired("api-url")
 	_ = cmd.MarkFlagRequired("client-secret")
+	_ = cmd.Flags().MarkDeprecated("auth-url", "use --env instead")
+	_ = cmd.Flags().MarkDeprecated("api-url", "use --env instead")
 	return cmd
 }
 
