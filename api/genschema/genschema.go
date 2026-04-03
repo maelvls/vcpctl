@@ -2,8 +2,7 @@ package main
 
 import (
 	"bytes"
-	jsontext "encoding/json/jsontext"
-	json "encoding/json/v2"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -239,7 +238,7 @@ func main() {
 	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtOidcAuthenticationOpenApi")
 	delete(merged["components"].(map[string]any)["schemas"].(map[string]any), "JwtStandardClaimsAuthenticationOpenApi")
 
-	raw, err := json.Marshal(merged, jsontext.Multiline(true), jsontext.WithIndent("  "), json.Deterministic(true))
+	raw, err := json.MarshalIndent(merged, "", "  ")
 	if err != nil {
 		panic(fmt.Errorf("marshalling updated OpenAPI spec: %w", err))
 	}
@@ -298,7 +297,7 @@ func createSchemaWithTemplate(templatePath string, defs map[string]any, onlyRefs
 
 	// Re-encode as JSON and rewrite all $ref paths to use local $defs instead
 	// of components.
-	raw, err := json.Marshal(schema, jsontext.Multiline(true), jsontext.WithIndent("  "), json.Deterministic(true))
+	raw, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
 		panic(fmt.Errorf("marshalling updated schema: %w", err))
 	}

@@ -2,7 +2,7 @@ package api
 
 import (
 	"bytes"
-	json "encoding/json/v2"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"

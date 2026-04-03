@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	json "encoding/json/v2"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"

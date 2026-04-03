@@ -3,13 +3,12 @@
 ## Install
 
 ```bash
-GOEXPERIMENT=jsonv2 \
-  go install github.com/maelvls/vcpctl@latest
+go install github.com/maelvls/vcpctl@latest
 ```
 
 > [!NOTE]
 >
-> I'm using `omitzero` struct tags, which requires Go 1.25 or later. It allows
+> I'm using `omitzero` struct tags, which requires Go 1.24 or later. It allows
 > me to distinguish between the `[]` and "unset" for slices in patch objects.
 > Pointers are still required for creating partial patches with types for which
 > the zero value is allowed (example: when trying to set "enabled" from true to
