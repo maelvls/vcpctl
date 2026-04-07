@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,9 +14,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/x/term"
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
+	"github.com/mattn/go-isatty"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/maelvls/vcpctl/errutil"
@@ -213,83 +211,39 @@ func loginWithAPIURL(ctx context.Context, apiURL, apiKey, contextName string) er
 }
 
 func loginInteractive(ctx context.Context, apiKey, contextName string) error {
-	conf, err := loadFileConf(ctx)
-	if err != nil {
-		return fmt.Errorf("loading configuration: %w", err)
-	}
-	current, _ := currentFrom(conf)
+	var current Auth
 
 	anonClient, err := api.NewAnonymousClient()
 	if err != nil {
 		return fmt.Errorf("while creating unauthenticated API client: %w", err)
 	}
 
-	if len(conf.ToolContexts) > 1 && contextName == "" {
-		if current.Name != "" {
-			fmt.Printf("\n📝  Re-logging in using current context '%s'.\n", displayContextForSelection(current))
-
-			if len(conf.ToolContexts) > 1 {
-				fmt.Println("\nOther available contexts:")
-				for _, toolctx := range conf.ToolContexts {
-					if toolctx.Name != current.Name {
-						displayContextForSelection(toolctx)
-					}
-				}
-				fmt.Printf("\n💡  To log in to a different context, use: vcpctl login --context <name>\n\n")
-			}
-		}
-	}
-
-	skipTenantPrompt := false
-	if current.TenantURL != "" && current.APIURL != "" && current.APIKey != "" {
-		cl, err := api.NewAPIKeyClient(current.APIURL, current.APIKey)
-		if err != nil {
-			return fmt.Errorf("while creating API client: %w", err)
-		}
-		_, tenantURL, err := api.SelfCheckAPIKey(ctx, cl)
-		if err == nil {
-			fmt.Printf("\n%s\n\n", successStyle.Render("✅  You are already logged in with the context "+displayContextForSelection(current)))
-
-			type loginChoice string
-			const (
-				loginChoiceRelogin loginChoice = "relogin"
-				loginChoiceNew     loginChoice = "new"
-			)
-			choice := loginChoiceRelogin
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[loginChoice]().
-						Options(
-							huh.NewOption("Edit the current context's API key", loginChoiceRelogin),
-							huh.NewOption("Log in using a new context", loginChoiceNew),
-						).
-						Value(&choice),
-				).Title("How would you like to log in?"),
-			)
-			if err := form.RunWithContext(ctx); err != nil {
-				return fmt.Errorf("prompt cancelled: %w", err)
-			}
-
-			if choice == loginChoiceRelogin {
-				skipTenantPrompt = true
-				current.TenantURL = tenantURL
-			} else {
-				current = Auth{}
-			}
-			fmt.Println()
-		}
-	}
-
 	current.AuthenticationType = "apiKey"
 
-	if !skipTenantPrompt {
-		if err := promptForTenantURL(ctx, anonClient, &current); err != nil {
-			return err
+	// Resolve which context to use before asking for credentials.
+	if contextName == "" && isatty.IsTerminal(os.Stdout.Fd()) {
+		conf, err := loadFileConf(ctx)
+		if err != nil {
+			return fmt.Errorf("loading configuration: %w", err)
 		}
-		fmt.Println()
-	} else if current.APIURL == "" {
-		return fmt.Errorf("current context is missing an API URL; please specify --api-url or a tenant URL")
+		if conf.CurrentContext != "" {
+			contextName, err = promptContextSelection(ctx, conf)
+			if err != nil {
+				return err
+			}
+			// Pre-fill tenant URL from the selected context so the prompt
+			// shows it as a default.
+			if existing, ok := resolveContext(conf, contextName); ok {
+				current.TenantURL = existing.TenantURL
+				current.APIURL = existing.APIURL
+			}
+		}
 	}
+
+	if err := promptForTenantURL(ctx, anonClient, &current); err != nil {
+		return err
+	}
+	fmt.Println()
 
 	if apiKey != "" {
 		if err := populateFromAPIKey(ctx, &current, apiKey); err != nil {
@@ -559,22 +513,6 @@ func authSwitchCmd(groupID string) *cobra.Command {
 	return cmd
 }
 
-func sameContext(a, b ToolContext) bool {
-	switch {
-	case a.TenantURL != b.TenantURL:
-		return false
-	case a.AuthenticationType != b.AuthenticationType:
-		return false
-	case a.AuthenticationType == "apiKey":
-		return a.Email == b.Email && a.UserID == b.UserID
-	case a.AuthenticationType == "rsaKeyFederated":
-		return a.ClientID == b.ClientID
-	case a.AuthenticationType == "rsaKey":
-		return a.ClientID == b.ClientID
-	}
-	return false
-}
-
 // Meant for the `vcpctl login*` commands. The provided toolctx's name can be
 // left empty, in which case a name will be derived. The contextFlag can also be
 // left empty. Returns the name of the saved context.
@@ -584,27 +522,28 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 		return ToolContext{}, fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// If --context flag was provided, use that name directly.
 	var name string
 	if contextFlag != "" {
+		// --context flag: use that name directly, overwrite without asking.
 		name = contextFlag
-	} else {
-		// No --context was passed, let's figure out if there is an existing
-		// context that is similar to the current one.
-		for _, existingCtx := range conf.ToolContexts {
-			if sameContext(existingCtx, target) {
-				name = existingCtx.Name
+	} else if conf.CurrentContext != "" {
+		// No --context flag, but a current context is selected.
+		if isatty.IsTerminal(os.Stdout.Fd()) {
+			// Interactive mode: let the user pick.
+			selected, err := promptContextSelection(ctx, conf)
+			if err != nil {
+				return ToolContext{}, err
 			}
+			name = selected
+		} else {
+			// Non-interactive: use the current context.
+			name = conf.CurrentContext
 		}
-	}
-	if name == "" {
-		name = generateContextName(target, conf.ToolContexts)
+	} else {
+		// No --context flag and no current context: use "default".
+		name = "default"
 	}
 	target.Name = name
-
-	if target.Name == "" {
-		return ToolContext{}, errors.New("internal error: context name derivation failed")
-	}
 
 	// Find the context.
 	var existing int = -1
@@ -621,111 +560,67 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 		return target, saveFileConf(conf)
 	}
 
-	existingCtx := conf.ToolContexts[existing]
-
-	// Let's make sure the user know if this context didn't have the same
-	// authentication type before.
-	if existingCtx.AuthenticationType != "" &&
-		existingCtx.AuthenticationType != target.AuthenticationType {
-		fmt.Printf("⚠️  Warning: Changing authentication type from '%s' to '%s' for context '%s'\n",
-			existingCtx.AuthenticationType, target.AuthenticationType, target.Name)
-		fmt.Printf("To keep existing context unchanged, use: vcpctl login --context <new-name>\n")
-
-		proceed, err := promptYesNo(ctx, "Continue?")
-		if err != nil {
-			return ToolContext{}, fmt.Errorf("prompting for confirmation: %w", err)
-		}
-		if !proceed {
-			return ToolContext{}, fmt.Errorf("login cancelled")
-		}
-	}
-
 	conf.CurrentContext = target.Name
 	conf.ToolContexts[existing] = target
 	return target, saveFileConf(conf)
 }
 
-// Backwards compatibility alias.
-func saveCurrentTenant(ctx context.Context, toolctx ToolContext) error {
-	_, err := saveCurrentContext(ctx, toolctx, "")
-	return err
-}
+const createNewContextOption = "\x00__create_new__"
 
-// generateContextName derives a Docker-style context name (e.g., "clever-alpaca") from
-// the tenant URL domain and user/service account ID.
-//
-// For API key type: Uses domain + user ID
-// For service account (rsaKeyFederated or rsaKey): Uses domain + service account ID
-//
-// The name generation is deterministic based on the seed, so the same tenant/user
-// combination will always produce the same name.
-func generateContextName(toolctx ToolContext, existing []ToolContext) string {
-	alreadyUsed := func(name string) bool {
-		for _, ctx := range existing {
-			if ctx.Name == name {
-				return true
-			}
-		}
-		return false
+// promptContextSelection shows an interactive picker for choosing which context
+// to use for login. Returns the chosen context name, or prompts for a new name
+// if "Create new context" is selected.
+func promptContextSelection(ctx context.Context, conf FileConf) (string, error) {
+	var opts []huh.Option[string]
+	for _, toolctx := range conf.ToolContexts {
+		opts = append(opts, huh.Option[string]{
+			Key:   displayContextForSelection(toolctx),
+			Value: toolctx.Name,
+		})
+	}
+	opts = append(opts, huh.Option[string]{
+		Key:   "Create new context...",
+		Value: createNewContextOption,
+	})
+
+	// Pre-select the current context.
+	selected := conf.CurrentContext
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Which context should be used for this login?").
+				Options(opts...).
+				Value(&selected),
+		),
+	)
+	if err := form.RunWithContext(ctx); err != nil {
+		return "", fmt.Errorf("prompt cancelled: %w", err)
 	}
 
-	if toolctx.TenantURL != "" {
-		// Attempt 1: just the domain name. Example:
-		//  glow-in-the-dark.venafi.cloud
-		contextName := extractDomainFromURL(toolctx.TenantURL)
-		if !alreadyUsed(contextName) {
-			return contextName
+	if selected == createNewContextOption {
+		var newName string
+		input := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title("New context name:").
+					Value(&newName).
+					Validate(func(s string) error {
+						s = strings.TrimSpace(s)
+						if s == "" {
+							return errors.New("context name cannot be empty")
+						}
+						return nil
+					}),
+			),
+		)
+		if err := input.RunWithContext(ctx); err != nil {
+			return "", fmt.Errorf("prompt cancelled: %w", err)
 		}
-
-		// Attempt 2: add a number. Example:
-		//  glow-in-the-dark.venafi.cloud.2
-		for i := 2; i < 1000; i++ {
-			candidate := fmt.Sprintf("%s.%d", contextName, i)
-			if !alreadyUsed(candidate) {
-				return candidate
-			}
-		}
-	} else if toolctx.ClientID != "" {
-		// If no tenant URL, fall back to "sa-<id>".
-		return "sa" + toolctx.ClientID
-	} else if toolctx.UserID != "" {
-		// If no tenant URL or client ID, fall back to "user-<id>".
-		return "user-" + toolctx.UserID
+		return strings.TrimSpace(newName), nil
 	}
 
-	// If we don't even have a user ID, let's just do "context-<random-suffix>".
-	randomSuffix := fmt.Sprintf("%x", sha256.Sum256([]byte(toolctx.TenantURL+toolctx.ClientID+toolctx.UserID)))[:6]
-	return "context-" + randomSuffix
-}
-
-// extractDomainFromURL extracts the domain name from a given URL.
-func extractDomainFromURL(tenantURL string) string {
-	url := tenantURL
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "http://")
-	parts := strings.SplitN(url, "/", 2)
-	return parts[0]
-}
-
-// ensureUniqueName ensures the name is unique by appending hash suffix if collision exists
-func ensureUniqueName(baseName, seed string, existingContexts []ToolContext) string {
-	nameExists := func(name string) bool {
-		for _, ctx := range existingContexts {
-			if ctx.Name == name {
-				return true
-			}
-		}
-		return false
-	}
-
-	if !nameExists(baseName) {
-		return baseName
-	}
-
-	// If collision, append first 4 chars of hash
-	h := sha256.Sum256([]byte(seed))
-	suffix := fmt.Sprintf("%x", h[:2]) // first 4 hex chars
-	return baseName + "-" + suffix
+	return selected, nil
 }
 
 // resolveContext find a context by name.
@@ -1014,59 +909,9 @@ func convertOldToNewConfig(old OldFileConf) FileConf {
 
 // Styles for prompts.
 var (
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
-	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	errorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
+	subtleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
-
-func promptYesNo(ctx context.Context, question string) (bool, error) {
-	fmt.Printf("%s %s: ", question, subtleStyle.Render("(y/n)"))
-
-	// Try to set raw mode for immediate single-character input.
-	oldState, err := term.MakeRaw(os.Stdin.Fd())
-	if err != nil {
-		// Fallback to line-based input if raw mode not available.
-		stdin := bufio.NewReader(cancellablereader.New(ctx, os.Stdin))
-		input, err := stdin.ReadString('\n')
-		if err != nil {
-			return false, err
-		}
-		input = strings.TrimSpace(strings.ToLower(input))
-		switch input {
-		case "y", "yes":
-			return true, nil
-		case "n", "no":
-			return false, nil
-		}
-		fmt.Println(errorStyle.Render("❌  Please enter 'y' or 'n'"))
-		return promptYesNo(ctx, question)
-	}
-	defer term.Restore(os.Stdin.Fd(), oldState)
-
-	// Read single character without waiting for Enter.
-	stdin := cancellablereader.New(ctx, os.Stdin)
-	for {
-		var buf [1]byte
-		_, err = stdin.Read(buf[:])
-		if err != nil {
-			term.Restore(os.Stdin.Fd(), oldState)
-			return false, err
-		}
-
-		char := strings.ToLower(string(buf[0]))
-
-		switch char {
-		case "y":
-			fmt.Println("y")
-			return true, nil
-		case "n":
-			fmt.Println("n")
-			return false, nil
-		}
-		// Invalid input; let's continue reading without showing an error
-		// message for better UX.
-	}
-}
 
 type validationDoneMsg struct {
 	err error
