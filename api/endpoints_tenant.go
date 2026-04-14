@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/maelvls/vcpctl/errutil"
@@ -287,14 +288,31 @@ func GetLoginInfo(ctx context.Context, client http.Client, apiURL, registeredTen
 //	actualToRegistered("https://ui-stack-dev210.qa.venafi.io")  -> "stack"
 func actualToRegistered(actualTenantURLPrefix string) (registeredTenantURLPrefix string, _ error) {
 	// For dev environments, the 'actual' tenantURLPrefix might be something
-	// like "ui-stack-dev210". The 'registered' tenantURLPrefix is always just "stack".
-	if strings.HasPrefix(actualTenantURLPrefix, "ui-stack-") {
-		return "stack", nil
+	// like "ui-stack-dev210". Let's get what's between ui- and -dev210, e.g.,
+	// "stack", and that's going to be our 'registered' tenantURLPrefix. The
+	// 'registered' tenant URL prefix might have many dashes, e.g.,
+	// "ngts-rls-test-1776163866-d791a1".
+	if strings.HasPrefix(actualTenantURLPrefix, "ui-") && strings.Contains(actualTenantURLPrefix, "-dev") {
+		// Let's do a regex match to extract the part between "ui-" and "-dev".
+		match, err := extractWithRegex(`^ui-(.+)-dev\d+$`, actualTenantURLPrefix)
+		if err != nil {
+			return "", fmt.Errorf("while extracting registered tenant URL prefix from actual tenant URL prefix '%s': %w", actualTenantURLPrefix, err)
+		}
+		return match, nil
 	}
 
 	// For regular production tenants, the 'registered' tenantURLPrefix is the same as
 	// the 'actual' tenantURLPrefix.
 	return actualTenantURLPrefix, nil
+}
+
+func extractWithRegex(pattern, s string) (string, error) {
+	re := regexp.MustCompile(pattern)
+	matches := re.FindStringSubmatch(s)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("string '%s' does not match expected pattern '%s'", s, pattern)
+	}
+	return matches[1], nil
 }
 
 // registeredToActual computes the 'actual' UI

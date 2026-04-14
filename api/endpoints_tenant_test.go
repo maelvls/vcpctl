@@ -73,6 +73,15 @@ func Test_registeredTenantURLPrefixFromTenantURL(t *testing.T) {
 			want:      "stack",
 			wantErr:   false,
 		},
+		// UI (tenant URL): https://ui-ngts-rls-test-1776163866-d791a1-dev214.qa.venafi.io
+		// registered tenant URL prefix = ngts-rls-test-1776163866-d791a1
+
+		{
+			name:      "complex devstack",
+			tenantURL: "https://ui-ngts-rls-test-1776163866-d791a1-dev214.qa.venafi.io",
+			want:      "ngts-rls-test-1776163866-d791a1",
+			wantErr:   false,
+		},
 	}
 
 	for _, tt := range tests {
