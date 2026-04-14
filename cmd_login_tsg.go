@@ -7,10 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/huh"
+	"github.com/mattn/go-isatty"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
@@ -21,30 +24,34 @@ import (
 type envURLs struct {
 	authURL string
 	apiURL  string
+	scmURL  string
 }
 
 var envURLMap = map[string]envURLs{
 	"prod": {
 		authURL: "https://auth.apps.paloaltonetworks.com",
 		apiURL:  "https://api.strata.paloaltonetworks.com",
+		scmURL:  "https://stratacloudmanager.paloaltonetworks.com",
 	},
 	"qa": {
 		authURL: "https://auth.qa.appsvc.paloaltonetworks.com",
 		apiURL:  "https://qa.api.sase.paloaltonetworks.com",
+		scmURL:  "https://stratacloudmanager.qa.appsvc.paloaltonetworks.com",
 	},
 	"dev": {
 		authURL: "https://auth.dev.appsvc.paloaltonetworks.com",
 		apiURL:  "https://dev.api.sase.paloaltonetworks.com",
+		scmURL:  "https://stratacloudmanager.dev.appsvc.paloaltonetworks.com",
 	},
 }
 
 func loginTSGCmd(groupID string) *cobra.Command {
 	var contextFlag, authURL, apiURL, clientSecret, env string
 	cmd := &cobra.Command{
-		Use:           "login-tsg <client-id>",
+		Use:           "login-tsg [client-id]",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MaximumNArgs(1),
 		Short:         "Authenticate using a Palo Alto Networks TSG service account.",
 		Long: undent.Undent(`
 			Authenticate using a Palo Alto Networks TSG (Tenant Service Group) service
@@ -55,8 +62,15 @@ func loginTSGCmd(groupID string) *cobra.Command {
 
 			Use --env to select the environment (prod, qa, dev). The --auth-url and
 			--api-url flags override the environment defaults.
+
+			When run without arguments in a terminal, an interactive mode guides you
+			through selecting the context, environment, and credentials.
 		`),
 		Example: undent.Undent(`
+			# Interactive mode (prompts for all details):
+			vcpctl login-tsg
+
+			# Non-interactive:
 			vcpctl login-tsg mael@1526746475.iam.panserviceaccount.com \
 			  --client-secret <secret>
 
@@ -65,10 +79,18 @@ func loginTSGCmd(groupID string) *cobra.Command {
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
+				return loginTSGInteractive(cmd.Context(), contextFlag)
+			}
+
+			if len(args) == 0 {
+				return errutil.Fixable(fmt.Errorf("client-id is required (or run without arguments for interactive mode)"))
+			}
 			clientID := args[0]
 			if clientSecret == "" {
 				return errutil.Fixable(fmt.Errorf("--client-secret is required"))
 			}
+
 			urls, ok := envURLMap[env]
 			if !ok {
 				return errutil.Fixable(fmt.Errorf("unknown --env %q; valid values: prod, qa, dev", env))
@@ -79,22 +101,98 @@ func loginTSGCmd(groupID string) *cobra.Command {
 			if apiURL == "" {
 				apiURL = urls.apiURL
 			}
-			apiURL = strings.TrimRight(apiURL, "/")
-			if !strings.HasSuffix(apiURL, "/ngts") {
-				apiURL = apiURL + "/ngts"
-			}
+			apiURL = normalizeAPIURL(apiURL)
 			return loginWithTSG(cmd.Context(), clientID, clientSecret, authURL, apiURL, contextFlag)
 		},
 	}
 	cmd.Flags().StringVar(&env, "env", "prod", "Environment to use: prod, qa, or dev")
 	cmd.Flags().StringVar(&authURL, "auth-url", "", "Override the OAuth2 authorization server URL")
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "Override the API URL ('/ngts' is appended if not already present)")
-	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "The client secret for the service account (required)")
+	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "The client secret for the service account")
 	cmd.Flags().StringVar(&contextFlag, "context", "", "Context name to create or update")
-	_ = cmd.MarkFlagRequired("client-secret")
 	_ = cmd.Flags().MarkDeprecated("auth-url", "use --env instead")
 	_ = cmd.Flags().MarkDeprecated("api-url", "use --env instead")
 	return cmd
+}
+
+func loginTSGInteractive(ctx context.Context, contextFlag string) error {
+	// Step 1: context picker (before any other prompt).
+	resolvedContext := contextFlag
+	if resolvedContext == "" {
+		conf, err := loadFileConf(ctx)
+		if err != nil {
+			return fmt.Errorf("loading configuration: %w", err)
+		}
+		if conf.CurrentContext != "" {
+			resolvedContext, err = promptContextSelection(ctx, conf)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Step 2: environment selector.
+	env := "prod"
+	envForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Which environment?").
+				Options(
+					huh.NewOption("Production (prod)", "prod"),
+					huh.NewOption("QA (qa)", "qa"),
+					huh.NewOption("Dev (dev)", "dev"),
+				).
+				Value(&env),
+		),
+	)
+	if err := envForm.RunWithContext(ctx); err != nil {
+		return fmt.Errorf("prompt cancelled: %w", err)
+	}
+
+	urls := envURLMap[env]
+
+	// Step 3: instructions.
+	fmt.Printf("\nPlease go to %s/settings/iam/access\n", urls.scmURL)
+	fmt.Printf("and create an SCM service account, then paste its email and client secret below.\n\n")
+
+	// Step 4: client ID and secret prompts.
+	var clientID, clientSecret string
+	credForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Service account email (client ID):").
+				Value(&clientID).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("client ID cannot be empty")
+					}
+					return nil
+				}),
+			huh.NewInput().
+				Title("Client secret:").
+				EchoMode(huh.EchoModePassword).
+				Value(&clientSecret).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("client secret cannot be empty")
+					}
+					return nil
+				}),
+		),
+	)
+	if err := credForm.RunWithContext(ctx); err != nil {
+		return fmt.Errorf("prompt cancelled: %w", err)
+	}
+
+	return loginWithTSG(ctx, strings.TrimSpace(clientID), strings.TrimSpace(clientSecret), urls.authURL, normalizeAPIURL(urls.apiURL), resolvedContext)
+}
+
+func normalizeAPIURL(apiURL string) string {
+	apiURL = strings.TrimRight(apiURL, "/")
+	if !strings.HasSuffix(apiURL, "/ngts") {
+		apiURL = apiURL + "/ngts"
+	}
+	return apiURL
 }
 
 var tsgIDRegexp = regexp.MustCompile(`@(\d+)\.iam\.panserviceaccount\.com$`)
