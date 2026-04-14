@@ -18,6 +18,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/mattn/go-isatty"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/cancellablereader"
@@ -53,6 +54,23 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				return errutil.Fixable(fmt.Errorf("a file path to the JSON authentication file or '-' for stdin is required"))
 			}
 			saKeyPath := args[0]
+
+			// Resolve context before processing credentials.
+			if contextFlag == "" {
+				if !isatty.IsTerminal(os.Stdin.Fd()) {
+					return errutil.Fixable(fmt.Errorf("--context is required when 'vcpctl login-keypair' isn't run interactively (e.g. from a pipe)"))
+				}
+				conf, err := loadFileConf(cmd.Context())
+				if err != nil {
+					return fmt.Errorf("loading configuration: %w", err)
+				}
+				if conf.CurrentContext != "" {
+					contextFlag, err = promptContextSelection(cmd.Context(), conf)
+					if err != nil {
+						return err
+					}
+				}
+			}
 
 			saKey, err := readJSONAuthKeypair(cmd.Context(), saKeyPath)
 			if err != nil {

@@ -20,12 +20,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/mattn/go-isatty"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/maelvls/vcpctl/errutil"
 	"github.com/maelvls/vcpctl/logutil"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 type jwksKey struct {
@@ -218,6 +218,23 @@ type wifJSON struct {
 func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag string) error {
 	if wifJSONPath == "" {
 		return errutil.Fixable(fmt.Errorf("--sa-wif requires a JSON file path or '-' for stdin"))
+	}
+
+	// Resolve context before processing credentials.
+	if contextFlag == "" {
+		if !isatty.IsTerminal(os.Stdin.Fd()) {
+			return errutil.Fixable(fmt.Errorf("--context is required when 'vcpctl login-wif' isn't run interactively (e.g. from a pipe)"))
+		}
+		conf, err := loadFileConf(ctx)
+		if err != nil {
+			return fmt.Errorf("loading configuration: %w", err)
+		}
+		if conf.CurrentContext != "" {
+			contextFlag, err = promptContextSelection(ctx, conf)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	var reader io.Reader
