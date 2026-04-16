@@ -118,6 +118,7 @@ func loginTSGCmd(groupID string) *cobra.Command {
 func loginTSGInteractive(ctx context.Context, contextFlag string) error {
 	// Step 1: context picker (before any other prompt).
 	resolvedContext := contextFlag
+	var existingTSGContext *ToolContext
 	if resolvedContext == "" {
 		conf, err := loadFileConf(ctx)
 		if err != nil {
@@ -128,11 +129,14 @@ func loginTSGInteractive(ctx context.Context, contextFlag string) error {
 			if err != nil {
 				return err
 			}
+			if existing, ok := resolveContext(conf, resolvedContext); ok && existing.AuthenticationType == "tsg" {
+				existingTSGContext = &existing
+			}
 		}
 	}
 
-	// Step 2: environment selector.
-	env := "prod"
+	// Step 2: environment selector — pre-select based on existing context if available.
+	env := envFromAuthURL(existingTSGContext)
 	envForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
@@ -155,8 +159,12 @@ func loginTSGInteractive(ctx context.Context, contextFlag string) error {
 	fmt.Printf("\nPlease go to %s/settings/iam/access\n", urls.scmURL)
 	fmt.Printf("and create an SCM service account, then paste its email and client secret below.\n\n")
 
-	// Step 4: client ID and secret prompts.
+	// Step 4: client ID and secret prompts — pre-fill from existing context if available.
 	var clientID, clientSecret string
+	if existingTSGContext != nil {
+		clientID = existingTSGContext.ClientID
+		clientSecret = existingTSGContext.ClientSecret
+	}
 	credForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -185,6 +193,19 @@ func loginTSGInteractive(ctx context.Context, contextFlag string) error {
 	}
 
 	return loginWithTSG(ctx, strings.TrimSpace(clientID), strings.TrimSpace(clientSecret), urls.authURL, normalizeAPIURL(urls.apiURL), resolvedContext)
+}
+
+// envFromAuthURL returns the env key ("prod", "qa", "dev") matching the
+// existing context's AuthURL, falling back to "prod" if not found.
+func envFromAuthURL(existing *ToolContext) string {
+	if existing != nil {
+		for key, urls := range envURLMap {
+			if strings.EqualFold(existing.AuthURL, urls.authURL) {
+				return key
+			}
+		}
+	}
+	return "prod"
 }
 
 func normalizeAPIURL(apiURL string) string {

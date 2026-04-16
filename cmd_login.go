@@ -231,11 +231,12 @@ func loginInteractive(ctx context.Context, apiKey, contextName string) error {
 			if err != nil {
 				return err
 			}
-			// Pre-fill tenant URL from the selected context so the prompt
-			// shows it as a default.
-			if existing, ok := resolveContext(conf, contextName); ok {
+			// Pre-fill fields from the existing context so prompts show
+			// them as defaults.
+			if existing, ok := resolveContext(conf, contextName); ok && existing.AuthenticationType == "apiKey" {
 				current.TenantURL = existing.TenantURL
 				current.APIURL = existing.APIURL
+				current.APIKey = existing.APIKey
 			}
 		}
 	}
