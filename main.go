@@ -73,7 +73,6 @@ func main() {
 		loginWifCmd("auth"),
 		loginKeypairCmd("auth"),
 		loginTSGCmd("auth"),
-		tsgurlCmd("auth"),
 		switchCmd("auth"),
 		tenantidCmd("auth"),
 		apikeyCmd("auth"),

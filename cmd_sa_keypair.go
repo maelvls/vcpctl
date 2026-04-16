@@ -129,6 +129,16 @@ func saGenkeypairCmd() *cobra.Command {
 				}
 			}
 
+			// When the current context is a TSG service account, the NGTS
+			// dataplane URL is the right API URL for the keypair JSON.
+			apiURLForJSON := conf.APIURL
+			if tsgID, err := extractTSGID(conf.ClientID); err == nil {
+				env := envFromAuthURL(&ToolContext{AuthURL: conf.AuthURL})
+				if ngtsURL, err := ngtsDataplaneURL(tsgID, env); err == nil {
+					apiURLForJSON = ngtsURL
+				}
+			}
+
 			switch outputFormat {
 			case "pem":
 				fmt.Println(ecKey)
@@ -137,7 +147,7 @@ func saGenkeypairCmd() *cobra.Command {
 					Type:       "rsaKey",
 					ClientID:   existingSA.Id.String(),
 					PrivateKey: ecKey,
-					APIURL:     conf.APIURL,
+					APIURL:     apiURLForJSON,
 					TenantURL:  tenantURL,
 				}, "", "  ")
 				if err != nil {

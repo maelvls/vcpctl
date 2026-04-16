@@ -90,6 +90,14 @@ func saGenWifCmd() *cobra.Command {
 			iss := jwksURL
 			sub := existingSA.Id.String()
 			aud := conf.APIURL
+			apiURLForJSON := conf.APIURL
+			if tsgID, err := extractTSGID(conf.ClientID); err == nil {
+				env := envFromAuthURL(&ToolContext{AuthURL: conf.AuthURL})
+				if ngtsURL, err := ngtsDataplaneURL(tsgID, env); err == nil {
+					aud = ngtsURL
+					apiURLForJSON = ngtsURL
+				}
+			}
 
 			desiredSA := existingSA
 			desiredSA.JwksURI = jwksURL
@@ -133,6 +141,7 @@ func saGenWifCmd() *cobra.Command {
 					ClientID:   existingSA.Id.String(),
 					PrivateKey: privKeyPEM,
 					TenantURL:  tenantURL,
+					APIURL:     apiURLForJSON,
 					JWKSURL:    jwksURL,
 					Iss:        iss,
 					Aud:        aud,

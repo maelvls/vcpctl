@@ -208,6 +208,10 @@ type wifJSON struct {
 	Aud        string `json:"aud"`
 	Sub        string `json:"sub"`
 
+	// Optional. When set, overrides the API URL derived from tenant info lookup.
+	// Used for NGTS dataplane URLs in TSG contexts.
+	APIURL string `json:"api_url,omitempty"`
+
 	// Optional. Only useful when using Venafi Cloud, but not required even when
 	// using Venafi Cloud. It is used to fill in the `tenantURL` field in
 	// ~/.config/vcpctl.yaml, which allows us to display the UI URL when running
@@ -318,9 +322,14 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag strin
 		}
 	}
 
+	storedAPIURL := info.APIURL
+	if input.APIURL != "" {
+		storedAPIURL = input.APIURL
+	}
+
 	current := Auth{
 		TenantURL:          input.TenantURL,
-		APIURL:             info.APIURL,
+		APIURL:             storedAPIURL,
 		AuthenticationType: "rsaKeyFederated",
 		ClientID:           input.ClientID,
 		AccessToken:        accessToken,
