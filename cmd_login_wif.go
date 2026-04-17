@@ -234,7 +234,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag strin
 			return fmt.Errorf("loading configuration: %w", err)
 		}
 		if conf.CurrentContext != "" {
-			contextFlag, err = promptContextSelection(ctx, conf)
+			contextFlag, err = promptContextSelection(ctx, conf, []string{"rsaKeyFederated"})
 			if err != nil {
 				return err
 			}

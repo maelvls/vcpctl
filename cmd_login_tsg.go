@@ -125,7 +125,7 @@ func loginTSGInteractive(ctx context.Context, contextFlag string) error {
 			return fmt.Errorf("loading configuration: %w", err)
 		}
 		if conf.CurrentContext != "" {
-			resolvedContext, err = promptContextSelection(ctx, conf)
+			resolvedContext, err = promptContextSelection(ctx, conf, []string{"tsg"})
 			if err != nil {
 				return err
 			}

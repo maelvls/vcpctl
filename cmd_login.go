@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 
@@ -227,7 +228,7 @@ func loginInteractive(ctx context.Context, apiKey, contextName string) error {
 			return fmt.Errorf("loading configuration: %w", err)
 		}
 		if conf.CurrentContext != "" {
-			contextName, err = promptContextSelection(ctx, conf)
+			contextName, err = promptContextSelection(ctx, conf, []string{"apiKey"})
 			if err != nil {
 				return err
 			}
@@ -449,30 +450,30 @@ func switchCmd(groupID string) *cobra.Command {
 			// If no context is provided, we prompt the user to select one.
 			current, _ := currentFrom(conf)
 
-			var opts []huh.Option[ToolContext]
+			if os.Getenv("VEN_API_URL") != "" || os.Getenv("VEN_API_KEY") != "" {
+				fmt.Fprintln(os.Stderr, "⚠️  WARNING: the env var VEN_API_URL or VEN_API_KEY is set.")
+				fmt.Fprintln(os.Stderr, "⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'.")
+			}
+
+			var opts []contextListOpt
 			for _, toolctx := range conf.ToolContexts {
-				opts = append(opts, huh.Option[ToolContext]{
-					Value: toolctx,
-					Key:   displayContextForSelection(toolctx),
+				opts = append(opts, contextListOpt{
+					display: displayContextForSelection(toolctx),
+					value:   toolctx.Name,
+					toolctx: toolctx,
 				})
 			}
 
-			var fields []huh.Field
-			if os.Getenv("VEN_API_URL") != "" || os.Getenv("VEN_API_KEY") != "" {
-				fields = append(fields, huh.NewNote().
-					Description("⚠️  WARNING: the env var VEN_API_URL or VEN_API_KEY is set.\n⚠️  WARNING: This means that all of the other commands will ignore what's set by 'vcpctl login'."),
-				)
-			}
-			fields = append(fields, huh.NewSelect[ToolContext]().
-				Options(opts...).
-				Description("Select the context you want to switch to.").
-				Value(&current),
-			)
-			err = huh.NewForm(huh.NewGroup(fields...)).RunWithContext(cmd.Context())
+			selectedName, err := runContextSelectorWithRename(cmd.Context(), "Select the context you want to switch to.", opts, current.Name)
 			if err != nil {
 				return fmt.Errorf("selecting context: %w", err)
 			}
-			conf.CurrentContext = current.Name
+			// Reload conf: the selector may have renamed or deleted contexts.
+			conf, err = loadFileConf(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("loading configuration: %w", err)
+			}
+			conf.CurrentContext = selectedName
 			return saveFileConf(conf)
 		},
 	}
@@ -531,11 +532,16 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 		// No --context flag, but a current context is selected.
 		if isatty.IsTerminal(os.Stdout.Fd()) {
 			// Interactive mode: let the user pick.
-			selected, err := promptContextSelection(ctx, conf)
+			selected, err := promptContextSelection(ctx, conf, nil)
 			if err != nil {
 				return ToolContext{}, err
 			}
 			name = selected
+			// Reload conf: the selector may have renamed or deleted contexts.
+			conf, err = loadFileConf(ctx)
+			if err != nil {
+				return ToolContext{}, fmt.Errorf("loading configuration: %w", err)
+			}
 		} else {
 			// Non-interactive: use the current context.
 			name = conf.CurrentContext
@@ -568,35 +574,294 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 
 const createNewContextOption = "\x00__create_new__"
 
+type contextListOpt struct {
+	display string      // display label
+	value   string      // context name, or createNewContextOption
+	toolctx ToolContext // underlying context; zero for the sentinel option
+}
+
+type contextSelectorModel struct {
+	title        string
+	opts         []contextListOpt
+	cursor       int
+	selected     string
+	shouldRename bool
+	shouldDelete bool
+	canceled     bool
+}
+
+func (m contextSelectorModel) Init() tea.Cmd { return nil }
+
+func (m contextSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			m.canceled = true
+			return m, tea.Quit
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.opts)-1 {
+				m.cursor++
+			}
+		case "enter", " ":
+			m.selected = m.opts[m.cursor].value
+			return m, tea.Quit
+		case "r":
+			if m.opts[m.cursor].value != createNewContextOption {
+				m.shouldRename = true
+				return m, tea.Quit
+			}
+		case "d":
+			if m.opts[m.cursor].value != createNewContextOption {
+				m.shouldDelete = true
+				return m, tea.Quit
+			}
+		}
+	}
+	return m, nil
+}
+
+var (
+	selectedContextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
+	cursorStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF69B4"))
+)
+
+// viewContent builds the raw string for the selector. Kept separate from
+// View() so callers can count lines for inline erasing after the program exits.
+func (m contextSelectorModel) viewContent() string {
+	var b strings.Builder
+	b.WriteString(m.title + "\n\n")
+	for i, opt := range m.opts {
+		// Split "name (details...)" so name and details can be styled separately.
+		// The sentinel option has no toolctx.Name, so details == display.
+		name := opt.toolctx.Name
+		details := opt.display[len(name):]
+		if i == m.cursor {
+			b.WriteString(cursorStyle.Render(">") + " " + selectedContextStyle.Render(name) + subtleStyle.Render(details) + "\n")
+		} else {
+			b.WriteString("  " + name + subtleStyle.Render(details) + "\n")
+		}
+	}
+	b.WriteString("\n")
+	hint := "↑/↓ navigate  enter select  r rename  d delete  esc cancel"
+	if m.opts[m.cursor].value == createNewContextOption {
+		hint = "↑/↓ navigate  enter select  esc cancel"
+	}
+	b.WriteString(subtleStyle.Render(hint))
+	return b.String()
+}
+
+func (m contextSelectorModel) View() tea.View {
+	return tea.NewView(m.viewContent())
+}
+
+// runContextSelectorWithRename runs the interactive context list. When the user
+// presses 'r' it opens $EDITOR to rename, 'd' shows a confirm then deletes.
+// Returns the selected value (which may be createNewContextOption).
+func runContextSelectorWithRename(ctx context.Context, title string, opts []contextListOpt, initialValue string) (string, error) {
+	cursor := 0
+	for i, o := range opts {
+		if o.value == initialValue {
+			cursor = i
+			break
+		}
+	}
+
+	for {
+		model := contextSelectorModel{title: title, opts: opts, cursor: cursor}
+		result, err := tea.NewProgram(model).Run()
+		if err != nil {
+			return "", fmt.Errorf("prompt cancelled: %w", err)
+		}
+		m := result.(contextSelectorModel)
+
+		// Erase the selector inline: bubbletea v2 leaves rendered content on
+		// screen after exit. After close(), the cursor sits on the last rendered
+		// line. Move up by the number of newlines in the view and erase to end.
+		if n := strings.Count(m.viewContent(), "\n"); n > 0 {
+			fmt.Printf("\033[%dA\033[J", n)
+		}
+
+		if m.canceled {
+			return "", context.Canceled
+		}
+
+		if m.shouldRename {
+			oldName := opts[m.cursor].value
+			newName, err := openEditorForRename(oldName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "\nrename failed: %v\n", err)
+				cursor = m.cursor
+				continue
+			}
+			if newName != oldName {
+				if err := renameContextInConf(ctx, oldName, newName); err != nil {
+					fmt.Fprintf(os.Stderr, "\nrename failed: %v\n", err)
+					cursor = m.cursor
+					continue
+				}
+				opts[m.cursor].toolctx.Name = newName
+				opts[m.cursor].display = displayContextForSelection(opts[m.cursor].toolctx)
+				opts[m.cursor].value = newName
+			}
+			cursor = m.cursor
+			continue
+		}
+
+		if m.shouldDelete {
+			name := opts[m.cursor].value
+			confirmed := false
+			form := huh.NewForm(huh.NewGroup(
+				huh.NewConfirm().
+					Title(fmt.Sprintf("Delete context '%s'?", name)).
+					Value(&confirmed),
+			))
+			if err := form.RunWithContext(ctx); err != nil && !errors.Is(err, huh.ErrUserAborted) {
+				return "", fmt.Errorf("prompt cancelled: %w", err)
+			}
+			if confirmed {
+				if err := deleteContextFromConf(ctx, name); err != nil {
+					fmt.Fprintf(os.Stderr, "\ndelete failed: %v\n", err)
+				} else {
+					opts = append(opts[:m.cursor], opts[m.cursor+1:]...)
+				}
+			}
+			if m.cursor >= len(opts) {
+				cursor = len(opts) - 1
+			} else {
+				cursor = m.cursor
+			}
+			continue
+		}
+
+		return m.selected, nil
+	}
+}
+
+// openEditorForRename writes currentName to a temp file, opens $VISUAL or
+// $EDITOR (falling back to vi) via sh -c, and returns the trimmed result.
+func openEditorForRename(currentName string) (string, error) {
+	editor := os.Getenv("VISUAL")
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+
+	f, err := os.CreateTemp("", "vcpctl-rename-*.txt")
+	if err != nil {
+		return "", fmt.Errorf("creating temp file: %w", err)
+	}
+	defer os.Remove(f.Name())
+
+	if _, err := f.WriteString(currentName); err != nil {
+		f.Close()
+		return "", fmt.Errorf("writing temp file: %w", err)
+	}
+	f.Close()
+
+	// Use sh -c so EDITOR values with arguments (e.g. "code --wait") work.
+	cmd := exec.Command("sh", "-c", editor+` "$@"`, "--", f.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("editor exited: %w", err)
+	}
+
+	content, err := os.ReadFile(f.Name())
+	if err != nil {
+		return "", fmt.Errorf("reading temp file: %w", err)
+	}
+	newName := strings.TrimSpace(string(content))
+	if newName == "" {
+		return "", fmt.Errorf("context name cannot be empty")
+	}
+	return newName, nil
+}
+
+// renameContextInConf renames a context in the config file, updating
+// current-context if it pointed to the old name.
+func renameContextInConf(ctx context.Context, oldName, newName string) error {
+	conf, err := loadFileConf(ctx)
+	if err != nil {
+		return err
+	}
+	for _, c := range conf.ToolContexts {
+		if c.Name == newName && newName != oldName {
+			return fmt.Errorf("context %q already exists", newName)
+		}
+	}
+	for i, c := range conf.ToolContexts {
+		if c.Name == oldName {
+			conf.ToolContexts[i].Name = newName
+		}
+	}
+	if conf.CurrentContext == oldName {
+		conf.CurrentContext = newName
+	}
+	return saveFileConf(conf)
+}
+
+// deleteContextFromConf removes a context from the config file, clearing
+// current-context if it pointed to the deleted context.
+func deleteContextFromConf(ctx context.Context, name string) error {
+	conf, err := loadFileConf(ctx)
+	if err != nil {
+		return err
+	}
+	n := 0
+	for _, c := range conf.ToolContexts {
+		if c.Name != name {
+			conf.ToolContexts[n] = c
+			n++
+		}
+	}
+	conf.ToolContexts = conf.ToolContexts[:n]
+	if conf.CurrentContext == name {
+		conf.CurrentContext = ""
+	}
+	return saveFileConf(conf)
+}
+
 // promptContextSelection shows an interactive picker for choosing which context
 // to use for login. Returns the chosen context name, or prompts for a new name
-// if "Create new context" is selected.
-func promptContextSelection(ctx context.Context, conf FileConf) (string, error) {
-	var opts []huh.Option[string]
+// if "Create new context" is selected. If authTypes is non-empty, only contexts
+// whose AuthenticationType is in authTypes are shown.
+func promptContextSelection(ctx context.Context, conf FileConf, authTypes []string) (string, error) {
+	var opts []contextListOpt
 	for _, toolctx := range conf.ToolContexts {
-		opts = append(opts, huh.Option[string]{
-			Key:   displayContextForSelection(toolctx),
-			Value: toolctx.Name,
+		if len(authTypes) > 0 {
+			matched := false
+			for _, t := range authTypes {
+				if toolctx.AuthenticationType == t {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		opts = append(opts, contextListOpt{
+			display: displayContextForSelection(toolctx),
+			value:   toolctx.Name,
+			toolctx: toolctx,
 		})
 	}
-	opts = append(opts, huh.Option[string]{
-		Key:   "Create new context...",
-		Value: createNewContextOption,
+	opts = append(opts, contextListOpt{
+		display: "Create new context...",
+		value:   createNewContextOption,
 	})
 
-	// Pre-select the current context.
-	selected := conf.CurrentContext
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Which context should be used for this login?").
-				Options(opts...).
-				Value(&selected),
-		),
-	)
-	if err := form.RunWithContext(ctx); err != nil {
-		return "", fmt.Errorf("prompt cancelled: %w", err)
+	selected, err := runContextSelectorWithRename(ctx, "Which context should be used for this login?", opts, conf.CurrentContext)
+	if err != nil {
+		return "", err
 	}
 
 	if selected == createNewContextOption {

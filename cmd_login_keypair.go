@@ -65,7 +65,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 					return fmt.Errorf("loading configuration: %w", err)
 				}
 				if conf.CurrentContext != "" {
-					contextFlag, err = promptContextSelection(cmd.Context(), conf)
+					contextFlag, err = promptContextSelection(cmd.Context(), conf, []string{"rsaKey"})
 					if err != nil {
 						return err
 					}
