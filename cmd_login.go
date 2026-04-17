@@ -552,6 +552,9 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 	}
 	target.Name = name
 
+	// Remember what was current before we make any changes.
+	previousCurrentContext := conf.CurrentContext
+
 	// Find the context.
 	var existing int = -1
 	for i, existingCtx := range conf.ToolContexts {
@@ -561,14 +564,36 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 		}
 	}
 	if existing == -1 {
-		// Doesn't exist in the config yet, let's add it.
 		conf.ToolContexts = append(conf.ToolContexts, target)
-		conf.CurrentContext = target.Name
-		return target, saveFileConf(conf)
+	} else {
+		conf.ToolContexts[existing] = target
 	}
 
-	conf.CurrentContext = target.Name
-	conf.ToolContexts[existing] = target
+	// Decide whether to update the current context.
+	if previousCurrentContext == "" || name == previousCurrentContext {
+		// No existing current context, or logging into the same context: auto-switch.
+		conf.CurrentContext = name
+	} else if isatty.IsTerminal(os.Stdout.Fd()) {
+		// Different context in interactive mode: ask the user.
+		doSwitch := true
+		form := huh.NewForm(huh.NewGroup(
+			huh.NewConfirm().
+				Title(fmt.Sprintf("Switch current context to '%s'?", name)).
+				Description(fmt.Sprintf("You can also run 'vcpctl switch %s' or 'vcpctl switch' later.", name)).
+				Value(&doSwitch),
+		))
+		if err := form.RunWithContext(ctx); err != nil && !errors.Is(err, huh.ErrUserAborted) {
+			return target, fmt.Errorf("prompt cancelled: %w", err)
+		}
+		if doSwitch {
+			conf.CurrentContext = name
+		}
+	} else {
+		// Different context in non-interactive mode: inform the user.
+		logutil.Infof("Current context is '%s'. You authenticated with context '%s'. Run 'vcpctl switch %s' or 'vcpctl switch' to use it.",
+			previousCurrentContext, name, name)
+	}
+
 	return target, saveFileConf(conf)
 }
 
