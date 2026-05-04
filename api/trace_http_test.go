@@ -15,25 +15,22 @@ func TestRedactSensitiveBody(t *testing.T) {
 			input:    `{"user":"john","privateKey":"secret123","email":"test@example.com"}`,
 			expected: `{"user":"john","privateKey":"*********","email":"test@example.com"}`,
 		},
+		// The `ociRegistryToken` field is returned by PUT
+		// /v1/serviceaccounts/<id>/ocitoken and POST /v1/serviceaccounts.
 		{
-			name:     "redacts ociToken field",
-			input:    `{"user":"john","ociToken":"token456","email":"test@example.com"}`,
-			expected: `{"user":"john","ociToken":"********","email":"test@example.com"}`,
+			name:     "redacts ociRegistryToken field",
+			input:    `{"ociRegistryToken":"regtoken789"}`,
+			expected: `{"ociRegistryToken":"***********"}`,
 		},
 		{
-			name:     "redacts both privateKey and ociToken",
-			input:    `{"privateKey":"secret123","ociToken":"token456","user":"john"}`,
-			expected: `{"privateKey":"*********","ociToken":"********","user":"john"}`,
+			name:     "redacts both privateKey and ociRegistryToken",
+			input:    `{"privateKey":"secret123","ociRegistryToken":"token456","user":"john"}`,
+			expected: `{"privateKey":"*********","ociRegistryToken":"********","user":"john"}`,
 		},
 		{
 			name:     "handles empty privateKey value",
 			input:    `{"privateKey":"","user":"john"}`,
 			expected: `{"privateKey":"","user":"john"}`,
-		},
-		{
-			name:     "handles empty ociToken value",
-			input:    `{"ociToken":"","user":"john"}`,
-			expected: `{"ociToken":"","user":"john"}`,
 		},
 		{
 			name:     "handles body without sensitive fields",
@@ -51,9 +48,9 @@ func TestRedactSensitiveBody(t *testing.T) {
 			expected: `{"privateKey":"**********************"}`,
 		},
 		{
-			name:     "handles body with only ociToken",
-			input:    `{"ociToken":"verylongtoken12345"}`,
-			expected: `{"ociToken":"******************"}`,
+			name:     "handles body with only ociRegistryToken",
+			input:    `{"ociRegistryToken":"verylongtoken12345"}`,
+			expected: `{"ociRegistryToken":"******************"}`,
 		},
 		{
 			name:     "handles privateKey in nested structure",
@@ -147,13 +144,13 @@ func TestRedactSensitiveBody(t *testing.T) {
 		},
 		{
 			name:     "handles JSON with privateKey in array",
-			input:    `{"keys":["privateKey","ociToken"],"values":["secret","token"]}`,
-			expected: `{"keys":["privateKey","ociToken"],"values":["secret","token"]}`,
+			input:    `{"keys":["privateKey","ociRegistryToken"],"values":["secret","token"]}`,
+			expected: `{"keys":["privateKey","ociRegistryToken"],"values":["secret","token"]}`,
 		},
 		{
 			name:     "handles very long non-JSON text",
-			input:    `This is a very long plain text response that doesn't contain any JSON structure at all but might contain words like privateKey or ociToken in the middle of sentences.`,
-			expected: `This is a very long plain text response that doesn't contain any JSON structure at all but might contain words like privateKey or ociToken in the middle of sentences.`,
+			input:    `This is a very long plain text response that doesn't contain any JSON structure at all but might contain words like privateKey or ociRegistryToken in the middle of sentences.`,
+			expected: `This is a very long plain text response that doesn't contain any JSON structure at all but might contain words like privateKey or ociRegistryToken in the middle of sentences.`,
 		},
 	}
 

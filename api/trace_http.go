@@ -39,11 +39,12 @@ func redactSensitiveHeaders(headers http.Header) http.Header {
 	return redacted
 }
 
-// Body might contain the 'privateKey' and 'ociToken' fields. Let's redact them.
+// Body might contain the 'privateKey', 'ociToken', and 'ociRegistryToken' fields. Let's redact them.
 func redactSensitiveBody(body string) string {
 	redacted := body
 	redacted = redactJSONField(redacted, "privateKey")
 	redacted = redactJSONField(redacted, "ociToken")
+	redacted = redactJSONField(redacted, "ociRegistryToken")
 	return redacted
 }
 
