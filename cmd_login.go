@@ -298,6 +298,7 @@ func loginWifCmd(groupID string) *cobra.Command {
 func authLoginCmd(groupID string) *cobra.Command {
 	cmd := loginCmd(groupID)
 	cmd.Deprecated = "use 'vcpctl login' instead; 'vcpctl auth login' will be removed in a future release"
+	cmd.Hidden = true
 	return cmd
 }
 
@@ -336,6 +337,7 @@ func authAPIKeyCmd(groupID string) *cobra.Command {
 	cmd := apikeyCmd(groupID)
 	cmd.Use = "api-key"
 	cmd.Deprecated = "use 'vcpctl apikey' instead; 'vcpctl auth api-key' will be removed in a future release"
+	cmd.Hidden = true
 	return cmd
 }
 
@@ -374,6 +376,7 @@ func authAPIURLCmd(groupID string) *cobra.Command {
 	cmd := apiurlCmd(groupID)
 	cmd.Use = "api-url"
 	cmd.Deprecated = "use 'vcpctl apiurl' instead; 'vcpctl auth api-url' will be removed in a future release"
+	cmd.Hidden = true
 	return cmd
 }
 
@@ -516,6 +519,7 @@ func displayContextForSelection(toolctx ToolContext) string {
 func authSwitchCmd(groupID string) *cobra.Command {
 	cmd := switchCmd(groupID)
 	cmd.Deprecated = "use 'vcpctl switch' instead; 'vcpctl auth switch' will be removed in a future release"
+	cmd.Hidden = true
 	return cmd
 }
 
