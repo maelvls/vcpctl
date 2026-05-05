@@ -90,7 +90,7 @@ func main() {
 
 		ophis.Command(&ophis.Config{}),
 
-		deprecatedAuthCmd(""),
+		deprecatedAuthCmd("auth"),
 		deprecatedPutCmd(),
 		deprecatedLsCmd(),
 		deprecatedGetCmd(),

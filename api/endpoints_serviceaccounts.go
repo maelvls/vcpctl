@@ -336,3 +336,32 @@ func findServiceAccount(nameOrID string, allSAs []ServiceAccountDetails) (Servic
 	}
 	return ServiceAccountDetails{}, errutil.NotFound{NameOrID: nameOrID}
 }
+
+// GenOCIToken generates (rotates) the OCI registry token for the given service
+// account ID. The previous token is invalidated. The OCI robot account name is
+// not returned by this endpoint — callers should reconstruct it from the API
+// URL and SA ID using ociAccountNameFromSAID.
+func GenOCIToken(ctx context.Context, cl *Client, id string) (PutServiceAccountByClientIDOCITokenResponseBody, error) {
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return PutServiceAccountByClientIDOCITokenResponseBody{}, fmt.Errorf("while parsing service account ID '%s' as UUID: %w", id, err)
+	}
+
+	resp, err := cl.PutV1ServiceaccountsByIdOcitoken(ctx, parsedID)
+	if err != nil {
+		return PutServiceAccountByClientIDOCITokenResponseBody{}, fmt.Errorf("while generating OCI token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+	default:
+		return PutServiceAccountByClientIDOCITokenResponseBody{}, HTTPErrorFrom(resp)
+	}
+
+	var result PutServiceAccountByClientIDOCITokenResponseBody
+	if err := decodeJSON(resp.Body, &result); err != nil {
+		return PutServiceAccountByClientIDOCITokenResponseBody{}, fmt.Errorf("while decoding response: %w", err)
+	}
+	return result, nil
+}

@@ -145,6 +145,7 @@ func saGenCmd() *cobra.Command {
 	}
 	cmd.AddCommand(saGenkeypairCmd())
 	cmd.AddCommand(saGenWifCmd())
+	cmd.AddCommand(saGenOciCmd())
 	return cmd
 }
 
@@ -197,6 +198,7 @@ func saPutCmd() *cobra.Command {
 	}
 	cmd.AddCommand(saPutKeypairCmd())
 	cmd.AddCommand(saPutWifCmd())
+	cmd.AddCommand(saPutOciCmd())
 	return cmd
 }
 

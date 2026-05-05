@@ -71,15 +71,19 @@ type ToolContext struct {
 	AuthURL      string `json:"authURL,omitzero"` // OAuth2 token endpoint base URL.
 }
 
-func deprecatedAuthCmd(_ string) *cobra.Command {
+func deprecatedAuthCmd(groupID string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "auth",
+		Short:         "Configure authentication for external tools (Docker, Kubernetes) or manage login contexts",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Hidden:        true,
-		Deprecated:    "all auth subcommands are now available at root level. Use 'vcpctl login', 'vcpctl switch', 'vcpctl apikey', and 'vcpctl apiurl'",
+		GroupID:       groupID,
 	}
-	cmd.AddCommand(authLoginCmd(""), authSwitchCmd(""), authAPIKeyCmd(""), authAPIURLCmd(""))
+	cmd.AddCommand(
+		authLoginCmd(""), authSwitchCmd(""), authAPIKeyCmd(""), authAPIURLCmd(""),
+		authDockerCmd(),
+		authPullSecretCmd(),
+	)
 	return cmd
 }
 
