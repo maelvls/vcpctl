@@ -54,7 +54,7 @@ func authDockerCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			saName, err = resolveSAName(saName)
+			saName, err = resolveSAName(saName, "-docker")
 			if err != nil {
 				return err
 			}
@@ -84,23 +84,23 @@ func authDockerCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"all"}, "OCI scopes to request. Use 'all' for all available ociToken scopes.")
-	cmd.Flags().StringVar(&saName, "sa", "", "Service account name (default: $USER)")
+	cmd.Flags().StringVar(&saName, "sa", "", "Service account name (default: $USER-docker)")
 	return cmd
 }
 
-// resolveSAName returns saName if non-empty, otherwise falls back to $USER.
-func resolveSAName(saName string) (string, error) {
+// resolveSAName returns saName if non-empty, otherwise falls back to $USER+suffix.
+func resolveSAName(saName, suffix string) (string, error) {
 	if saName != "" {
 		return saName, nil
 	}
 	if v := os.Getenv("USER"); v != "" {
-		return v, nil
+		return v + suffix, nil
 	}
 	u, err := user.Current()
 	if err != nil {
 		return "", fmt.Errorf("could not determine current user for SA name; set --sa explicitly: %w", err)
 	}
-	return u.Username, nil
+	return u.Username + suffix, nil
 }
 
 // resolveOciScopes expands the "all" shorthand into the full list of ociToken scopes.
@@ -225,7 +225,7 @@ func authPullSecretCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			saName, err = resolveSAName(saName)
+			saName, err = resolveSAName(saName, "-pullsecret")
 			if err != nil {
 				return err
 			}
@@ -270,7 +270,7 @@ func authPullSecretCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"all"}, "OCI scopes to request. Use 'all' for all available ociToken scopes.")
-	cmd.Flags().StringVar(&saName, "sa", "", "Service account name (default: $USER)")
+	cmd.Flags().StringVar(&saName, "sa", "", "Service account name (default: $USER-pullsecret)")
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", `Kubernetes namespace for the secret (default: "venafi")`)
 	cmd.Flags().StringVar(&secretName, "secret-name", "", `Name of the Kubernetes secret (default: "ngts-image-pull-secret")`)
 	cmd.Flags().BoolVar(&printYAML, "print-yaml", false, "Print the Secret manifest as YAML to stdout instead of applying it with kubectl")
