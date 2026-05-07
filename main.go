@@ -87,6 +87,7 @@ func main() {
 		saSubcmd("resources"),
 		subcaSubcmd("resources"),
 		policySubcmd("resources"),
+		zonesCmd("resources"),
 
 		ophis.Command(&ophis.Config{}),
 
