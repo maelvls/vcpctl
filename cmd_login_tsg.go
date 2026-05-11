@@ -167,7 +167,8 @@ func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envPr
 	urls := envURLMap[env]
 
 	// Step 3: instructions.
-	fmt.Printf("\nPlease go to %s/settings/iam/access\n", urls.scmURL)
+	settingsURL := fmt.Sprintf("%s/settings/iam/access", urls.scmURL)
+	fmt.Printf("\nPlease go to \033[96m%s\033[0m\n", settingsURL)
 	fmt.Printf("and create an SCM service account, then paste its email and client secret below.\n\n")
 
 	// Step 4: client ID and secret prompts — pre-fill from existing context if available.
@@ -202,6 +203,9 @@ func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envPr
 	if err := credForm.RunWithContext(ctx); err != nil {
 		return fmt.Errorf("prompt cancelled: %w", err)
 	}
+
+	// Clear the instructions after credentials are entered
+	fmt.Print("\033[3A\033[J")
 
 	return loginWithTSG(ctx, strings.TrimSpace(clientID), strings.TrimSpace(clientSecret), urls.authURL, normalizeAPIURL(urls.apiURL), resolvedContext)
 }
