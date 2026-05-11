@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
@@ -211,7 +212,10 @@ func saPutWifCmd() *cobra.Command {
 
 			// These will be changed by the 'gen'.
 			if sub == "" {
-				sub = "dummy-subject"
+				// Add timestamp to ensure uniqueness across service accounts.
+				// Otherwise, the backend rejects the request with:
+				// "60219: Subject Identifier and Issuer URL need to be unique across service accounts"
+				sub = fmt.Sprintf("dummy-subject-%d", time.Now().Unix())
 			}
 			if aud == "" {
 				aud = "dummy-audience"
