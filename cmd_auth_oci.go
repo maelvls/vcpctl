@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strings"
+	"time"
 
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
@@ -22,19 +23,25 @@ func authDockerCmd() *cobra.Command {
 		Use:   "docker",
 		Short: "Configure Docker to pull from the Venafi OCI registry",
 		Long: undent.Undent(`
-			Creates or updates an OCI token service account, generates a fresh token,
-			and runs 'docker login' against the Venafi OCI registry.
+			Creates a new OCI token service account with a unique timestamp suffix,
+			generates a token, and runs 'docker login' against the Venafi OCI registry.
 
-			The service account name defaults to your OS username ($USER). You can
-			override it with --sa.
+			Each run creates a NEW service account (e.g., 'user-docker-20260511143022')
+			rather than reusing an existing one. This ensures that previous credentials
+			remain valid and are not invalidated by subsequent runs.
+
+			The service account base name defaults to your OS username ($USER). You can
+			override it with --sa, but a timestamp suffix will still be appended to
+			ensure uniqueness.
 
 			By default all available ociToken scopes are requested. Use --scope to
 			restrict to specific scopes.
 
-			⚠️  WARNING: Each run generates a new token and invalidates the previous one.
-			If you share a service account across multiple users or systems, re-running
-			this command will break their access. Consider using separate service accounts
-			(--sa flag) for different users/systems to avoid this issue.
+			Note: Old service accounts are not automatically cleaned up. You may want to
+			periodically review and delete unused service accounts. To help you do that
+			interactively, you can use:
+
+			  vcpctl sa rm -i
 		`),
 		Example: undent.Undent(`
 			vcpctl auth docker
@@ -59,10 +66,11 @@ func authDockerCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			saName, err = resolveSAName(saName, "-docker")
+			baseName, err := resolveSAName(saName, "-docker")
 			if err != nil {
 				return err
 			}
+			saName = makeUniqueSAName(baseName)
 
 			resolvedScopes, err := resolveOciScopes(cmd.Context(), apiClient, scopes)
 			if err != nil {
@@ -89,7 +97,7 @@ func authDockerCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"all"}, "OCI scopes to request. Use 'all' for all available ociToken scopes.")
-	cmd.Flags().StringVar(&saName, "sa", "", "Service account name (default: $USER-docker)")
+	cmd.Flags().StringVar(&saName, "sa", "", "Service account base name (default: $USER-docker, timestamp will be appended)")
 	return cmd
 }
 
@@ -106,6 +114,13 @@ func resolveSAName(saName, suffix string) (string, error) {
 		return "", fmt.Errorf("could not determine current user for SA name; set --sa explicitly: %w", err)
 	}
 	return u.Username + suffix, nil
+}
+
+// makeUniqueSAName appends a timestamp suffix to ensure the service account name is unique.
+// This prevents token rotation issues by creating a new SA on each run.
+func makeUniqueSAName(baseName string) string {
+	timestamp := time.Now().Format("20060102150405")
+	return baseName + "-" + timestamp
 }
 
 // resolveOciScopes expands the "all" shorthand into the full list of ociToken scopes.
@@ -183,39 +198,60 @@ func authPullSecretCmd() *cobra.Command {
 	var secretName string
 	var printYAML bool
 
-	const defaultSecretName = "ngts-image-pull-secret"
+	const defaultSecretNameNGTS = "ngts-image-pull-secret"
+	const defaultSecretNameVenafi = "venafi-image-pull-secret"
 	const defaultNamespace = "venafi"
 
 	cmd := &cobra.Command{
 		Use:   "pullsecret",
 		Short: "Create or update a Kubernetes image pull secret for the Venafi OCI registry",
 		Long: undent.Undent(`
-			Creates or updates an OCI token service account, generates a fresh token,
-			and creates or updates a Kubernetes docker-registry Secret with the
-			resulting credentials.
+			Creates a new OCI token service account with a unique timestamp suffix,
+			generates a token, and creates or updates Kubernetes docker-registry Secrets
+			with the resulting credentials.
 
-			The secret name defaults to 'ngts-image-pull-secret' and the namespace
-			defaults to 'venafi'. The namespace is created if it does not already exist.
-			The secret is applied via 'kubectl apply', so it is safe to run repeatedly.
+			Each run creates a NEW service account (e.g., 'user-pullsecret-20260511143022')
+			rather than reusing an existing one. This ensures that previous credentials
+			remain valid and are not invalidated by subsequent runs.
 
-			Use --print-yaml to print the Secret manifest to stdout instead of applying
-			it with kubectl. This is useful for piping into GitOps workflows or for
+			By default, two secrets are created for compatibility:
+			  - 'venafi-image-pull-secret' (for CyberArk Certificate Manager SaaS and Self-Hosted)
+			  - 'ngts-image-pull-secret' (for NGTS documentation)
+
+			If you specify a custom --secret-name, only that single secret is created.
+
+			The namespace defaults to 'venafi' and is created if it does not already exist.
+			Secrets are applied via 'kubectl apply', so it is safe to run repeatedly.
+
+			Use --print-yaml to print the Secret manifest(s) to stdout instead of applying
+			them with kubectl. This is useful for piping into GitOps workflows or for
 			inspecting the result before applying.
 
-			The service account name defaults to your OS username ($USER). You can
-			override it with --sa.
+			The service account base name defaults to your OS username ($USER). You can
+			override it with --sa, but a timestamp suffix will still be appended to
+			ensure uniqueness.
 
-			⚠️  WARNING: Each run generates a new token and invalidates the previous one.
-			If you share a service account across multiple users or systems, re-running
-			this command will break their access. Consider using separate service accounts
-			(--sa flag) for different users/systems to avoid this issue.
+			Note: Old service accounts are not automatically cleaned up. You may want to
+			periodically review and delete unused service accounts. To help you do that
+			interactively, you can use:
+
+			  vcpctl sa rm -i
 		`),
 		Example: undent.Undent(`
+			# Create both default secrets (venafi-image-pull-secret and ngts-image-pull-secret):
 			vcpctl auth pullsecret
+
+			# Create both default secrets in a different namespace:
 			vcpctl auth pullsecret -n cert-manager
+
+			# Create only a custom-named secret:
 			vcpctl auth pullsecret --secret-name my-pull-secret -n cert-manager
+
+			# Print YAML for both default secrets:
 			vcpctl auth pullsecret --print-yaml
-			vcpctl auth pullsecret --print-yaml -n cert-manager
+
+			# Print YAML for a custom secret:
+			vcpctl auth pullsecret --secret-name my-pull-secret --print-yaml -n cert-manager
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -235,10 +271,11 @@ func authPullSecretCmd() *cobra.Command {
 				return fmt.Errorf("while creating API client: %w", err)
 			}
 
-			saName, err = resolveSAName(saName, "-pullsecret")
+			baseName, err := resolveSAName(saName, "-pullsecret")
 			if err != nil {
 				return err
 			}
+			saName = makeUniqueSAName(baseName)
 
 			resolvedScopes, err := resolveOciScopes(cmd.Context(), apiClient, scopes)
 			if err != nil {
@@ -259,31 +296,56 @@ func authPullSecretCmd() *cobra.Command {
 			if ns == "" {
 				ns = defaultNamespace
 			}
-			name := secretName
-			if name == "" {
-				name = defaultSecretName
+
+			// Determine which secrets to create
+			var secretNames []string
+			if secretName != "" {
+				// Custom secret name provided - only create that one
+				secretNames = []string{secretName}
+			} else {
+				// No custom name - create both default secrets for compatibility
+				secretNames = []string{defaultSecretNameVenafi, defaultSecretNameNGTS}
 			}
 
 			if printYAML {
-				return kubectlPrintSecretYAML(name, ns, creds.Username, creds.Password, registry)
+				for i, name := range secretNames {
+					if i > 0 {
+						fmt.Println("---")
+					}
+					if err := kubectlPrintSecretYAML(name, ns, creds.Username, creds.Password, registry); err != nil {
+						return err
+					}
+				}
+				return nil
 			}
 
 			if err := kubectlEnsureNamespace(ns); err != nil {
 				return err
 			}
-			if err := kubectlCreateSecret(name, ns, creds.Username, creds.Password, registry); err != nil {
-				return err
+
+			for _, name := range secretNames {
+				if err := kubectlCreateSecret(name, ns, creds.Username, creds.Password, registry); err != nil {
+					return err
+				}
 			}
 
-			logutil.Infof("✅  Kubernetes secret '%s' created/updated in namespace '%s'", name, ns)
+			// Print summary
+			if len(secretNames) == 1 {
+				logutil.Infof("✅  Kubernetes secret '%s' created/updated in namespace '%s'", secretNames[0], ns)
+			} else {
+				logutil.Infof("✅  Kubernetes secret created/updated in namespace '%s': %s", ns, strings.Join(secretNames, ", "))
+			}
+			logutil.Infof("    Service account: %s (client ID: %s)", saName, saID)
+			logutil.Infof("    OCI username:    %s", creds.Username)
+			logutil.Infof("    Registry:        %s", registry)
 			return nil
 		},
 	}
 	cmd.Flags().StringSliceVar(&scopes, "scope", []string{"all"}, "OCI scopes to request. Use 'all' for all available ociToken scopes.")
-	cmd.Flags().StringVar(&saName, "sa", "", "Service account name (default: $USER-pullsecret)")
+	cmd.Flags().StringVar(&saName, "sa", "", "Service account base name (default: $USER-pullsecret, timestamp will be appended)")
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", `Kubernetes namespace for the secret (default: "venafi")`)
-	cmd.Flags().StringVar(&secretName, "secret-name", "", `Name of the Kubernetes secret (default: "ngts-image-pull-secret")`)
-	cmd.Flags().BoolVar(&printYAML, "print-yaml", false, "Print the Secret manifest as YAML to stdout instead of applying it with kubectl")
+	cmd.Flags().StringVar(&secretName, "secret-name", "", `Name of the Kubernetes secret (default: creates both "venafi-image-pull-secret" and "ngts-image-pull-secret")`)
+	cmd.Flags().BoolVar(&printYAML, "print-yaml", false, "Print the Secret manifest(s) as YAML to stdout instead of applying them with kubectl")
 	return cmd
 }
 

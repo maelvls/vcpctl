@@ -90,16 +90,24 @@ func saGenOciCmd() *cobra.Command {
 
 			The output is a JSON object with the username, password, and auth fields,
 			suitable for use with 'docker login' or as a Kubernetes docker-registry secret.
+
+			For Kubernetes YAML manifests, consider using the following instead, which generates
+			ready-to-apply Secret resources:
+
+			    vcpctl auth pullsecret --print-yaml --sa <sa-name>
 		`),
 		Example: undent.Undent(`
+			# Generate credentials as JSON:
 			vcpctl sa gen oci <sa-name>
 
-			You can save the output and use it with docker login:
+			# Use with docker login:
+			vcpctl sa gen oci <sa-name> >oci.json
+			docker login "$(jq -r .registry <oci.json)" \
+			  --username "$(jq -r .username <oci.json)" \
+			  --password "$(jq -r .password <oci.json)"
 
-			  vcpctl sa gen oci <sa-name> >oci.json
-			  docker login $(jq -r .server <oci.json) \
-			    --username "$(jq -r .username <oci.json)" \
-			    --password "$(jq -r .password <oci.json)"
+			# For Kubernetes YAML manifests, use auth pullsecret instead:
+			vcpctl auth pullsecret --sa <sa-name> -n <namespace> --print-yaml | kubectl apply -f -
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
