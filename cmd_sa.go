@@ -128,11 +128,11 @@ func saGenCmd() *cobra.Command {
 			for a Service Account in CyberArk Certificate Manager, SaaS.
 
 			The command 'vcpctl sa gen wif' pushes the generated public key to
-			https://0x0.st and sets the JWKS URL in the Service Account configuration
+			https://drop.mael-valais-gcp.jetstacker.net and sets the JWKS URL in the Service Account configuration
 			to that URL. Security-wise, this is safe because the URL's path is a randomly
 			generated hash: no way to squat the same URL to serve a different JWKS.
 
-			The JWKS URL served by 0x0.st goes away after 30 days.
+			The JWKS URL served by drop.mael-valais-gcp.jetstacker.net goes away after 30 days.
 		`),
 		Example: undent.Undent(`
 			vcpctl sa gen keypair <sa-name>

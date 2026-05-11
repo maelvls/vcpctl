@@ -35,8 +35,8 @@ func saGenWifCmd() *cobra.Command {
 			    "client_id": "b4dd2b31-f473-11f0-aa2c-f69f144f25db",
 			    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
 			    "api_url": "https://api.venafi.cloud",
-				"jwks_url": "https://0x0.st/abcd.json",
-				"iss": "https://0x0.st/abcd.json",
+				"jwks_url": "https://drop.mael-valais-gcp.jetstacker.net/abcd.json",
+				"iss": "https://drop.mael-valais-gcp.jetstacker.net/abcd.json",
 				"aud": "venafi-cloud",
 				"sub": "system:serviceaccount:default:my-sa"
 			  }
@@ -161,7 +161,7 @@ func saGenWifCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (only 'json' is supported)")
-	cmd.Flags().StringVar(&uploadURL, "upload-url", "https://0x0.st", "URL of the file hosting service to upload the JWKS to (must accept multipart/form-data POST with a 'file' field and return the URL as plain text)")
+	cmd.Flags().StringVar(&uploadURL, "upload-url", "https://drop.mael-valais-gcp.jetstacker.net", "URL of the file hosting service to upload the JWKS to (must accept multipart/form-data POST with a 'file' field and return the URL as plain text)")
 	return cmd
 }
 
@@ -360,7 +360,7 @@ func saPutWifCmd() *cobra.Command {
 	cmd.Flags().StringVar(&sub, "sub", "", "Expected subject claim")
 	cmd.Flags().StringVar(&aud, "aud", "", "Expected audience claim")
 	cmd.Flags().StringVar(&iss, "iss", "", "Expected issuer URL claim")
-	cmd.Flags().StringVar(&jwksURL, "jwks-url", "", "The URL pointing to the JSON Web Key Set (JWKS). You can leave this field empty and use 'vcpctl sa gen wif' to let the tool upload a JWKS to 0x0.st for you.")
+	cmd.Flags().StringVar(&jwksURL, "jwks-url", "", "The URL pointing to the JSON Web Key Set (JWKS). You can leave this field empty and use 'vcpctl sa gen wif' to let the tool upload a JWKS to drop.mael-valais-gcp.jetstacker.net for you.")
 	cmd.Flags().StringArrayVar(&apps, "app", []string{}, "Application UUID to associate with the service account (can be specified multiple times)")
 	cmd.Flags().StringVar(&ownerTeam, "owner-team", "", "Owner team UUID (if not provided, the first team will be used)")
 	return cmd
