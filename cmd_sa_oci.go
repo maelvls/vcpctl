@@ -77,7 +77,7 @@ func saPutOciCmd() *cobra.Command {
 type ociCreds struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
-	Server   string `json:"server"`
+	Server   string `json:"registry"`
 }
 
 func saGenOciCmd() *cobra.Command {
@@ -93,6 +93,13 @@ func saGenOciCmd() *cobra.Command {
 		`),
 		Example: undent.Undent(`
 			vcpctl sa gen oci <sa-name>
+
+			You can save the output and use it with docker login:
+
+			  vcpctl sa gen oci <sa-name> >oci.json
+			  docker login $(jq -r .server <oci.json) \
+			    --username "$(jq -r .username <oci.json)" \
+			    --password "$(jq -r .password <oci.json)"
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,

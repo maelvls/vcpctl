@@ -30,6 +30,11 @@ func authDockerCmd() *cobra.Command {
 
 			By default all available ociToken scopes are requested. Use --scope to
 			restrict to specific scopes.
+
+			⚠️  WARNING: Each run generates a new token and invalidates the previous one.
+			If you share a service account across multiple users or systems, re-running
+			this command will break their access. Consider using separate service accounts
+			(--sa flag) for different users/systems to avoid this issue.
 		`),
 		Example: undent.Undent(`
 			vcpctl auth docker
@@ -199,6 +204,11 @@ func authPullSecretCmd() *cobra.Command {
 
 			The service account name defaults to your OS username ($USER). You can
 			override it with --sa.
+
+			⚠️  WARNING: Each run generates a new token and invalidates the previous one.
+			If you share a service account across multiple users or systems, re-running
+			this command will break their access. Consider using separate service accounts
+			(--sa flag) for different users/systems to avoid this issue.
 		`),
 		Example: undent.Undent(`
 			vcpctl auth pullsecret
