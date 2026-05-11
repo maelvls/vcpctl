@@ -867,6 +867,10 @@ func deleteContextFromConf(ctx context.Context, name string) error {
 // if "Create new context" is selected. If authTypes is non-empty, only contexts
 // whose AuthenticationType is in authTypes are shown.
 func promptContextSelection(ctx context.Context, conf FileConf, authTypes []string) (string, error) {
+	return promptContextSelectionWithEnv(ctx, conf, authTypes, "")
+}
+
+func promptContextSelectionWithEnv(ctx context.Context, conf FileConf, authTypes []string, envFilter string) (string, error) {
 	var opts []contextListOpt
 	for _, toolctx := range conf.ToolContexts {
 		if len(authTypes) > 0 {
@@ -878,6 +882,16 @@ func promptContextSelection(ctx context.Context, conf FileConf, authTypes []stri
 				}
 			}
 			if !matched {
+				continue
+			}
+		}
+		if envFilter != "" {
+			// Filter by environment using AuthURL
+			expectedAuthURL := ""
+			if urls, ok := envURLMap[envFilter]; ok {
+				expectedAuthURL = urls.authURL
+			}
+			if expectedAuthURL != "" && !strings.EqualFold(toolctx.AuthURL, expectedAuthURL) {
 				continue
 			}
 		}

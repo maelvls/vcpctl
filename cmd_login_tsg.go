@@ -80,7 +80,8 @@ func loginTSGCmd(groupID string) *cobra.Command {
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
-				return loginTSGInteractive(cmd.Context(), contextFlag)
+				envProvided := cmd.Flags().Changed("env")
+				return loginTSGInteractive(cmd.Context(), contextFlag, env, envProvided)
 			}
 
 			if len(args) == 0 {
@@ -115,7 +116,7 @@ func loginTSGCmd(groupID string) *cobra.Command {
 	return cmd
 }
 
-func loginTSGInteractive(ctx context.Context, contextFlag string) error {
+func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envProvided bool) error {
 	// Step 1: context picker (before any other prompt).
 	resolvedContext := contextFlag
 	var existingTSGContext *ToolContext
@@ -125,7 +126,12 @@ func loginTSGInteractive(ctx context.Context, contextFlag string) error {
 			return fmt.Errorf("loading configuration: %w", err)
 		}
 		if conf.CurrentContext != "" {
-			resolvedContext, err = promptContextSelection(ctx, conf, []string{"tsg"})
+			// Filter contexts by environment if --env was provided
+			envFilter := ""
+			if envProvided {
+				envFilter = envFlag
+			}
+			resolvedContext, err = promptContextSelectionWithEnv(ctx, conf, []string{"tsg"}, envFilter)
 			if err != nil {
 				return err
 			}
@@ -135,22 +141,27 @@ func loginTSGInteractive(ctx context.Context, contextFlag string) error {
 		}
 	}
 
-	// Step 2: environment selector — pre-select based on existing context if available.
-	env := envFromAuthURL(existingTSGContext)
-	envForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Which environment?").
-				Options(
-					huh.NewOption("Production (prod)", "prod"),
-					huh.NewOption("QA (qa)", "qa"),
-					huh.NewOption("Dev (dev)", "dev"),
-				).
-				Value(&env),
-		),
-	)
-	if err := envForm.RunWithContext(ctx); err != nil {
-		return fmt.Errorf("prompt cancelled: %w", err)
+	// Step 2: environment selector — skip if --env was provided, otherwise pre-select based on existing context if available.
+	var env string
+	if envProvided {
+		env = envFlag
+	} else {
+		env = envFromAuthURL(existingTSGContext)
+		envForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("Which environment?").
+					Options(
+						huh.NewOption("Production (prod)", "prod"),
+						huh.NewOption("QA (qa)", "qa"),
+						huh.NewOption("Dev (dev)", "dev"),
+					).
+					Value(&env),
+			),
+		)
+		if err := envForm.RunWithContext(ctx); err != nil {
+			return fmt.Errorf("prompt cancelled: %w", err)
+		}
 	}
 
 	urls := envURLMap[env]
