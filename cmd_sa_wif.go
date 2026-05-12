@@ -27,7 +27,7 @@ func saGenWifCmd() *cobra.Command {
 			Federation Service Account.
 
 			This command is useful for setting up Workload Identity Federation authentication.
-			The output can be piped directly to 'vcpctl login --sa-wif'.
+			The output can be piped directly to 'vcpctl login-wif -'.
 
 			With '-ojson', the output looks like:
 
@@ -44,7 +44,7 @@ func saGenWifCmd() *cobra.Command {
 		`),
 		Example: undent.Undent(`
 			vcpctl sa gen wif my-sa -ojson
-			vcpctl sa gen wif my-sa -ojson | vcpctl login --sa-wif -
+			vcpctl sa gen wif my-sa -ojson | vcpctl login-wif -
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,

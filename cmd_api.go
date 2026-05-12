@@ -201,7 +201,7 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 		requestBody = file
 	}
 
-	resp, err := makeAPIRequest(cmd.Context(), cl, method, path, requestBody, opts.headers)
+	resp, err := makeAPIRequest(cmd.Context(), cl, conf.AuthenticationType, method, path, requestBody, opts.headers)
 	if err != nil {
 		return err
 	}
@@ -457,7 +457,7 @@ func magicFieldValue(ctx context.Context, v string) (any, error) {
 	return v, nil
 }
 
-func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, requestBody any, headers []string) (*http.Response, error) {
+func makeAPIRequest(ctx context.Context, cl *api.Client, authenticationType, method, path string, requestBody any, headers []string) (*http.Response, error) {
 	// The 'Server' field of the api.Client always has a trailing slash. Which
 	// means we need to remove any leading slash from 'path'. Also, since we
 	// allow the user to skip the leading '/v1/' part, we add it if missing.
@@ -468,7 +468,19 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, method, path string, re
 		}
 	}
 
-	url := cl.Server + path
+	// For TSG (NGTS) authentication, strip the /ngts suffix from the server URL
+	// since the API endpoints are at the base URL, not under /ngts.
+	serverURL := cl.Server
+	if authenticationType == "tsg" {
+		serverURL = strings.TrimSuffix(serverURL, "/ngts/")
+		serverURL = strings.TrimSuffix(serverURL, "/ngts")
+		// Ensure trailing slash
+		if !strings.HasSuffix(serverURL, "/") {
+			serverURL = serverURL + "/"
+		}
+	}
+
+	url := serverURL + path
 
 	var body io.Reader
 	var bodyIsJSON bool
