@@ -483,7 +483,6 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, authenticationType, met
 	url := serverURL + path
 
 	var body io.Reader
-	var bodyIsJSON bool
 
 	switch v := requestBody.(type) {
 	case map[string]any:
@@ -496,7 +495,6 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, authenticationType, met
 				return nil, fmt.Errorf("marshaling request body: %w", err)
 			}
 			body = bytes.NewReader(jsonData)
-			bodyIsJSON = true
 		}
 	case io.Reader:
 		body = v
@@ -520,7 +518,17 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, authenticationType, met
 		}
 	}
 
-	if bodyIsJSON {
+	// Set Content-Type to application/json by default if there's a body,
+	// unless the user explicitly sets it via -H flag.
+	hasContentTypeHeader := false
+	for _, h := range headers {
+		if strings.HasPrefix(strings.ToLower(h), "content-type:") {
+			hasContentTypeHeader = true
+			break
+		}
+	}
+
+	if body != nil && !hasContentTypeHeader {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
