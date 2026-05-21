@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -97,7 +98,7 @@ func TestMagicFieldValue(t *testing.T) {
 	tests := []struct {
 		name      string
 		input     string
-		wantValue interface{}
+		wantValue any
 		wantErr   bool
 	}{
 		{
@@ -167,4 +168,63 @@ func TestMagicFieldValue(t *testing.T) {
 			assert.Equal(t, tt.wantValue, value)
 		})
 	}
+}
+
+func TestParseFields_FileInput(t *testing.T) {
+	tests := []struct {
+		name         string
+		magicFields  []string
+		expectedJSON string
+	}{
+		{
+			name:         "file field with JSON content",
+			magicFields:  []string{"file={\"test\":\"value\"}"},
+			expectedJSON: `{"file":"{\"test\":\"value\"}"}`,
+		},
+		{
+			name:         "nested field with file content",
+			magicFields:  []string{"data[file]={\"nested\":true}", "data[name]=test"},
+			expectedJSON: `{"data":{"file":"{\"nested\":true}","name":"test"}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := &apiOptions{magicFields: tt.magicFields}
+			result, err := parseFields(context.Background(), opts)
+			require.NoError(t, err)
+
+			// Convert to JSON to compare
+			jsonBytes, err := json.Marshal(result)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.expectedJSON, string(jsonBytes))
+		})
+	}
+}
+
+func TestParseFields_FileFromDisk(t *testing.T) {
+	// Create a temporary file with test content
+	tmpfile := t.TempDir() + "/testfile.json"
+	testContent := `{"test":"value","nested":{"key":123}}`
+	err := os.WriteFile(tmpfile, []byte(testContent), 0644)
+	require.NoError(t, err)
+
+	opts := &apiOptions{
+		magicFields: []string{"file=@" + tmpfile},
+	}
+	result, err := parseFields(context.Background(), opts)
+	require.NoError(t, err)
+
+	// The file content should be stored as a string in the "file" field
+	assert.Equal(t, testContent, result["file"])
+
+	// Verify it can be marshaled to JSON
+	jsonBytes, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	// Build expected JSON properly with escaped content
+	expected := map[string]any{"file": testContent}
+	expectedBytes, err := json.Marshal(expected)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(expectedBytes), string(jsonBytes))
 }

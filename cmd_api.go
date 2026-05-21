@@ -82,6 +82,12 @@ Request body:
 			# Complex nested structure
 			vcpctl api /v1/items -F items[0][name]=first -F items[0][count]=5
 
+			# Load file content into a field
+			vcpctl api /v1/upload -F data=@payload.json -F name=myfile
+
+			# Load stdin into a field
+			cat data.json | vcpctl api /v1/upload -F file=@- -F name=myfile
+
 			# Request body from file
 			vcpctl api /v1/serviceaccounts --input payload.json
 
