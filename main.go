@@ -74,6 +74,7 @@ func main() {
 		loginKeypairCmd("auth"),
 		loginTSGCmd("auth"),
 		switchCmd("auth"),
+		ctxCmd("auth"),
 		tenantidCmd("auth"),
 		apikeyCmd("auth"),
 		apiurlCmd("auth"),

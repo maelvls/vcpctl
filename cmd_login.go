@@ -35,40 +35,40 @@ type FileConf struct {
 }
 
 type ToolContext struct {
-	Name string `yaml:"name"` // Derived from tenant URL domain with numeric suffix
+	Name string `yaml:"name" json:"name"` // Derived from tenant URL domain with numeric suffix
 
-	TenantID string `json:"tenantID,omitzero"` // The tenant ID (company ID).
-	APIURL   string `json:"apiURL,omitzero"`   // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
-	Username string `json:"username,omitzero"` // Not really used. Just there to help the user identify the context.
+	TenantID string `yaml:"tenantID,omitzero" json:"tenantID,omitzero"` // The tenant ID (company ID).
+	APIURL   string `yaml:"apiURL,omitzero" json:"apiURL,omitzero"`     // The API URL of the tenant, e.g., https://api.uk.venafi.cloud
+	Username string `yaml:"username,omitzero" json:"username,omitzero"` // Not really used. Just there to help the user identify the context.
 
 	// Optional. Only useful when using Venafi Cloud, but not required even when
 	// using Venafi Cloud. It is used to display the UI URL when running `vcpctl
 	// switch`.
-	TenantURL string `yaml:"url,omitzero"` // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
+	TenantURL string `yaml:"tenantURL,omitzero" json:"tenantURL,omitzero"` // The UI URL of the tenant, e.g., https://ven-cert-manager-uk.venafi.cloud
 
-	AuthenticationType string `json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey", "bearerToken"
+	AuthenticationType string `yaml:"authenticationType,omitzero" json:"authenticationType,omitzero"` // e.g., "apiKey", "rsaKeyFederated", "rsaKey", "bearerToken"
 
 	// For the type "apiKey".
-	APIKey string `json:"apiKey,omitzero"`
-	Email  string `json:"email,omitzero"`  // Not really used. Just there to help the user identify the context.
-	UserID string `json:"userID,omitzero"` // Only used to identify when two contexts are the "same".
+	APIKey string `yaml:"apiKey,omitzero" json:"apiKey,omitzero"`
+	Email  string `yaml:"email,omitzero" json:"email,omitzero"`   // Not really used. Just there to help the user identify the context.
+	UserID string `yaml:"userID,omitzero" json:"userID,omitzero"` // Only used to identify when two contexts are the "same".
 
 	// For the types "rsaKeyFederated", "rsaKey" and "bearerToken".
-	AccessToken string `json:"accessToken,omitzero"`
-	PrivateKey  string `json:"privateKey,omitzero"`
+	AccessToken string `yaml:"accessToken,omitzero" json:"accessToken,omitzero"`
+	PrivateKey  string `yaml:"privateKey,omitzero" json:"privateKey,omitzero"`
 
 	// For the type "rsaKeyFederated".
-	IssuerURL string `json:"issuerURL,omitzero"`
-	Subject   string `json:"subject,omitzero"`
-	Audience  string `json:"audience,omitzero"`
+	IssuerURL string `yaml:"issuerURL,omitzero" json:"issuerURL,omitzero"`
+	Subject   string `yaml:"subject,omitzero" json:"subject,omitzero"`
+	Audience  string `yaml:"audience,omitzero" json:"audience,omitzero"`
 
 	// For the type "rsaKey" and "rsaKeyFederated". Not really needed for
 	// "rsaKeyFederated", but useful to know when two contexts are the "same".
-	ClientID string `json:"clientID,omitzero"`
+	ClientID string `yaml:"clientID,omitzero" json:"clientID,omitzero"`
 
 	// For the type "tsg".
-	ClientSecret string `json:"clientSecret,omitzero"`
-	AuthURL      string `json:"authURL,omitzero"` // OAuth2 token endpoint base URL.
+	ClientSecret string `yaml:"clientSecret,omitzero" json:"clientSecret,omitzero"`
+	AuthURL      string `yaml:"authURL,omitzero" json:"authURL,omitzero"` // OAuth2 token endpoint base URL.
 }
 
 func deprecatedAuthCmd(groupID string) *cobra.Command {
