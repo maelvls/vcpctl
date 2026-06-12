@@ -85,3 +85,18 @@ func ErrIsHTTPNotFound(err error) bool {
 	}
 	return false
 }
+
+// ErrIsNGTSIAM401 checks if the error is an NGTS IAM_401 error (invalid/expired token).
+func ErrIsNGTSIAM401(err error) bool {
+	var httpErr HTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+
+	var ngtsErr NGTSError
+	if !errors.As(httpErr.Err, &ngtsErr) {
+		return false
+	}
+
+	return ngtsErr.HasCode("IAM_401")
+}

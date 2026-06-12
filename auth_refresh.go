@@ -54,7 +54,25 @@ func (t *refreshingAccessTokenTransport) RoundTrip(req *http.Request) (*http.Res
 	t.applyToken(req)
 
 	resp, err := t.base.RoundTrip(req)
-	if err != nil || resp.StatusCode != http.StatusUnauthorized || t.refresh == nil {
+	if err != nil {
+		return resp, err
+	}
+
+	// Only attempt token refresh if we have a refresh function.
+	if t.refresh == nil {
+		return resp, err
+	}
+
+	// Check if this is a 401 that we should retry.
+	shouldRetry := false
+	if resp.StatusCode == http.StatusUnauthorized {
+		// For NGTS/TSG, only retry on IAM_401 errors.
+		// For other auth types, retry on any 401.
+		httpErr := api.HTTPErrorFrom(resp)
+		shouldRetry = api.ErrIsNGTSIAM401(httpErr) || !isNGTSError(httpErr)
+	}
+
+	if !shouldRetry {
 		return resp, err
 	}
 
@@ -67,7 +85,7 @@ func (t *refreshingAccessTokenTransport) RoundTrip(req *http.Request) (*http.Res
 		if resp.Body != nil {
 			_ = resp.Body.Close()
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to refresh access token after receiving 401 Unauthorized: %w", err)
 	}
 
 	if resp.Body != nil {
@@ -117,6 +135,17 @@ func cloneRequest(req *http.Request) (*http.Request, error) {
 		newReq.Body = body
 	}
 	return newReq, nil
+}
+
+// isNGTSError returns true if the error body was successfully parsed as NGTSError.
+func isNGTSError(err error) bool {
+	var httpErr api.HTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+
+	var ngtsErr api.NGTSError
+	return errors.As(httpErr.Err, &ngtsErr)
 }
 
 func buildAccessTokenRefresher(conf ToolConf) func(context.Context) (string, error) {

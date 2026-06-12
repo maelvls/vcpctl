@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// Returns a VenafiError if it can be parsed from the JSON body, or a generic
-// error containing the raw body otherwise. err.Error() might be empty if the
-// body is empty!
+// Returns a VenafiError or NGTSError if it can be parsed from the JSON body,
+// or a generic error containing the raw body otherwise. err.Error() might be
+// empty if the body is empty!
 func ErrFromJSONBody(body io.Reader) error {
 	bodyBytes, _ := io.ReadAll(body)
 
@@ -20,13 +20,45 @@ func ErrFromJSONBody(body io.Reader) error {
 		return fmt.Errorf("%s", bodyBytes)
 	}
 
-	var v VenafiError
-	err := json.Unmarshal(bodyBytes, &v)
+	// Try parsing as NGTS error format first.
+	var ngtsErr NGTSError
+	if err := json.Unmarshal(bodyBytes, &ngtsErr); err == nil && !ngtsErr.IsEmpty() {
+		return ngtsErr
+	}
+
+	// Fall back to Venafi error format.
+	var venafiErr VenafiError
+	err := json.Unmarshal(bodyBytes, &venafiErr)
 	if err != nil {
 		return fmt.Errorf("%s", string(bodyBytes))
 	}
 
-	return v
+	return venafiErr
+}
+
+// NGTSError represents the error format returned by NGTS API.
+// Example: {"_error":{"code":"IAM_401","message":"Invalid Request Token.","_request_id":"f2e7abff-7c8e-4061-a35c-483cf9e1bff6"}}
+type NGTSError struct {
+	Err struct {
+		Code      string `json:"code"`
+		Message   string `json:"message"`
+		RequestID string `json:"_request_id"`
+	} `json:"_error"`
+}
+
+func (e NGTSError) Error() string {
+	if e.Err.Code == "" && e.Err.Message == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s: %s", e.Err.Code, e.Err.Message)
+}
+
+func (e NGTSError) HasCode(code string) bool {
+	return e.Err.Code == code
+}
+
+func (e NGTSError) IsEmpty() bool {
+	return e.Err.Code == "" && e.Err.Message == ""
 }
 
 // Examples:
