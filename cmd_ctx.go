@@ -85,6 +85,7 @@ func ctxCmd(groupID string) *cobra.Command {
 					"clientid":           "ClientID",
 					"clientsecret":       "ClientSecret",
 					"authurl":            "AuthURL",
+					"tsgid":              "TSGID",
 				}
 
 				actualFieldName, exists := fieldMap[fieldName]

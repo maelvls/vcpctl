@@ -69,6 +69,7 @@ type ToolContext struct {
 	// For the type "tsg".
 	ClientSecret string `yaml:"clientSecret,omitzero" json:"clientSecret,omitzero"`
 	AuthURL      string `yaml:"authURL,omitzero" json:"authURL,omitzero"` // OAuth2 token endpoint base URL.
+	TSGID        string `yaml:"tsgID,omitzero" json:"tsgID,omitzero"`     // The TSG ID to scope API requests to. If empty, defaults to extracting from ClientID email.
 }
 
 func deprecatedAuthCmd(groupID string) *cobra.Command {
@@ -511,6 +512,9 @@ func displayContextForSelection(toolctx ToolContext) string {
 		parts = append(parts, fmt.Sprintf("service account: %s", toolctx.Username))
 	} else if toolctx.ClientID != "" {
 		parts = append(parts, fmt.Sprintf("service account: %s", toolctx.ClientID))
+	}
+	if toolctx.AuthenticationType == "tsg" && toolctx.TSGID != "" {
+		parts = append(parts, fmt.Sprintf("tsg: %s", toolctx.TSGID))
 	}
 	return fmt.Sprintf("%s (%s)", toolctx.Name, strings.Join(parts, ", "))
 }
@@ -965,6 +969,7 @@ type ToolConf struct {
 	ContextName        string `json:"contextName"`
 	ClientSecret       string `json:"clientSecret"`
 	AuthURL            string `json:"authURL"`
+	TSGID              string `json:"tsgID"`
 }
 
 func newAPIClient(conf ToolConf) (*api.Client, error) {
@@ -1082,6 +1087,7 @@ func getToolConfig(cmd *cobra.Command) (ToolConf, error) {
 		ContextName:        current.Name,
 		ClientSecret:       current.ClientSecret,
 		AuthURL:            current.AuthURL,
+		TSGID:              current.TSGID,
 	}, nil
 }
 

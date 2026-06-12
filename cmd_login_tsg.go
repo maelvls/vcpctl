@@ -58,7 +58,8 @@ func loginTSGCmd(groupID string) *cobra.Command {
 			account. The client ID is the service account email, e.g.,
 			mael@1526746475.iam.panserviceaccount.com.
 
-			The TSG ID is extracted from the client ID automatically.
+			The TSG ID is extracted from the client ID automatically. Use 'vcpctl tsg switch'
+			after login to select a different TSG if needed.
 
 			Use --env to select the environment (prod, qa, dev). The --auth-url and
 			--api-url flags override the environment defaults.
@@ -256,6 +257,7 @@ func extractTSGID(clientID string) (string, error) {
 }
 
 func loginWithTSG(ctx context.Context, clientID, clientSecret, authURL, apiURL, contextFlag string) error {
+	// Extract TSG ID from client ID
 	tsgID, err := extractTSGID(clientID)
 	if err != nil {
 		return err
@@ -274,6 +276,7 @@ func loginWithTSG(ctx context.Context, clientID, clientSecret, authURL, apiURL, 
 		ClientID:           clientID,
 		ClientSecret:       clientSecret,
 		AuthURL:            authURL,
+		TSGID:              tsgID,
 	}
 
 	current, err = saveCurrentContext(ctx, current, contextFlag)

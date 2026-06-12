@@ -423,10 +423,14 @@ func refreshTSGAccessToken(ctx context.Context, conf ToolConf) (string, error) {
 		return "", fmt.Errorf("missing auth URL for TSG authentication")
 	}
 
-	// Extract TSG ID from client ID
-	tsgID, err := extractTSGIDForRefresh(conf.ClientID)
-	if err != nil {
-		return "", err
+	// Prefer explicit TSGID if set, otherwise extract from ClientID.
+	tsgID := conf.TSGID
+	if tsgID == "" {
+		var err error
+		tsgID, err = extractTSGIDForRefresh(conf.ClientID)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	accessToken, err := fetchTSGAccessTokenForRefresh(ctx, conf.AuthURL, conf.ClientID, conf.ClientSecret, tsgID)
