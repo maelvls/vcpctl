@@ -276,6 +276,11 @@
         "subCaProvider": {
           "$ref": "#/$defs/SubCaProviderInformation"
         },
+        "subTsgId": {
+          "description": "Sub-TSG ID that owns this configuration (null for Primary TSG)",
+          "example": "a007d406bf",
+          "type": "string"
+        },
         "ultraShortLivedCertCount": {
           "description": "Number of ultra short lived certificates",
           "example": 200,
@@ -636,6 +641,19 @@
         "sans": {
           "$ref": "#/$defs/SansInformation"
         },
+        "shareWithAll": {
+          "description": "Shared with all sub-TSGs",
+          "example": false,
+          "type": "boolean"
+        },
+        "sharedWithSubTsgIds": {
+          "items": {
+            "description": "Sub-TSG IDs this policy is shared with",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "subject": {
           "$ref": "#/$defs/SubjectAttributesInformation"
         },
@@ -800,6 +818,19 @@
         },
         "pkcs11": {
           "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
+        },
+        "shareWithAll": {
+          "description": "Shared with all sub-TSGs",
+          "example": false,
+          "type": "boolean"
+        },
+        "sharedWithSubTsgIds": {
+          "items": {
+            "description": "Sub-TSG IDs this SubCA provider is shared with",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
         },
         "stateOrProvince": {
           "description": "State or province",

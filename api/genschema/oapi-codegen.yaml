@@ -9,9 +9,10 @@ output-options:
   prefer-skip-optional-pointer-with-omitzero: true
   nullable-type: true
   include-tags:
-    - Service Accounts
+    - Built-In Accounts
     - Issuer Configurations
     - Issuer Sub CA Providers
+    - Issuer Intermediate Certificates
     - Workload Issuance Policies
     - Certificate Policy
     - User Accounts # Only for check API key.

@@ -101,6 +101,19 @@
         "pkcs11": {
           "$ref": "#/$defs/SubCaProviderPkcs11ConfigurationInformation"
         },
+        "shareWithAll": {
+          "description": "Shared with all sub-TSGs",
+          "example": false,
+          "type": "boolean"
+        },
+        "sharedWithSubTsgIds": {
+          "items": {
+            "description": "Sub-TSG IDs this SubCA provider is shared with",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "stateOrProvince": {
           "description": "State or province",
           "example": "Texas",

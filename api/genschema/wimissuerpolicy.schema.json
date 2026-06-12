@@ -134,6 +134,19 @@
         "sans": {
           "$ref": "#/$defs/SansInformation"
         },
+        "shareWithAll": {
+          "description": "Shared with all sub-TSGs",
+          "example": false,
+          "type": "boolean"
+        },
+        "sharedWithSubTsgIds": {
+          "items": {
+            "description": "Sub-TSG IDs this policy is shared with",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "subject": {
           "$ref": "#/$defs/SubjectAttributesInformation"
         },

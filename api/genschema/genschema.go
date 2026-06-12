@@ -28,7 +28,7 @@ const (
 	// First, we need to fetch the HTML page to fetch the latest OpenAPI spec.
 	// The HTML contains somthing like this:
 	//  <div class="item"><a href="/tlsprotectcloud/openapi/691235c38218c38bed9afb9b" class="link">Certificate Manager - SaaS API - v1.0</a></div>
-	unifiedOpenAPIRootURL = "https://developer.venafi.com/tlsprotectcloud/openapi/"
+	unifiedOpenAPIURL = "https://raw.githubusercontent.com/PaloAltoNetworks/pan.dev/refs/heads/master/openapi-specs/scm/config/ngts/tlsprotect-cloud.json"
 )
 
 // Usage:
@@ -39,33 +39,6 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: genschema\n")
 		os.Exit(1)
 	}
-
-	// Step 0: Fetch the HTML from the root OpenAPI URL to find the latest
-	// OpenAPI spec URL.
-	body, err := http.Get(unifiedOpenAPIRootURL)
-	if err != nil {
-		panic(err)
-	}
-	defer body.Body.Close()
-	data, err := io.ReadAll(body.Body)
-	if err != nil {
-		panic(err)
-	}
-
-	html := string(data)
-	prefix := `href="/tlsprotectcloud/openapi/`
-	suffix := `"`
-	start := strings.Index(html, prefix)
-	if start == -1 {
-		panic("could not find '" + prefix + "' in HTML: " + html)
-	}
-	start += len(prefix)
-	end := strings.Index(html[start:], suffix)
-	if end == -1 {
-		panic("could not find '" + suffix + "' after '" + prefix + "' in HTML: " + html)
-	}
-	unifiedOpenAPIURL := "https://developer.venafi.com/tlsprotectcloud/openapi/" + html[start:start+end]
-	logutil.Infof("latest unified OpenAPI URL: %s", unifiedOpenAPIURL)
 
 	oapi1, err := fetchSchema(unifiedOpenAPIURL)
 	if err != nil {
