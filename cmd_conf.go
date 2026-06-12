@@ -171,6 +171,9 @@ func confGetCmd() *cobra.Command {
 				return fmt.Errorf("while fetching service accounts: %w", err)
 			}
 
+			// Build duplicate detection map
+			nameCounts := buildServiceAccountNameCounts(knownSvcaccts)
+
 			config, err := api.GetConfig(cmd.Context(), apiClient, idOrName)
 			if err != nil {
 				return fmt.Errorf("while getting Workload Identity Manager configuration: %w", err)
@@ -190,13 +193,13 @@ func confGetCmd() *cobra.Command {
 				yamlData = buf.Bytes()
 			} else if showDeps {
 				// Show all dependencies (old behavior)
-				yamlData, err = renderToYAML(cmd.Context(), saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
+				yamlData, err = renderToYAML(cmd.Context(), saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), nameCounts, config)
 				if err != nil {
 					return err
 				}
 			} else {
 				// Only show WIMConfiguration
-				wimConfig, _, _, _, err := renderToManifests(cmd.Context(), saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), config)
+				wimConfig, _, _, _, resolvedServiceAccounts, err := renderToManifests(cmd.Context(), saResolver(knownSvcaccts), issuingtemplateResolver(issuingTemplates), nameCounts, config)
 				if err != nil {
 					return fmt.Errorf("while rendering to manifests: %w", err)
 				}
@@ -206,13 +209,11 @@ func confGetCmd() *cobra.Command {
 					WIMConfiguration: wimConfig,
 				}
 
-				var buf bytes.Buffer
-				enc := yaml.NewEncoder(&buf)
-				err = enc.Encode(configManifest)
+				// Use custom marshaller with comment support
+				yamlData, err = marshalWIMConfigWithSAComments(configManifest, resolvedServiceAccounts)
 				if err != nil {
 					return fmt.Errorf("while encoding WIMConfiguration to YAML: %w", err)
 				}
-				yamlData = buf.Bytes()
 			}
 
 			coloredYAMLPrint(string(yamlData))

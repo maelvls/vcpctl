@@ -95,6 +95,7 @@ func manifestToAPIExtendedConfigurationInformation(
 func apiToManifestWIMConfiguration(
 	ctx context.Context,
 	resolveSA func(context.Context, openapi_types.UUID) (api.ServiceAccountDetails, error),
+	nameCounts map[string]int,
 	cfg api.ExtendedConfigurationInformation,
 ) (manifest.WIMConfiguration, error) {
 	// The 'clientAuthentication' field is optional in the responses we get from
@@ -113,11 +114,17 @@ func apiToManifestWIMConfiguration(
 	if err != nil {
 		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while resolving ServiceAccounts from ServiceAccountIds: %w", err)
 	}
-	serviceAccountNames, err := resolve(ctx, serviceAccounts, func(ctx context.Context, sa api.ServiceAccountDetails) (string, error) {
-		return sa.Name, nil
-	})
-	if err != nil {
-		return manifest.WIMConfiguration{}, fmt.Errorf("apiToManifestWIMConfiguration: while resolving names from ServiceAccounts: %w", err)
+
+	// Decide whether to use name or UUID for each service account
+	serviceAccountNames := make([]string, len(serviceAccounts))
+	for i, sa := range serviceAccounts {
+		if isDuplicateName(sa.Name, nameCounts) {
+			// Use UUID when duplicate exists
+			serviceAccountNames[i] = sa.Id.String()
+		} else {
+			// Use name for unique names (preserves readability)
+			serviceAccountNames[i] = sa.Name
+		}
 	}
 
 	policyNames, err := resolve(ctx, cfg.Policies, func(ctx context.Context, p api.PolicyInformation) (string, error) {

@@ -43,7 +43,7 @@ func GetConfigs(ctx context.Context, cl *Client) ([]ExtendedConfigurationInforma
 }
 
 func GetConfig(ctx context.Context, cl *Client, nameOrID string) (ExtendedConfigurationInformation, error) {
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		return GetConfigByID(ctx, cl, nameOrID)
 	}
 
@@ -164,7 +164,7 @@ func PatchConfig(ctx context.Context, cl *Client, id string, patch Configuration
 
 func RemoveConfig(ctx context.Context, cl *Client, nameOrID string) error {
 	var id string
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		id = nameOrID
 	} else {
 		config, err := GetConfig(ctx, cl, nameOrID)

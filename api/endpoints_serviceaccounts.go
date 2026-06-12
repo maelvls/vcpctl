@@ -122,7 +122,7 @@ func GetServiceAccountScopes(ctx context.Context, cl *Client) ([]ScopeDetails, e
 }
 
 func GetServiceAccount(ctx context.Context, cl *Client, nameOrID string) (ServiceAccountDetails, error) {
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		return GetServiceAccountByID(ctx, cl, nameOrID)
 	}
 
@@ -285,7 +285,7 @@ func venafiErrorHasCode(err error, code int) bool {
 
 func DeleteServiceAccount(ctx context.Context, cl *Client, nameOrID string) error {
 	var id string
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		id = nameOrID
 	} else {
 		sa, err := GetServiceAccount(ctx, cl, nameOrID)
@@ -320,7 +320,7 @@ func DeleteServiceAccount(ctx context.Context, cl *Client, nameOrID string) erro
 }
 
 func findServiceAccount(nameOrID string, allSAs []ServiceAccountDetails) (ServiceAccountDetails, error) {
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		for _, sa := range allSAs {
 			if sa.Id.String() == nameOrID {
 				return sa, nil

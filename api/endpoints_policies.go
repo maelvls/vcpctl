@@ -42,7 +42,7 @@ func GetPolicies(ctx context.Context, cl *Client) ([]ExtendedPolicyInformation, 
 }
 
 func GetPolicy(ctx context.Context, cl *Client, nameOrID string) (ExtendedPolicyInformation, error) {
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		return GetPolicyByID(ctx, cl, nameOrID)
 	}
 

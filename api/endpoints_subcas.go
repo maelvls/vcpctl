@@ -43,7 +43,7 @@ func GetSubCAProviders(ctx context.Context, cl *Client) ([]SubCaProviderInformat
 }
 
 func GetSubCAProvider(ctx context.Context, cl *Client, nameOrID string) (SubCaProviderInformation, error) {
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		id := nameOrID
 		return GetSubCAByID(ctx, cl, id)
 	}
@@ -173,7 +173,7 @@ func PatchSubCAProvider(ctx context.Context, cl *Client, id string, patch SubCaP
 }
 
 func DeleteSubCaProvider(ctx context.Context, cl *Client, nameOrID string) error {
-	if looksLikeAnID(nameOrID) {
+	if LooksLikeAnID(nameOrID) {
 		return RemoveSubCaProviderByID(ctx, cl, nameOrID)
 	}
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
-	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/printer"
 	"github.com/maelvls/undent"
@@ -82,6 +80,9 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string, includeD
 		return fmt.Errorf("while fetching service accounts: %w", err)
 	}
 
+	// Build duplicate detection map
+	nameCounts := buildServiceAccountNameCounts(knownSvcaccts)
+
 	config, err := api.GetConfig(ctx, cl, name)
 	switch {
 	case errors.Is(err, errutil.NotFound{}):
@@ -97,12 +98,12 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string, includeD
 
 	var yamlData []byte
 	if includeDeps {
-		yamlData, err = renderToYAML(ctx, saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
+		yamlData, err = renderToYAML(ctx, saResolver(knownSvcaccts), issuingtemplateResolver(templates), nameCounts, config)
 		if err != nil {
 			return err
 		}
 	} else {
-		wimConfig, _, _, _, err := renderToManifests(ctx, saResolver(knownSvcaccts), issuingtemplateResolver(templates), config)
+		wimConfig, _, _, _, resolvedServiceAccounts, err := renderToManifests(ctx, saResolver(knownSvcaccts), issuingtemplateResolver(templates), nameCounts, config)
 		if err != nil {
 			return fmt.Errorf("while rendering to manifests: %w", err)
 		}
@@ -111,12 +112,11 @@ func confEditCmdLogic(ctx context.Context, cl *api.Client, name string, includeD
 			WIMConfiguration: wimConfig,
 		}
 
-		var buf bytes.Buffer
-		enc := yaml.NewEncoder(&buf)
-		if err := enc.Encode(configManifest); err != nil {
+		// Use custom marshaller with comment support
+		yamlData, err = marshalWIMConfigWithSAComments(configManifest, resolvedServiceAccounts)
+		if err != nil {
 			return fmt.Errorf("while encoding WIMConfiguration to YAML: %w", err)
 		}
-		yamlData = buf.Bytes()
 	}
 
 	parseFn := parseManifests
