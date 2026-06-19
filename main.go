@@ -23,6 +23,8 @@ import (
 // Replace the old flag-based main() with cobra execution.
 func main() {
 	var apiURLFlag, apiKeyFlag, contextFlag string
+	var debugFlagPassed, debugHTTPFlagPassed bool
+
 	rootCmd := &cobra.Command{
 		Use:   "vcpctl",
 		Short: "CLI tool for managing WIM (formerly Firefly) configs in CyberArk Certificate Manager, SaaS",
@@ -54,14 +56,26 @@ func main() {
 		`),
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// When --debug-http is passed, automatically enable --debug
+			if logutil.EnableDebugHTTP {
+				if debugFlagPassed && debugHTTPFlagPassed {
+					logutil.Infof("--debug is not needed when using --debug-http as --debug-http automatically enables debug logging")
+				}
+				logutil.EnableDebug = true
+			}
+		},
 	}
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set VEN_API_URL. Flag takes precedence. When using this flag, the configuration file is not used.")
 	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given CyberArk Certificate Manager, SaaS API key. You can also set VEN_API_KEY. Flag takes precedence. When using this flag, the configuration file is not used.")
 	rootCmd.PersistentFlags().StringVar(&contextFlag, "context", "", "Switch to the given context for this command.")
 
-	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebug, "debug", false, "Enable debug logging (set to 'true' to enable)")
-	rootCmd.PersistentFlags().BoolVar(&logutil.EnableDebugHTTP, "debug-http", false, "Enable HTTP request/response logging (set to 'true' to enable)")
+	debugFlag := rootCmd.PersistentFlags().VarPF(newBoolValue(&logutil.EnableDebug, &debugFlagPassed), "debug", "", "Enable debug logging")
+	debugFlag.NoOptDefVal = "true"
+
+	debugHTTPFlag := rootCmd.PersistentFlags().VarPF(newBoolValue(&logutil.EnableDebugHTTP, &debugHTTPFlagPassed), "debug-http", "", "Enable HTTP request/response logging and debug logging. Can also be set via VCPCTL_DEBUG_HTTP=true")
+	debugHTTPFlag.NoOptDefVal = "true"
 	rootCmd.AddGroup(
 		&cobra.Group{ID: "resources", Title: "Managing Resources"},
 		&cobra.Group{ID: "auth", Title: "Authentication"},
@@ -287,4 +301,32 @@ func withoutANSI(s string) string {
 
 func countANSIChars(s string) int {
 	return len(s) - len(withoutANSI(s))
+}
+
+// boolValue implements pflag.Value for tracking whether a bool flag was set
+type boolValue struct {
+	value   *bool
+	changed *bool
+}
+
+func newBoolValue(val *bool, changed *bool) *boolValue {
+	return &boolValue{value: val, changed: changed}
+}
+
+func (b *boolValue) Set(s string) error {
+	v := s == "true" || s == "1"
+	*b.value = v
+	*b.changed = true
+	return nil
+}
+
+func (b *boolValue) Type() string {
+	return "bool"
+}
+
+func (b *boolValue) String() string {
+	if b.value == nil {
+		return "false"
+	}
+	return fmt.Sprintf("%v", *b.value)
 }

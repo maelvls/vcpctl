@@ -9,7 +9,7 @@ import (
 
 var (
 	EnableDebug     = false
-	EnableDebugHTTP = false
+	EnableDebugHTTP = envDebugHTTP()
 
 	Yel   = ansi.ColorFunc("yellow")
 	Green = ansi.ColorFunc("green")
@@ -18,6 +18,11 @@ var (
 	Gray  = ansi.ColorFunc("black+h")
 	Cyan  = ansi.ColorFunc("cyan")
 )
+
+func envDebugHTTP() bool {
+	val := os.Getenv("VCPCTL_DEBUG_HTTP")
+	return val == "true" || val == "1"
+}
 
 // Prints to stderr.
 func Debugf(format string, a ...any) {
