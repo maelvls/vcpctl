@@ -29,7 +29,7 @@ func ErrFromJSONBody(body io.Reader) error {
 	// Fall back to Venafi error format.
 	var venafiErr VenafiError
 	err := json.Unmarshal(bodyBytes, &venafiErr)
-	if err != nil {
+	if err != nil || len(venafiErr.Errors) == 0 {
 		return fmt.Errorf("%s", string(bodyBytes))
 	}
 
@@ -83,6 +83,10 @@ func (e VenafiError) HasCode(code int) bool {
 }
 
 func (e VenafiError) Error() string {
+	if len(e.Errors) == 0 {
+		return ""
+	}
+
 	var msgs []string
 	for _, err := range e.Errors {
 		msg := fmt.Sprintf("%d: %s", err.Code, err.Message)
