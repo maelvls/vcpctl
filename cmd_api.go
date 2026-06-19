@@ -489,6 +489,7 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, authenticationType, met
 	url := serverURL + path
 
 	var body io.Reader
+	var getBody func() (io.ReadCloser, error)
 
 	switch v := requestBody.(type) {
 	case map[string]any:
@@ -501,9 +502,20 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, authenticationType, met
 				return nil, fmt.Errorf("marshaling request body: %w", err)
 			}
 			body = bytes.NewReader(jsonData)
+			getBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(jsonData)), nil
+			}
 		}
 	case io.Reader:
-		body = v
+		// Read the body into memory so we can replay it on retry (for token refresh).
+		bodyBytes, err := io.ReadAll(v)
+		if err != nil {
+			return nil, fmt.Errorf("reading request body: %w", err)
+		}
+		body = bytes.NewReader(bodyBytes)
+		getBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+		}
 	case nil:
 		// No body
 	default:
@@ -514,6 +526,7 @@ func makeAPIRequest(ctx context.Context, cl *api.Client, authenticationType, met
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
+	req.GetBody = getBody
 
 	// Since we aren't using the generated client's methods, we need to apply
 	// the request editors manually (for the tppl-api-key and user-agent

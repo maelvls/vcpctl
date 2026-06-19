@@ -910,7 +910,7 @@ func promptContextSelectionWithEnv(ctx context.Context, conf FileConf, authTypes
 		value:   createNewContextOption,
 	})
 
-	selected, err := runContextSelectorWithRename(ctx, "Which context should be used for this login?", opts, conf.CurrentContext)
+	selected, err := runContextSelectorWithRename(ctx, "Which context should be used to save this login?", opts, conf.CurrentContext)
 	if err != nil {
 		return "", err
 	}
