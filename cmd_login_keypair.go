@@ -169,6 +169,8 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 	cmd.Flags().StringVar(&saFlag, "sa", "", "Service account name to use (enables non-interactive mode)")
 	cmd.Flags().StringSliceVar(&scopeFlags, "scope", nil, "Scopes to assign to the service account (comma-separated or repeated flag)")
 	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
+	cmd.RegisterFlagCompletionFunc("context", contextCompletionFunc)
+	cmd.RegisterFlagCompletionFunc("from-context", contextCompletionFunc)
 	return cmd
 }
 

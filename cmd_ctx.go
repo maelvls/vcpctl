@@ -155,6 +155,7 @@ func ctxCmd(groupID string) *cobra.Command {
 
 	cmd.Flags().StringVar(&contextName, "context", "", "Context name to display")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "yaml", "Output format (yaml or json)")
+	cmd.RegisterFlagCompletionFunc("context", contextCompletionFunc)
 
 	return cmd
 }

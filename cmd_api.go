@@ -126,6 +126,9 @@ Request body:
 		return nil
 	}
 
+	// Register completion function for the path argument
+	cmd.ValidArgsFunction = apiPathCompletionFunc
+
 	return cmd
 }
 

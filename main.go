@@ -70,6 +70,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Use the given CyberArk Certificate Manager, SaaS API URL. You can also set VEN_API_URL. Flag takes precedence. When using this flag, the configuration file is not used.")
 	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Use the given CyberArk Certificate Manager, SaaS API key. You can also set VEN_API_KEY. Flag takes precedence. When using this flag, the configuration file is not used.")
 	rootCmd.PersistentFlags().StringVar(&contextFlag, "context", "", "Switch to the given context for this command.")
+	rootCmd.RegisterFlagCompletionFunc("context", contextCompletionFunc)
 
 	debugFlag := rootCmd.PersistentFlags().VarPF(newBoolValue(&logutil.EnableDebug, &debugFlagPassed), "debug", "", "Enable debug logging")
 	debugFlag.NoOptDefVal = "true"

@@ -160,6 +160,7 @@ func loginCmd(groupID string) *cobra.Command {
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
 	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
+	cmd.RegisterFlagCompletionFunc("context", contextCompletionFunc)
 
 	return cmd
 }
@@ -301,6 +302,7 @@ func loginWifCmd(groupID string) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
 	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
+	cmd.RegisterFlagCompletionFunc("context", contextCompletionFunc)
 	return cmd
 }
 

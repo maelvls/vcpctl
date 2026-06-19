@@ -119,6 +119,7 @@ func loginTSGCmd(groupID string) *cobra.Command {
 	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
 	_ = cmd.Flags().MarkDeprecated("auth-url", "use --env instead")
 	_ = cmd.Flags().MarkDeprecated("api-url", "use --env instead")
+	cmd.RegisterFlagCompletionFunc("context", contextCompletionFunc)
 	return cmd
 }
 
