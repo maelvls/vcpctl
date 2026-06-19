@@ -232,7 +232,6 @@ func envFromAuthURL(existing *ToolContext) string {
 	return "prod"
 }
 
-
 // ngtsDataplaneURL returns the NGTS-only dataplane URL for the given TSG ID
 // and environment.
 func ngtsDataplaneURL(tsgID, env string) (string, error) {
@@ -241,6 +240,8 @@ func ngtsDataplaneURL(tsgID, env string) (string, error) {
 		return fmt.Sprintf("https://%s.ngts.paloaltonetworks.com", tsgID), nil
 	case "qa":
 		return fmt.Sprintf("https://%s.ngts.qa.venafi.io", tsgID), nil
+	case "dev":
+		return fmt.Sprintf("https://%s.ngts.dev.venafi.io", tsgID), nil
 	default:
 		return "", fmt.Errorf("NGTS dataplane URL not yet known for environment %q", env)
 	}

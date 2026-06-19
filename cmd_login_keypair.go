@@ -55,8 +55,8 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 			   (from 'vcpctl sa gen keypair'). Use '-' to read from stdin.
 
 			Notes:
-			- Modes 1 and 2 require an API key context for API access (current context by default).
-			- Use --from-context to specify a different API key context for API operations.
+			- Modes 1 and 2 require an API key or TSG context for API access (current context by default).
+			- Use --from-context to specify a different API key or TSG context for API operations.
 			- The --context flag specifies where to save the keypair authentication credentials.
 		`),
 		Example: undent.Undent(`
@@ -165,7 +165,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&contextFlag, "context", "", "Context name to create or update for the keypair authentication")
-	cmd.Flags().StringVar(&fromContextFlag, "from-context", "", "Context to use for API access (must be API key auth). Defaults to current context.")
+	cmd.Flags().StringVar(&fromContextFlag, "from-context", "", "Context to use for API access (must be API key or TSG auth). Defaults to current context.")
 	cmd.Flags().StringVar(&saFlag, "sa", "", "Service account name to use (enables non-interactive mode)")
 	cmd.Flags().StringSliceVar(&scopeFlags, "scope", nil, "Scopes to assign to the service account (comma-separated or repeated flag)")
 	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
@@ -313,8 +313,58 @@ func pickSigningMethod(key interface{}) (interface{}, jwt.SigningMethod, error) 
 	}
 }
 
+// envFromAuthURLString determines the environment (prod/qa/dev) from an auth URL string
+func envFromAuthURLString(authURL string) string {
+	// Map of known auth URLs to environments (from cmd_login_tsg.go)
+	envMap := map[string]string{
+		"https://auth.apps.paloaltonetworks.com":           "prod",
+		"https://auth.qa.appsvc.paloaltonetworks.com":      "qa",
+		"https://auth.dev.appsvc.paloaltonetworks.com":     "dev",
+	}
+
+	for url, env := range envMap {
+		if strings.EqualFold(authURL, url) {
+			return env
+		}
+	}
+	return "prod" // default
+}
+
+// determineAPIURLForRSAKey determines the correct API URL to save in the rsaKey context.
+// For TSG source contexts, it returns the tenant-specific dataplane URL.
+// For API key source contexts, it returns the original API URL.
+func determineAPIURLForRSAKey(sourceAuth ToolConf) (string, error) {
+	if sourceAuth.AuthenticationType == "tsg" && sourceAuth.TSGID != "" && sourceAuth.AuthURL != "" {
+		env := envFromAuthURLString(sourceAuth.AuthURL)
+		dataplaneURL, err := ngtsDataplaneURL(sourceAuth.TSGID, env)
+		if err != nil {
+			return "", fmt.Errorf("building TSG dataplane URL: %w", err)
+		}
+		logutil.Debugf("Using TSG dataplane URL for rsaKey context: %s (TSG: %s, env: %s)", dataplaneURL, sourceAuth.TSGID, env)
+		return dataplaneURL, nil
+	}
+	return sourceAuth.APIURL, nil
+}
+
 func exchangeServiceAccountJWT(ctx context.Context, apiURL, signedJWT string) (string, error) {
+	return exchangeServiceAccountJWTWithTSG(ctx, apiURL, signedJWT, "", "")
+}
+
+func exchangeServiceAccountJWTWithTSG(ctx context.Context, apiURL, signedJWT, tsgID, authURL string) (string, error) {
 	apiURL = strings.TrimRight(apiURL, "/")
+
+	// For TSG contexts, use the tenant-specific dataplane URL instead of the standard API URL
+	// because /v1/oauth/token/serviceaccount doesn't work with the /ngts prefix
+	if tsgID != "" && authURL != "" {
+		env := envFromAuthURLString(authURL)
+		dataplaneURL, err := ngtsDataplaneURL(tsgID, env)
+		if err != nil {
+			return "", fmt.Errorf("building TSG dataplane URL: %w", err)
+		}
+		logutil.Debugf("Using TSG dataplane URL for JWT exchange: %s (TSG: %s, env: %s)", dataplaneURL, tsgID, env)
+		apiURL = dataplaneURL
+	}
+
 	endpoint := fmt.Sprintf("%s/v1/oauth/token/serviceaccount", apiURL)
 
 	form := url.Values{
@@ -403,8 +453,8 @@ func runLoginKeypairInteractive(ctx context.Context, contextFlagOverride, fromCo
 		TSGID:              current.TSGID,
 	}
 
-	if currentAuth.AuthenticationType != "apiKey" {
-		return errutil.Fixable(fmt.Errorf("current context must use API key authentication. Please run 'vcpctl login' first or use 'vcpctl switch' to select an API key context"))
+	if currentAuth.AuthenticationType != "apiKey" && currentAuth.AuthenticationType != "tsg" {
+		return errutil.Fixable(fmt.Errorf("current context must use API key or TSG authentication. Please run 'vcpctl login' or 'vcpctl login-tsg' first, or use 'vcpctl switch' to select an appropriate context"))
 	}
 
 	// Create API client
@@ -527,14 +577,21 @@ func runLoginKeypairInteractive(ctx context.Context, contextFlagOverride, fromCo
 		return fmt.Errorf("signing JWT: %w", err)
 	}
 
-	accessToken, err := exchangeServiceAccountJWT(ctx, currentAuth.APIURL, signedJWT)
+	accessToken, err := exchangeServiceAccountJWTWithTSG(ctx, currentAuth.APIURL, signedJWT, currentAuth.TSGID, currentAuth.AuthURL)
 	if err != nil {
 		return fmt.Errorf("exchanging JWT for access token: %w", err)
 	}
 
+	// Determine the correct API URL for the rsaKey context
+	// For TSG sources, use tenant-specific dataplane URL
+	rsaKeyAPIURL, err := determineAPIURLForRSAKey(currentAuth)
+	if err != nil {
+		return fmt.Errorf("determining API URL for rsaKey context: %w", err)
+	}
+
 	// Save to context
 	authToSave := Auth{
-		APIURL:             currentAuth.APIURL,
+		APIURL:             rsaKeyAPIURL,
 		AuthenticationType: "rsaKey",
 		ClientID:           saID,
 		PrivateKey:         ecKey,
@@ -596,8 +653,8 @@ func runLoginKeypairNonInteractive(ctx context.Context, saName, contextName, fro
 		TSGID:              current.TSGID,
 	}
 
-	if currentAuth.AuthenticationType != "apiKey" {
-		return errutil.Fixable(fmt.Errorf("current context must use API key authentication. Please run 'vcpctl login' first or use 'vcpctl switch' to select an API key context"))
+	if currentAuth.AuthenticationType != "apiKey" && currentAuth.AuthenticationType != "tsg" {
+		return errutil.Fixable(fmt.Errorf("current context must use API key or TSG authentication. Please run 'vcpctl login' or 'vcpctl login-tsg' first, or use 'vcpctl switch' to select an appropriate context"))
 	}
 
 	// Create API client
@@ -719,14 +776,21 @@ func runLoginKeypairNonInteractive(ctx context.Context, saName, contextName, fro
 		return fmt.Errorf("signing JWT: %w", err)
 	}
 
-	accessToken, err := exchangeServiceAccountJWT(ctx, currentAuth.APIURL, signedJWT)
+	accessToken, err := exchangeServiceAccountJWTWithTSG(ctx, currentAuth.APIURL, signedJWT, currentAuth.TSGID, currentAuth.AuthURL)
 	if err != nil {
 		return fmt.Errorf("exchanging JWT for access token: %w", err)
 	}
 
+	// Determine the correct API URL for the rsaKey context
+	// For TSG sources, use tenant-specific dataplane URL
+	rsaKeyAPIURL, err := determineAPIURLForRSAKey(currentAuth)
+	if err != nil {
+		return fmt.Errorf("determining API URL for rsaKey context: %w", err)
+	}
+
 	// Save to context
 	authToSave := Auth{
-		APIURL:             currentAuth.APIURL,
+		APIURL:             rsaKeyAPIURL,
 		AuthenticationType: "rsaKey",
 		ClientID:           saID,
 		PrivateKey:         ecKey,
