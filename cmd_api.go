@@ -213,6 +213,11 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 	}
 	defer resp.Body.Close()
 
+	// Check for non-2xx status codes BEFORE consuming the body.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return api.HTTPErrorFrom(resp)
+	}
+
 	// Show response headers if requested.
 	if opts.showResponseHeaders {
 		fmt.Fprintf(os.Stderr, "%s %s\r\n", resp.Proto, resp.Status)
@@ -234,11 +239,6 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 	}
 	if last != '\n' {
 		fmt.Fprintln(os.Stdout)
-	}
-
-	// Exit with error for non-2xx status codes.
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	return nil

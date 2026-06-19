@@ -67,8 +67,9 @@ func (e NGTSError) IsEmpty() bool {
 //	{"errors":[{"code":10051,"message":"Unable to find VenafiCaIssuerPolicy for key [c549e230-454c-11f0-906f-19aebcf83bb8]","args":["VenafiCaIssuerPolicy",["c549e230-454c-11f0-906f-19aebcf83bb8"]]}]}
 type VenafiError struct {
 	Errors []struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code    int           `json:"code"`
+		Message string        `json:"message"`
+		Args    []any `json:"args,omitempty"`
 	} `json:"errors"`
 }
 
@@ -84,7 +85,24 @@ func (e VenafiError) HasCode(code int) bool {
 func (e VenafiError) Error() string {
 	var msgs []string
 	for _, err := range e.Errors {
-		msgs = append(msgs, fmt.Sprintf("%d: %s", err.Code, err.Message))
+		msg := fmt.Sprintf("%d: %s", err.Code, err.Message)
+
+		// If args are present and contain useful detail beyond the message, include them
+		if len(err.Args) > 0 {
+			var argStrs []string
+			for _, arg := range err.Args {
+				argStr := fmt.Sprintf("%v", arg)
+				// Only include args that add information beyond what's in the message
+				if !strings.Contains(err.Message, argStr) {
+					argStrs = append(argStrs, argStr)
+				}
+			}
+			if len(argStrs) > 0 {
+				msg = fmt.Sprintf("%s (%s)", msg, strings.Join(argStrs, ", "))
+			}
+		}
+
+		msgs = append(msgs, msg)
 	}
 	return fmt.Sprintf("\n* %s", strings.Join(msgs, "\n* "))
 }

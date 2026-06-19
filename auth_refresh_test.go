@@ -344,8 +344,9 @@ func TestIsNGTSError(t *testing.T) {
 	t.Run("rejects Venafi error", func(t *testing.T) {
 		venafiErr := api.VenafiError{}
 		venafiErr.Errors = append(venafiErr.Errors, struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
+			Code    int           `json:"code"`
+			Message string        `json:"message"`
+			Args    []any `json:"args,omitempty"`
 		}{Code: 1000, Message: "Error"})
 
 		httpErr := api.HTTPError{

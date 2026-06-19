@@ -76,6 +76,33 @@ func TestNGTSError(t *testing.T) {
 		notEmpty2.Err.Message = "Some message"
 		assert.False(t, notEmpty2.IsEmpty())
 	})
+
+	t.Run("parses Venafi error with args field", func(t *testing.T) {
+		// Real-world example with args containing additional error details
+		body := `{"errors":[{"code":1006,"message":"Invalid or missing request parameters","args":["json: unknown field \"@certificateSigningRequest\""]}]}`
+		err := ErrFromJSONBody(strings.NewReader(body))
+
+		var venafiErr VenafiError
+		require.True(t, errors.As(err, &venafiErr), "expected VenafiError type")
+		assert.True(t, venafiErr.HasCode(1006))
+		// The args should be included in the error message since they add detail
+		assert.Contains(t, err.Error(), "1006: Invalid or missing request parameters")
+		assert.Contains(t, err.Error(), "json: unknown field")
+	})
+
+	t.Run("parses Venafi error with args that duplicate the message", func(t *testing.T) {
+		// When args just repeat the message, they should be excluded
+		body := `{"errors":[{"code":1006,"message":"request object parsing failed","args":["request object parsing failed"]}]}`
+		err := ErrFromJSONBody(strings.NewReader(body))
+
+		var venafiErr VenafiError
+		require.True(t, errors.As(err, &venafiErr))
+		// Args should not appear since they duplicate the message
+		errMsg := err.Error()
+		assert.Contains(t, errMsg, "1006: request object parsing failed")
+		// Count occurrences - should only appear once (in the message, not duplicated in args)
+		assert.Equal(t, 1, strings.Count(errMsg, "request object parsing failed"))
+	})
 }
 
 func TestHTTPError_NGTSFormat(t *testing.T) {
@@ -110,8 +137,9 @@ func TestHTTPError_NGTSFormat(t *testing.T) {
 	t.Run("ErrIsNGTSIAM401 rejects Venafi errors", func(t *testing.T) {
 		venafiErr := VenafiError{}
 		venafiErr.Errors = append(venafiErr.Errors, struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
+			Code    int           `json:"code"`
+			Message string        `json:"message"`
+			Args    []any `json:"args,omitempty"`
 		}{Code: 1000, Message: "Some error"})
 
 		httpErr := HTTPError{
@@ -128,5 +156,18 @@ func TestHTTPError_NGTSFormat(t *testing.T) {
 		ngtsErr.Err.Code = "IAM_401"
 
 		assert.False(t, ErrIsNGTSIAM401(ngtsErr))
+	})
+
+	t.Run("HTTPError with plain text body", func(t *testing.T) {
+		body := `Forbidden`
+		err := ErrFromJSONBody(strings.NewReader(body))
+
+		httpErr := HTTPError{
+			StatusCode: 403,
+			Status:     "403 Forbidden",
+			Err:        err,
+		}
+
+		assert.Equal(t, "HTTP 403 Forbidden: Forbidden", httpErr.Error())
 	})
 }
