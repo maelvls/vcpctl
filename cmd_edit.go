@@ -24,7 +24,6 @@ import (
 	"github.com/maelvls/vcpctl/logutil"
 	manifest "github.com/maelvls/vcpctl/manifest"
 	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -311,8 +310,8 @@ func genECKeyPair() (string, string, error) {
 }
 
 func coloredYAMLPrint(yamlBytes string) {
-	// If not a TTY, let's not color the output.
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	// If not an interactive terminal, let's not color the output.
+	if !IsInteractiveTerminal(os.Stdout.Fd()) {
 		fmt.Print(yamlBytes)
 		return
 	}

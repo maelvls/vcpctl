@@ -10,7 +10,6 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/maelvls/vcpctl/logutil"
-	"github.com/mattn/go-isatty"
 )
 
 // tsgOption represents a TSG option for selection
@@ -64,9 +63,9 @@ func flattenTSGHierarchy(tsgs []tenantServiceGroup, level int) []tsgOption {
 
 // promptTSGSelection presents an interactive UI for selecting a TSG
 func promptTSGSelection(ctx context.Context, conf ToolConf, defaultTSGID string) (string, error) {
-	// Check if running in a TTY
-	if !isatty.IsTerminal(os.Stdin.Fd()) {
-		logutil.Debugf("Not a TTY, skipping TSG selection prompt")
+	// Check if running in an interactive terminal
+	if !IsInteractiveTerminal(os.Stdin.Fd()) {
+		logutil.Debugf("Not an interactive terminal, skipping TSG selection prompt")
 		return defaultTSGID, nil
 	}
 

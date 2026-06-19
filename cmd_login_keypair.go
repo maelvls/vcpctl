@@ -20,7 +20,6 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/mattn/go-isatty"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/cancellablereader"
@@ -34,6 +33,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 	var fromContextFlag string
 	var saFlag string
 	var scopeFlags []string
+	var autoSwitch bool
 	cmd := &cobra.Command{
 		Use:           "login-keypair [json-file]",
 		SilenceErrors: true,
@@ -74,16 +74,19 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 
 			# Piped from stdin:
 			vcpctl sa gen keypair my-sa -ojson | vcpctl login-keypair - --context my-sa-context
+
+			# Automatically switch to the new context:
+			vcpctl login-keypair --sa mael --context dev210-keypair --switch
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Mode 1: Interactive mode (no args, no --sa flag)
 			if len(args) == 0 && saFlag == "" {
-				if !isatty.IsTerminal(os.Stdin.Fd()) {
-					return errutil.Fixable(fmt.Errorf("a file path to the JSON authentication file or '-' for stdin is required when not running interactively"))
+				if !IsInteractiveTerminal(os.Stdin.Fd()) {
+					return errutil.Fixable(fmt.Errorf("when not running interactively, please either:\n  - pass a JSON authentication file or '-' (see --help),\n  - or pass the flags --sa and --context"))
 				}
 
-				return runLoginKeypairInteractive(cmd.Context(), contextFlag, fromContextFlag, scopeFlags)
+				return runLoginKeypairInteractive(cmd.Context(), contextFlag, fromContextFlag, scopeFlags, autoSwitch)
 			}
 
 			// Mode 2: Non-interactive with --sa flag (generates new keypair)
@@ -97,7 +100,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 					return errutil.Fixable(fmt.Errorf("--context is required when using --sa"))
 				}
 
-				return runLoginKeypairNonInteractive(cmd.Context(), saFlag, contextFlag, fromContextFlag, scopeFlags)
+				return runLoginKeypairNonInteractive(cmd.Context(), saFlag, contextFlag, fromContextFlag, scopeFlags, autoSwitch)
 			}
 
 			// Non-interactive mode: read from JSON file
@@ -152,7 +155,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 				Username:           saName,
 			}
 
-			current, err = saveCurrentContext(cmd.Context(), current, contextFlag)
+			current, err = saveCurrentContext(cmd.Context(), current, contextFlag, autoSwitch)
 			if err != nil {
 				return fmt.Errorf("saving configuration for context %v: %w", displayContextForSelection(current), err)
 			}
@@ -165,6 +168,7 @@ func loginKeypairCmd(groupID string) *cobra.Command {
 	cmd.Flags().StringVar(&fromContextFlag, "from-context", "", "Context to use for API access (must be API key auth). Defaults to current context.")
 	cmd.Flags().StringVar(&saFlag, "sa", "", "Service account name to use (enables non-interactive mode)")
 	cmd.Flags().StringSliceVar(&scopeFlags, "scope", nil, "Scopes to assign to the service account (comma-separated or repeated flag)")
+	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
 	return cmd
 }
 
@@ -356,7 +360,7 @@ func exchangeServiceAccountJWT(ctx context.Context, apiURL, signedJWT string) (s
 // 3. Prompt for scopes
 // 4. Generate keypair and update SA
 // 5. Authenticate and save to context
-func runLoginKeypairInteractive(ctx context.Context, contextFlagOverride, fromContextOverride string, scopeFlagsOverride []string) error {
+func runLoginKeypairInteractive(ctx context.Context, contextFlagOverride, fromContextOverride string, scopeFlagsOverride []string, autoSwitch bool) error {
 	// Load config to get current context
 	conf, err := loadFileConf(ctx)
 	if err != nil {
@@ -538,7 +542,7 @@ func runLoginKeypairInteractive(ctx context.Context, contextFlagOverride, fromCo
 		Username:           saName,
 	}
 
-	authToSave, err = saveCurrentContext(ctx, authToSave, contextName)
+	authToSave, err = saveCurrentContext(ctx, authToSave, contextName, autoSwitch)
 	if err != nil {
 		return fmt.Errorf("saving configuration for context %v: %w", displayContextForSelection(authToSave), err)
 	}
@@ -549,7 +553,7 @@ func runLoginKeypairInteractive(ctx context.Context, contextFlagOverride, fromCo
 
 // runLoginKeypairNonInteractive handles non-interactive mode with --sa flag:
 // Creates/updates SA with generated keypair and authenticates without prompts.
-func runLoginKeypairNonInteractive(ctx context.Context, saName, contextName, fromContextOverride string, scopes []string) error {
+func runLoginKeypairNonInteractive(ctx context.Context, saName, contextName, fromContextOverride string, scopes []string, autoSwitch bool) error {
 	// Load config to get source context
 	conf, err := loadFileConf(ctx)
 	if err != nil {
@@ -730,7 +734,7 @@ func runLoginKeypairNonInteractive(ctx context.Context, saName, contextName, fro
 		Username:           saName,
 	}
 
-	authToSave, err = saveCurrentContext(ctx, authToSave, contextName)
+	authToSave, err = saveCurrentContext(ctx, authToSave, contextName, autoSwitch)
 	if err != nil {
 		return fmt.Errorf("saving configuration for context %v: %w", displayContextForSelection(authToSave), err)
 	}
@@ -795,6 +799,7 @@ func promptServiceAccountName(ctx context.Context, apiClient *api.Client, previo
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Which service account should be used?").
+				Description("You can pass --sa to skip this prompt").
 				Options(options...).
 				Value(&selected),
 		),
@@ -811,6 +816,7 @@ func promptServiceAccountName(ctx context.Context, apiClient *api.Client, previo
 			huh.NewGroup(
 				huh.NewInput().
 					Title("New service account name:").
+					Description("You can pass --sa <name> to skip this prompt").
 					Value(&newName).
 					Validate(func(s string) error {
 						s = strings.TrimSpace(s)
@@ -878,7 +884,7 @@ func promptScopeSelection(ctx context.Context, availableScopes, currentScopes []
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Select scopes for this service account").
-				Description("Use space to select, enter to confirm").
+				Description("Use space to select, enter to confirm. You can pass --scope to skip this prompt").
 				Options(options...).
 				Value(&selected),
 		),

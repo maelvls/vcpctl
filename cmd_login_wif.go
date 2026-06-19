@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/mattn/go-isatty"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/maelvls/vcpctl/errutil"
@@ -219,14 +218,14 @@ type wifJSON struct {
 	TenantURL string `json:"tenant_url"`
 }
 
-func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag string) error {
+func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag string, autoSwitch bool) error {
 	if wifJSONPath == "" {
 		return errutil.Fixable(fmt.Errorf("--sa-wif requires a JSON file path or '-' for stdin"))
 	}
 
 	// Resolve context before processing credentials.
 	if contextFlag == "" {
-		if !isatty.IsTerminal(os.Stdin.Fd()) {
+		if !IsInteractiveTerminal(os.Stdin.Fd()) {
 			return errutil.Fixable(fmt.Errorf("--context is required when 'vcpctl login-wif' isn't run interactively (e.g. from a pipe)"))
 		}
 		conf, err := loadFileConf(ctx)
@@ -340,7 +339,7 @@ func loginWithWIFJSON(ctx context.Context, wifJSONPath string, contextFlag strin
 		Audience:           input.Aud,
 	}
 
-	current, err = saveCurrentContext(ctx, current, contextFlag)
+	current, err = saveCurrentContext(ctx, current, contextFlag, autoSwitch)
 	if err != nil {
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}

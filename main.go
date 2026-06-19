@@ -15,7 +15,6 @@ import (
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/logutil"
-	"github.com/mattn/go-isatty"
 	"github.com/njayp/ophis"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/spf13/cobra"
@@ -239,7 +238,7 @@ func printTable(headers []string, rows [][]string) {
 // Returns an ANSI color escape code that is unique to the given text.
 func uniqueColor(text string) string {
 	// Don't color if the terminal is not a TTY.
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !IsInteractiveTerminal(os.Stdout.Fd()) {
 		return text
 	}
 
@@ -258,21 +257,21 @@ func hash(s string) int {
 }
 
 func redBold(text string) string {
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !IsInteractiveTerminal(os.Stdout.Fd()) {
 		return text
 	}
 	return fmt.Sprintf("\x1b[1;31m%s\x1b[0m", text)
 }
 
 func lightGray(text string) string {
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !IsInteractiveTerminal(os.Stdout.Fd()) {
 		return text
 	}
 	return fmt.Sprintf("\x1b[90m%s\x1b[0m", text)
 }
 
 func boldCyan(text string) string {
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !IsInteractiveTerminal(os.Stdout.Fd()) {
 		return text
 	}
 	return fmt.Sprintf("\x1b[1;34m%s\x1b[0m", text)

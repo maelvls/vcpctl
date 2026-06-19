@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-yaml"
 	"github.com/maelvls/undent"
-	"github.com/mattn/go-isatty"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/cancellablereader"
 	"github.com/maelvls/vcpctl/errutil"
@@ -90,6 +89,7 @@ func deprecatedAuthCmd(groupID string) *cobra.Command {
 
 func loginCmd(groupID string) *cobra.Command {
 	var apiURL, apiKey, contextName string
+	var autoSwitch bool
 	cmd := &cobra.Command{
 		Use:           "login [url]",
 		SilenceErrors: true,
@@ -127,6 +127,9 @@ func loginCmd(groupID string) *cobra.Command {
 			# Fully non-interactive with tenant URL and API key:
 			vcpctl login https://ui-stack-dev130.qa.venafi.io --api-key <key>
 
+			# Automatically switch to the new context after login:
+			vcpctl login https://ui-stack-dev130.qa.venafi.io --api-key <key> --switch
+
 			# Bypass tenant URL to API URL conversion (for advanced use):
 			vcpctl login --api-url https://api-stack-dev130.qa.venafi.io --api-key <key>
 		`),
@@ -143,25 +146,26 @@ func loginCmd(groupID string) *cobra.Command {
 				if apiURL != "" {
 					logutil.Infof("⚠️  Warning: --api-url will be ignored because the tenant URL positional argument is provided. The API URL will be determined automatically from the tenant URL.")
 				}
-				return loginWithTenantURL(cmd.Context(), &anonymousClient, args[0], apiKey, contextName)
+				return loginWithTenantURL(cmd.Context(), &anonymousClient, args[0], apiKey, contextName, autoSwitch)
 			}
 
 			if apiURL != "" {
-				return loginWithAPIURL(cmd.Context(), apiURL, apiKey, contextName)
+				return loginWithAPIURL(cmd.Context(), apiURL, apiKey, contextName, autoSwitch)
 			}
 
-			return loginInteractive(cmd.Context(), apiKey, contextName)
+			return loginInteractive(cmd.Context(), apiKey, contextName, autoSwitch)
 		},
 	}
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "The API URL of the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "The API key for the CyberArk Certificate Manager, SaaS tenant. If not provided, you will be prompted to enter it")
 	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
+	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
 
 	return cmd
 }
 
 // The 'cl' must be an unauthenticated client.
-func loginWithTenantURL(ctx context.Context, anonymousClient *http.Client, tenantURL, apiKey, contextName string) error {
+func loginWithTenantURL(ctx context.Context, anonymousClient *http.Client, tenantURL, apiKey, contextName string, autoSwitch bool) error {
 	tenantURL = normalizeURL(tenantURL)
 	if tenantURL == "" {
 		return fmt.Errorf("tenant URL cannot be empty")
@@ -189,10 +193,10 @@ func loginWithTenantURL(ctx context.Context, anonymousClient *http.Client, tenan
 		}
 	}
 
-	return saveLoginAndReport(ctx, current, contextName)
+	return saveLoginAndReport(ctx, current, contextName, autoSwitch)
 }
 
-func loginWithAPIURL(ctx context.Context, apiURL, apiKey, contextName string) error {
+func loginWithAPIURL(ctx context.Context, apiURL, apiKey, contextName string, autoSwitch bool) error {
 	apiURL = normalizeURL(apiURL)
 	if apiURL == "" {
 		return fmt.Errorf("API URL cannot be empty")
@@ -213,10 +217,10 @@ func loginWithAPIURL(ctx context.Context, apiURL, apiKey, contextName string) er
 		}
 	}
 
-	return saveLoginAndReport(ctx, current, contextName)
+	return saveLoginAndReport(ctx, current, contextName, autoSwitch)
 }
 
-func loginInteractive(ctx context.Context, apiKey, contextName string) error {
+func loginInteractive(ctx context.Context, apiKey, contextName string, autoSwitch bool) error {
 	var current Auth
 
 	anonClient, err := api.NewAnonymousClient()
@@ -227,7 +231,7 @@ func loginInteractive(ctx context.Context, apiKey, contextName string) error {
 	current.AuthenticationType = "apiKey"
 
 	// Resolve which context to use before asking for credentials.
-	if contextName == "" && isatty.IsTerminal(os.Stdout.Fd()) {
+	if contextName == "" && IsInteractiveTerminal(os.Stdout.Fd()) {
 		conf, err := loadFileConf(ctx)
 		if err != nil {
 			return fmt.Errorf("loading configuration: %w", err)
@@ -262,11 +266,12 @@ func loginInteractive(ctx context.Context, apiKey, contextName string) error {
 		}
 	}
 
-	return saveLoginAndReport(ctx, current, contextName)
+	return saveLoginAndReport(ctx, current, contextName, autoSwitch)
 }
 
 func loginWifCmd(groupID string) *cobra.Command {
 	var contextName string
+	var autoSwitch bool
 	cmd := &cobra.Command{
 		Use:           "login-wif <json-file>",
 		SilenceErrors: true,
@@ -285,13 +290,17 @@ func loginWifCmd(groupID string) *cobra.Command {
 
 			# WIF login from stdin:
 			vcpctl sa gen wif my-sa -ojson | vcpctl login-wif -
+
+			# Automatically switch to the new context:
+			vcpctl login-wif wif-credentials.json --switch
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return loginWithWIFJSON(cmd.Context(), args[0], contextName)
+			return loginWithWIFJSON(cmd.Context(), args[0], contextName, autoSwitch)
 		},
 	}
 	cmd.Flags().StringVar(&contextName, "context", "", "Context name to create or update")
+	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
 	return cmd
 }
 
@@ -472,7 +481,7 @@ func switchCmd(groupID string) *cobra.Command {
 				})
 			}
 
-			selectedName, err := runContextSelectorWithRename(cmd.Context(), "Select the context you want to switch to.", opts, current.Name)
+			selectedName, err := runContextSelectorWithRename(cmd.Context(), "Select the context you want to switch to.", "", opts, current.Name)
 			if err != nil {
 				return fmt.Errorf("selecting context: %w", err)
 			}
@@ -530,7 +539,7 @@ func authSwitchCmd(groupID string) *cobra.Command {
 // Meant for the `vcpctl login*` commands. The provided toolctx's name can be
 // left empty, in which case a name will be derived. The contextFlag can also be
 // left empty. Returns the name of the saved context.
-func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag string) (ToolContext, error) {
+func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag string, autoSwitch bool) (ToolContext, error) {
 	conf, err := loadFileConf(ctx)
 	if err != nil {
 		return ToolContext{}, fmt.Errorf("loading configuration: %w", err)
@@ -542,7 +551,7 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 		name = contextFlag
 	} else if conf.CurrentContext != "" {
 		// No --context flag, but a current context is selected.
-		if isatty.IsTerminal(os.Stdout.Fd()) {
+		if IsInteractiveTerminal(os.Stdout.Fd()) {
 			// Interactive mode: let the user pick.
 			selected, err := promptContextSelection(ctx, conf, nil)
 			if err != nil {
@@ -585,13 +594,16 @@ func saveCurrentContext(ctx context.Context, target ToolContext, contextFlag str
 	if previousCurrentContext == "" || name == previousCurrentContext {
 		// No existing current context, or logging into the same context: auto-switch.
 		conf.CurrentContext = name
-	} else if isatty.IsTerminal(os.Stdout.Fd()) {
+	} else if autoSwitch {
+		// --switch flag provided: auto-switch without prompting.
+		conf.CurrentContext = name
+	} else if IsInteractiveTerminal(os.Stdout.Fd()) {
 		// Different context in interactive mode: ask the user.
 		doSwitch := true
 		form := huh.NewForm(huh.NewGroup(
 			huh.NewConfirm().
 				Title(fmt.Sprintf("Switch current context to '%s'?", name)).
-				Description(fmt.Sprintf("You can also run 'vcpctl switch %s' or 'vcpctl switch' later.", name)).
+				Description(fmt.Sprintf("You can also run 'vcpctl switch %s' or 'vcpctl switch' later, or skip this prompt by passing --switch.", name)).
 				Value(&doSwitch),
 		))
 		if err := form.RunWithContext(ctx); err != nil && !errors.Is(err, huh.ErrUserAborted) {
@@ -619,6 +631,7 @@ type contextListOpt struct {
 
 type contextSelectorModel struct {
 	title        string
+	description  string
 	opts         []contextListOpt
 	cursor       int
 	selected     string
@@ -671,7 +684,11 @@ var (
 // View() so callers can count lines for inline erasing after the program exits.
 func (m contextSelectorModel) viewContent() string {
 	var b strings.Builder
-	b.WriteString(m.title + "\n\n")
+	b.WriteString(m.title + "\n")
+	if m.description != "" {
+		b.WriteString(subtleStyle.Render(m.description) + "\n")
+	}
+	b.WriteString("\n")
 	for i, opt := range m.opts {
 		// Split "name (details...)" so name and details can be styled separately.
 		// The sentinel option has no toolctx.Name, so details == display.
@@ -699,7 +716,7 @@ func (m contextSelectorModel) View() tea.View {
 // runContextSelectorWithRename runs the interactive context list. When the user
 // presses 'r' it opens $EDITOR to rename, 'd' shows a confirm then deletes.
 // Returns the selected value (which may be createNewContextOption).
-func runContextSelectorWithRename(ctx context.Context, title string, opts []contextListOpt, initialValue string) (string, error) {
+func runContextSelectorWithRename(ctx context.Context, title, description string, opts []contextListOpt, initialValue string) (string, error) {
 	cursor := 0
 	for i, o := range opts {
 		if o.value == initialValue {
@@ -709,7 +726,7 @@ func runContextSelectorWithRename(ctx context.Context, title string, opts []cont
 	}
 
 	for {
-		model := contextSelectorModel{title: title, opts: opts, cursor: cursor}
+		model := contextSelectorModel{title: title, description: description, opts: opts, cursor: cursor}
 		result, err := tea.NewProgram(model).Run()
 		if err != nil {
 			return "", fmt.Errorf("prompt cancelled: %w", err)
@@ -910,7 +927,7 @@ func promptContextSelectionWithEnv(ctx context.Context, conf FileConf, authTypes
 		value:   createNewContextOption,
 	})
 
-	selected, err := runContextSelectorWithRename(ctx, "Which context should be used to save this login?", opts, conf.CurrentContext)
+	selected, err := runContextSelectorWithRename(ctx, "Which context should be used to save this login?", "You can pass --context to skip this prompt", opts, conf.CurrentContext)
 	if err != nil {
 		return "", err
 	}
@@ -921,6 +938,7 @@ func promptContextSelectionWithEnv(ctx context.Context, conf FileConf, authTypes
 			huh.NewGroup(
 				huh.NewInput().
 					Title("New context name:").
+					Description("You can pass --context <name> to skip this prompt").
 					Value(&newName).
 					Validate(func(s string) error {
 						s = strings.TrimSpace(s)
@@ -1408,6 +1426,7 @@ func populateFromAPIKey(ctx context.Context, current *Auth, apiKey string) error
 func promptForTenantURL(ctx context.Context, anonClient http.Client, current *Auth) error {
 	fmt.Println(subtleStyle.Render("Enter the URL you use to log into CyberArk Certificate Manager, SaaS"))
 	fmt.Println(subtleStyle.Render("Example: https://ven-cert-manager-uk.venafi.cloud"))
+	fmt.Println(subtleStyle.Render("You can pass the tenant URL as a positional argument to skip this prompt"))
 	fmt.Println()
 
 	tenantURL, err := promptString(ctx, "Tenant URL: ", current.TenantURL, func(ctx context.Context, input string) error {
@@ -1435,8 +1454,9 @@ func promptForTenantURL(ctx context.Context, anonClient http.Client, current *Au
 func promptForAPIKey(ctx context.Context, current *Auth) error {
 	if current.TenantURL != "" {
 		fmt.Println(subtleStyle.Render("To get the API key, open: " + current.TenantURL + "/platform-settings/user-preferences?key=api-keys"))
-		fmt.Println()
 	}
+	fmt.Println(subtleStyle.Render("You can pass --api-key to skip this prompt"))
+	fmt.Println()
 
 	apiKeyInput, err := promptString(ctx, "API Key: ", current.APIKey, func(ctx context.Context, input string) error {
 		return populateFromAPIKey(ctx, current, input)
@@ -1448,8 +1468,8 @@ func promptForAPIKey(ctx context.Context, current *Auth) error {
 	return nil
 }
 
-func saveLoginAndReport(ctx context.Context, current Auth, contextName string) error {
-	current, err := saveCurrentContext(ctx, current, contextName)
+func saveLoginAndReport(ctx context.Context, current Auth, contextName string, autoSwitch bool) error {
+	current, err := saveCurrentContext(ctx, current, contextName, autoSwitch)
 	if err != nil {
 		return fmt.Errorf("saving configuration for %s: %w", current.TenantURL, err)
 	}

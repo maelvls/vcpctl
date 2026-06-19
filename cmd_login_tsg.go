@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
-	"github.com/mattn/go-isatty"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
@@ -47,6 +46,7 @@ var envURLMap = map[string]envURLs{
 
 func loginTSGCmd(groupID string) *cobra.Command {
 	var contextFlag, authURL, apiURL, clientSecret, env string
+	var autoSwitch bool
 	cmd := &cobra.Command{
 		Use:           "login-tsg [client-id]",
 		SilenceErrors: true,
@@ -77,12 +77,16 @@ func loginTSGCmd(groupID string) *cobra.Command {
 
 			vcpctl login-tsg mael@1526746475.iam.panserviceaccount.com \
 			  --env qa --client-secret <secret>
+
+			# Automatically switch to the new context:
+			vcpctl login-tsg mael@1526746475.iam.panserviceaccount.com \
+			  --client-secret <secret> --switch
 		`),
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
+			if len(args) == 0 && IsInteractiveTerminal(os.Stdout.Fd()) {
 				envProvided := cmd.Flags().Changed("env")
-				return loginTSGInteractive(cmd.Context(), contextFlag, env, envProvided)
+				return loginTSGInteractive(cmd.Context(), contextFlag, env, envProvided, autoSwitch)
 			}
 
 			if len(args) == 0 {
@@ -104,7 +108,7 @@ func loginTSGCmd(groupID string) *cobra.Command {
 				apiURL = urls.apiURL
 			}
 			apiURL = normalizeAPIURL(apiURL)
-			return loginWithTSG(cmd.Context(), clientID, clientSecret, authURL, apiURL, contextFlag)
+			return loginWithTSG(cmd.Context(), clientID, clientSecret, authURL, apiURL, contextFlag, autoSwitch)
 		},
 	}
 	cmd.Flags().StringVar(&env, "env", "prod", "Environment to use: prod, qa, or dev")
@@ -112,12 +116,13 @@ func loginTSGCmd(groupID string) *cobra.Command {
 	cmd.Flags().StringVar(&apiURL, "api-url", "", "Override the API URL ('/ngts' is appended if not already present)")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "The client secret for the service account")
 	cmd.Flags().StringVar(&contextFlag, "context", "", "Context name to create or update")
+	cmd.Flags().BoolVar(&autoSwitch, "switch", false, "Automatically switch to the context after logging in without prompting")
 	_ = cmd.Flags().MarkDeprecated("auth-url", "use --env instead")
 	_ = cmd.Flags().MarkDeprecated("api-url", "use --env instead")
 	return cmd
 }
 
-func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envProvided bool) error {
+func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envProvided bool, autoSwitch bool) error {
 	// Step 1: context picker (before any other prompt).
 	resolvedContext := contextFlag
 	var existingTSGContext *ToolContext
@@ -152,6 +157,7 @@ func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envPr
 			huh.NewGroup(
 				huh.NewSelect[string]().
 					Title("Which environment?").
+					Description("You can pass --env to skip this prompt").
 					Options(
 						huh.NewOption("Production (prod)", "prod"),
 						huh.NewOption("QA (qa)", "qa"),
@@ -182,6 +188,7 @@ func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envPr
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Service account email (client ID):").
+				Description("You can pass the client ID as a positional argument to skip this prompt").
 				Value(&clientID).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
@@ -191,6 +198,7 @@ func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envPr
 				}),
 			huh.NewInput().
 				Title("Client secret:").
+				Description("You can pass --client-secret to skip this prompt").
 				EchoMode(huh.EchoModePassword).
 				Value(&clientSecret).
 				Validate(func(s string) error {
@@ -208,7 +216,7 @@ func loginTSGInteractive(ctx context.Context, contextFlag, envFlag string, envPr
 	// Clear the instructions after credentials are entered
 	fmt.Print("\033[3A\033[J")
 
-	return loginWithTSG(ctx, strings.TrimSpace(clientID), strings.TrimSpace(clientSecret), urls.authURL, normalizeAPIURL(urls.apiURL), resolvedContext)
+	return loginWithTSG(ctx, strings.TrimSpace(clientID), strings.TrimSpace(clientSecret), urls.authURL, normalizeAPIURL(urls.apiURL), resolvedContext, autoSwitch)
 }
 
 // envFromAuthURL returns the env key ("prod", "qa", "dev") matching the
@@ -256,7 +264,7 @@ func extractTSGID(clientID string) (string, error) {
 	return matches[1], nil
 }
 
-func loginWithTSG(ctx context.Context, clientID, clientSecret, authURL, apiURL, contextFlag string) error {
+func loginWithTSG(ctx context.Context, clientID, clientSecret, authURL, apiURL, contextFlag string, autoSwitch bool) error {
 	// Extract TSG ID from client ID
 	tsgID, err := extractTSGID(clientID)
 	if err != nil {
@@ -279,7 +287,7 @@ func loginWithTSG(ctx context.Context, clientID, clientSecret, authURL, apiURL, 
 		TSGID:              tsgID,
 	}
 
-	current, err = saveCurrentContext(ctx, current, contextFlag)
+	current, err = saveCurrentContext(ctx, current, contextFlag, autoSwitch)
 	if err != nil {
 		return fmt.Errorf("saving configuration for context %v: %w", displayContextForSelection(current), err)
 	}
