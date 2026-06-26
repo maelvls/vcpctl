@@ -192,6 +192,10 @@ func main() {
 	setNullableOnProperty(merged, "PatchAdvancedSettingsInformation", "includeRawCertDataInAuditLog")
 	setNullableOnProperty(merged, "PatchAdvancedSettingsInformation", "requireFIPSCompliantBuild")
 
+	// We need to be able to set serviceAccountIds to an empty array when PATCHing
+	// (to detach all service accounts from a configuration).
+	setNullableOnProperty(merged, "ConfigurationUpdateRequest", "serviceAccountIds")
+
 	// Same story for SubCaProviderPkcs11ConfigurationInformation.
 	copySchema(merged, "SubCaProviderPkcs11ConfigurationInformation", "PatchSubCaProviderPkcs11ConfigurationInformation")
 	set(merged, "components.schemas.SubCaProviderUpdateRequest.properties.pkcs11.$ref", "#/components/schemas/PatchSubCaProviderPkcs11ConfigurationInformation")

@@ -2414,8 +2414,8 @@ type ConfigurationUpdateRequest struct {
 	Name string `json:"name,omitempty,omitzero"`
 
 	// PolicyIds Array of UUIDs of policies to associate with the configuration
-	PolicyIds         []openapi_types.UUID `json:"policyIds,omitempty,omitzero"`
-	ServiceAccountIds []openapi_types.UUID `json:"serviceAccountIds,omitempty,omitzero"`
+	PolicyIds         []openapi_types.UUID                    `json:"policyIds,omitempty,omitzero"`
+	ServiceAccountIds nullable.Nullable[[]openapi_types.UUID] `json:"serviceAccountIds,omitempty,omitzero"`
 
 	// SubCaProviderId UUID of Sub CA provider to associate with the configuration
 	SubCaProviderId openapi_types.UUID `json:"subCaProviderId,omitempty,omitzero"`

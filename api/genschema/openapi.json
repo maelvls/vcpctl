@@ -4862,6 +4862,7 @@
               "format": "uuid",
               "type": "string"
             },
+            "nullable": true,
             "type": "array"
           },
           "subCaProviderId": {

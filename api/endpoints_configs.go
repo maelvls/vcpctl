@@ -297,7 +297,7 @@ func DetachSAFromConf(ctx context.Context, cl *Client, confName, saName string) 
 
 	// Is this SA in the configuration?
 	if !slices.Contains(existing.ServiceAccountIds, sa.Id) {
-		logutil.Debugf("Service account '%s' (ID: %s) is not in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), existing.Name)
+		logutil.Infof("Service account '%s' (ID: %s) is not in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), existing.Name)
 		return nil
 	}
 
@@ -419,8 +419,8 @@ func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (Conf
 		return ConfigurationUpdateRequest{}, false, fmt.Errorf("cannot change the 'shortLivedCertCount' field of an existing configuration")
 	}
 
-	if len(desired.ServiceAccountIds) > 0 && !slicesEqual(desired.ServiceAccountIds, existing.ServiceAccountIds) {
-		patch.ServiceAccountIds = desired.ServiceAccountIds
+	if !slicesEqual(desired.ServiceAccountIds, existing.ServiceAccountIds) {
+		patch.ServiceAccountIds.Set(desired.ServiceAccountIds)
 		smthChanged = true
 	}
 
