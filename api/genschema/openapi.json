@@ -14394,7 +14394,7 @@
         },
         "summary": "Retrieve Certificate Instances",
         "tags": [
-          "Certificate Installations"
+          "TLS Server Endpoints"
         ]
       }
     },
@@ -14446,7 +14446,7 @@
         },
         "summary": "Request validation for a set of",
         "tags": [
-          "Certificate Installations"
+          "TLS Server Endpoints"
         ]
       }
     },
@@ -14510,7 +14510,7 @@
         },
         "summary": "Get a certificate installation details",
         "tags": [
-          "Certificate Installations"
+          "TLS Server Endpoints"
         ]
       }
     },
@@ -14576,7 +14576,7 @@
         },
         "summary": "Retrieve certificate instance data matching search",
         "tags": [
-          "Certificate Installations"
+          "TLS Server Endpoints"
         ]
       }
     },
@@ -20507,92 +20507,6 @@
         ]
       }
     },
-    "/v1/expirationreports/tenantconfiguration": {
-      "get": {
-        "description": "Retrieve the certificate expiration reports configuration for the current tenant",
-        "operationId": "get-v1-tenant-expiration-reports-configuration",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TenantExpirationReportsConfiguration"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "description": "BadRequest"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "InternalServerError"
-          }
-        },
-        "summary": "Retrieve the certificate expiration reports config",
-        "tags": [
-          "Certificate Expiration Reports"
-        ]
-      },
-      "put": {
-        "description": "Update the certificate expiration reports configuration for the current tenant",
-        "operationId": "put-v1-tenant-expiration-reports-configuration",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TenantExpirationReportsConfiguration"
-              }
-            }
-          },
-          "description": "The options to apply",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TenantExpirationReportsConfiguration"
-                }
-              }
-            },
-            "description": "Success. The tenant configuration was successfully updated."
-          },
-          "400": {
-            "description": "BadRequest"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "InternalServerError"
-          }
-        },
-        "summary": "Update the certificate expiration reports configur",
-        "tags": [
-          "Certificate Expiration Reports"
-        ]
-      }
-    },
-    "/v1/expirationreports/trigger": {
-      "post": {
-        "description": "The certificate reports job is normally scheduled per the tenant configuration. This operation attempts to start the process for the current tenant now.",
-        "operationId": "post-v1-run-reports",
-        "responses": {
-          "204": {
-            "description": "Success. The reports check process was triggered."
-          }
-        },
-        "summary": "Attempt to initiate the certificate reports",
-        "tags": [
-          "Certificate Expiration Reports"
-        ]
-      }
-    },
     "/v1/integrationservices": {
       "get": {
         "description": "Retrieves the details of all services (Ex: Discovery services and Automated key pair services).",
@@ -20938,7 +20852,7 @@
         },
         "summary": "Get the details of all machine",
         "tags": [
-          "Machine Identities"
+          "Machine Installations"
         ]
       },
       "post": {
@@ -20977,7 +20891,7 @@
         },
         "summary": "Add a machine identity to a",
         "tags": [
-          "Machine Identities"
+          "Machine Installations"
         ]
       }
     },
@@ -21035,7 +20949,7 @@
         },
         "summary": "Remove a machine identity",
         "tags": [
-          "Machine Identities"
+          "Machine Installations"
         ]
       },
       "get": {
@@ -21098,7 +21012,7 @@
         },
         "summary": "Get a machine identity details",
         "tags": [
-          "Machine Identities"
+          "Machine Installations"
         ]
       },
       "patch": {
@@ -21170,7 +21084,7 @@
         },
         "summary": "Update a machine identity details",
         "tags": [
-          "Machine Identities"
+          "Machine Installations"
         ]
       }
     },
@@ -21244,7 +21158,7 @@
         },
         "summary": "Initiate a machine workflow",
         "tags": [
-          "Machine Identities"
+          "Machine Installations"
         ]
       }
     },
@@ -21295,7 +21209,7 @@
         },
         "summary": "Get the details of machine identities",
         "tags": [
-          "Machine Identities"
+          "Machine Installations"
         ]
       }
     },
@@ -22546,7 +22460,7 @@
         },
         "summary": "Retrieve all plugins",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       },
       "post": {
@@ -22575,7 +22489,7 @@
         },
         "summary": "Create a local plugin",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       }
     },
@@ -22597,7 +22511,7 @@
         },
         "summary": "Retrieve all disabled plugins",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       }
     },
@@ -22623,7 +22537,7 @@
         },
         "summary": "Delete a local plugin",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       },
       "get": {
@@ -22654,7 +22568,7 @@
         },
         "summary": "Retrieve plugin by ID",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       },
       "patch": {
@@ -22693,7 +22607,7 @@
         },
         "summary": "Update a local plugin",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       }
     },
@@ -22719,7 +22633,7 @@
         },
         "summary": "Remove plugin disablement",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       },
       "post": {
@@ -22750,7 +22664,7 @@
         },
         "summary": "Disable a plugin",
         "tags": [
-          "Plugins"
+          "Plugins (Connectors)"
         ]
       }
     },
@@ -23914,7 +23828,7 @@
         },
         "summary": "Retrieve all tags",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       },
       "post": {
@@ -23965,7 +23879,7 @@
         },
         "summary": "Create a tag",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24018,7 +23932,7 @@
         },
         "summary": "Create tags in bulk",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24064,7 +23978,7 @@
         },
         "summary": "Delete tags in bulk",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24106,7 +24020,7 @@
         },
         "summary": "Retrieve values for all tags",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24153,7 +24067,7 @@
         },
         "summary": "Delete tag by name",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       },
       "get": {
@@ -24215,7 +24129,7 @@
         },
         "summary": "Retrieve tag by name",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24279,7 +24193,7 @@
         },
         "summary": "Retrieve values for a tag",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       },
       "post": {
@@ -24342,7 +24256,7 @@
         },
         "summary": "Create tag values",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24399,7 +24313,7 @@
         },
         "summary": "Delete a tag value",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24452,7 +24366,7 @@
         },
         "summary": "Replace Add Or Delete Tags",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -24505,7 +24419,7 @@
         },
         "summary": "Bulk operation to retrieve number of",
         "tags": [
-          "Tags"
+          "Certificate Tags"
         ]
       }
     },
@@ -26916,7 +26830,7 @@
   "servers": [
     {
       "description": "Strata Cloud Manager API",
-      "url": "https://api.strata.paloaltonetworks.com"
+      "url": "https://api.strata.paloaltonetworks.com/ngts"
     }
   ],
   "tags": [
@@ -26925,8 +26839,8 @@
       "name": "Certificates"
     },
     {
-      "description": "APIs for Certificate Installations.",
-      "name": "Certificate Installations"
+      "description": "APIs for TLS Server Endpoints.",
+      "name": "TLS Server Endpoints"
     },
     {
       "description": "APIs for Certificate Discovery.",
@@ -26953,8 +26867,8 @@
       "name": "Credential Management"
     },
     {
-      "description": "APIs for Machine Identities.",
-      "name": "Machine Identities"
+      "description": "APIs for Machine Installations.",
+      "name": "Machine Installations"
     },
     {
       "description": "APIs for Machine Types.",
@@ -26981,28 +26895,24 @@
       "name": "Certificate Auto-renewal Monitoring"
     },
     {
-      "description": "APIs for Certificate Expiration Reports.",
-      "name": "Certificate Expiration Reports"
+      "description": "APIs for Certificate Tags.",
+      "name": "Certificate Tags"
     },
     {
-      "description": "APIs for Tags.",
-      "name": "Tags"
+      "description": "APIs for Issuer Configurations.",
+      "name": "Issuer Configurations"
     },
     {
-      "description": "APIs for Workload Identity Manager Configurations.",
-      "name": "Workload Identity Manager Configurations"
+      "description": "APIs for Issuer Sub CA Providers.",
+      "name": "Issuer Sub CA Providers"
     },
     {
-      "description": "APIs for Workload Identity Manager Sub CA Providers.",
-      "name": "Workload Identity Manager Sub CA Providers"
+      "description": "APIs for Workload Issuance Policies.",
+      "name": "Workload Issuance Policies"
     },
     {
-      "description": "APIs for Workload Identity Manager Policies.",
-      "name": "Workload Identity Manager Policies"
-    },
-    {
-      "description": "APIs for Workload Identity Manager Intermediate Certificates.",
-      "name": "Workload Identity Manager Intermediate Certificates"
+      "description": "APIs for Issuer Certificates.",
+      "name": "Issuer Certificates"
     },
     {
       "description": "APIs for Certificate Approvals.",
@@ -27013,8 +26923,8 @@
       "name": "Certificate Revocation Approvals"
     },
     {
-      "description": "APIs for Plugins.",
-      "name": "Plugins"
+      "description": "APIs for Plugins (Connectors).",
+      "name": "Plugins (Connectors)"
     },
     {
       "description": "APIs for Built-In Accounts.",

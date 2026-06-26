@@ -6,7 +6,6 @@ import (
 
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/spf13/cobra"
 )
 
@@ -71,9 +70,9 @@ func zonesCmd(groupID string) *cobra.Command {
 			}
 
 			// Create a map of template ID -> template name
-			templateMap := make(map[openapi_types.UUID]string)
+			templateMap := make(map[string]string)
 			for _, t := range templates {
-				templateMap[t.Id] = t.Name
+				templateMap[t.Id.String()] = t.Name
 			}
 
 			// Fetch all applications

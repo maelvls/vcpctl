@@ -201,14 +201,14 @@ func saResolver(svcAccts []api.ServiceAccountDetails) func(_ context.Context, id
 	}
 }
 
-func issuingtemplateResolver(templates []api.CertificateIssuingTemplateInformation1) func(_ context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
-	return func(_ context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error) {
+func issuingtemplateResolver(templates []api.CertificateIssuingTemplateInformation) func(_ context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation, error) {
+	return func(_ context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation, error) {
 		for _, t := range templates {
 			if t.CertificateAuthorityAccountId == caAccountId && t.CertificateAuthorityProductOptionId == caProductOptionId {
 				return t, nil
 			}
 		}
-		return api.CertificateIssuingTemplateInformation1{}, fmt.Errorf("issuing template with CaAccountId %s and CaProductOptionId %s not found", caAccountId.String(), caProductOptionId.String())
+		return api.CertificateIssuingTemplateInformation{}, fmt.Errorf("issuing template with CaAccountId %s and CaProductOptionId %s not found", caAccountId.String(), caProductOptionId.String())
 	}
 }
 

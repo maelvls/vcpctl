@@ -189,7 +189,7 @@ func (applyctx *manifestApplyContext) applySubCa(ctx context.Context, idx int, i
 
 	// The issuing template is needed when creating a new sub CA provider due to
 	// the fields 'caType', 'caAccountId' and 'caProductOptionId'.
-	desired, err := manifestToAPISubCa(func(s string) (api.CertificateIssuingTemplateInformation1, error) {
+	desired, err := manifestToAPISubCa(func(s string) (api.CertificateIssuingTemplateInformation, error) {
 		return api.GetIssuingTemplateByName(ctx, applyctx.client, s)
 	}, in)
 	if err != nil {

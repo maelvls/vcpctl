@@ -96,7 +96,7 @@ func parseManifests(raw []byte) ([]manifest.Manifest, error) {
 func renderToManifests(
 	ctx context.Context,
 	resolveSA func(context.Context, openapi_types.UUID) (api.ServiceAccountDetails, error),
-	resolveIssuingTemplates func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	resolveIssuingTemplates func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation, error),
 	nameCounts map[string]int,
 	cfg api.ExtendedConfigurationInformation,
 ) (manifest.WIMConfiguration, []manifest.ServiceAccount, []manifest.Policy, manifest.SubCa, []api.ServiceAccountDetails, error) {
@@ -182,7 +182,7 @@ func marshalWIMConfigWithSAComments(
 func renderToYAML(
 	ctx context.Context,
 	resolveSA func(context.Context, openapi_types.UUID) (api.ServiceAccountDetails, error),
-	resolveIssuingTemplates func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	resolveIssuingTemplates func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation, error),
 	nameCounts map[string]int,
 	cfg api.ExtendedConfigurationInformation,
 ) ([]byte, error) {

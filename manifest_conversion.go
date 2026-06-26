@@ -601,7 +601,7 @@ func apiToManifestServiceAccount(in api.ServiceAccountDetails) manifest.ServiceA
 	}
 }
 
-func manifestToAPISubCa(resolveIssuingTmpl func(string) (api.CertificateIssuingTemplateInformation1, error), in manifest.SubCa) (api.SubCaProviderInformation, error) {
+func manifestToAPISubCa(resolveIssuingTmpl func(string) (api.CertificateIssuingTemplateInformation, error), in manifest.SubCa) (api.SubCaProviderInformation, error) {
 	tmpl, err := resolveIssuingTmpl(in.IssuingTemplateName)
 	if err != nil {
 		return api.SubCaProviderInformation{}, fmt.Errorf("manifestToAPISubCa: while resolving 'issuingTemplateName' %q: %w", in.IssuingTemplateName, err)
@@ -629,7 +629,7 @@ func manifestToAPISubCa(resolveIssuingTmpl func(string) (api.CertificateIssuingT
 
 func apiToManifestSubCa(
 	ctx context.Context,
-	resolve func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation1, error),
+	resolve func(ctx context.Context, caAccountId, caProductOptionId openapi_types.UUID) (api.CertificateIssuingTemplateInformation, error),
 	in api.SubCaProviderInformation,
 ) (manifest.SubCa, error) {
 	tmpl, err := resolve(ctx, in.CaAccountId, in.CaProductOptionId)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/maelvls/undent"
 	api "github.com/maelvls/vcpctl/api"
 	"github.com/maelvls/vcpctl/errutil"
@@ -267,8 +268,12 @@ func saPutWifCmd() *cobra.Command {
 				if len(availableApps) == 0 {
 					return fmt.Errorf("no application provided and no application available in the account")
 				}
-				applications = []api.Application{availableApps[0].Id}
-				logutil.Debugf("No application provided, using the first available one: %s (%s)", availableApps[0].Name, availableApps[0].Id.String())
+				appID, err := uuid.Parse(availableApps[0].Id)
+				if err != nil {
+					return fmt.Errorf("invalid application ID: %w", err)
+				}
+				applications = []api.Application{appID}
+				logutil.Debugf("No application provided, using the first available one: %s (%s)", availableApps[0].Name, availableApps[0].Id)
 			}
 
 			// Parse owner team (UUID) if provided.

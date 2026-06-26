@@ -10,7 +10,7 @@ import (
 	"github.com/maelvls/vcpctl/errutil"
 )
 
-func GetIssuingTemplates(ctx context.Context, cl *Client) ([]CertificateIssuingTemplateInformation1, error) {
+func GetIssuingTemplates(ctx context.Context, cl *Client) ([]CertificateIssuingTemplateInformation, error) {
 	resp, err := cl.CertificateissuingtemplateGetAll(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("while making request: %w", err)
@@ -30,7 +30,7 @@ func GetIssuingTemplates(ctx context.Context, cl *Client) ([]CertificateIssuingT
 	}
 
 	var result struct {
-		CertificateIssuingTemplates []CertificateIssuingTemplateInformation1 `json:"certificateIssuingTemplates"`
+		CertificateIssuingTemplates []CertificateIssuingTemplateInformation `json:"certificateIssuingTemplates"`
 	}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
@@ -40,10 +40,10 @@ func GetIssuingTemplates(ctx context.Context, cl *Client) ([]CertificateIssuingT
 	return result.CertificateIssuingTemplates, nil
 }
 
-func GetIssuingTemplateByName(ctx context.Context, cl *Client, name string) (CertificateIssuingTemplateInformation1, error) {
+func GetIssuingTemplateByName(ctx context.Context, cl *Client, name string) (CertificateIssuingTemplateInformation, error) {
 	templates, err := GetIssuingTemplates(ctx, cl)
 	if err != nil {
-		return CertificateIssuingTemplateInformation1{}, err
+		return CertificateIssuingTemplateInformation{}, err
 	}
 
 	// Find the template with the desired name.
@@ -53,5 +53,5 @@ func GetIssuingTemplateByName(ctx context.Context, cl *Client, name string) (Cer
 		}
 	}
 
-	return CertificateIssuingTemplateInformation1{}, errutil.NotFound{NameOrID: name}
+	return CertificateIssuingTemplateInformation{}, errutil.NotFound{NameOrID: name}
 }
