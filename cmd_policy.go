@@ -102,8 +102,9 @@ func policyGetCmd() *cobra.Command {
 			vcpctl policy get <policy-name> --raw
 			vcpctl policy get <policy-name> -o json
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completePolicyName,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the policy name or ID), got %s", args)
@@ -172,8 +173,9 @@ func policyRmCmd() *cobra.Command {
 		Example: undent.Undent(`
 			vcpctl policy rm <policy-name>
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completePolicyName,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the Policy name or ID), but got %s", args)
@@ -203,6 +205,7 @@ func policyEditCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "edit <policy-name-or-id>",
 		Short: "Edit a Policy",
+		ValidArgsFunction: completePolicyName,
 		Long: undent.Undent(`
 			Edit a Policy using a single YAML manifest. The temporary file opened
 			in your editor contains a single WIMIssuerPolicy manifest.

@@ -100,8 +100,9 @@ func subcaGetCmd() *cobra.Command {
 			vcpctl subca get <subca-name> --raw
 			vcpctl subca get <subca-name> -o json
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeSubCAName,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the SubCA Provider name or ID), got %s", args)
@@ -180,8 +181,9 @@ func subcaRmCmd() *cobra.Command {
 			attached to a WIM (Workload Identity Manager, formerly Firefly)
 			configuration.
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeSubCAName,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the Sub CA name or ID), got %s", args)
@@ -215,6 +217,7 @@ func subcaEditCmd() *cobra.Command {
 			Edit a SubCA Provider using a single YAML manifest. The temporary file
 			opened in your editor contains a single WIMSubCAProvider manifest.
 		`),
+		ValidArgsFunction: completeSubCAName,
 		Example: undent.Undent(`
 			vcpctl subca edit <subca-name>
 		`),

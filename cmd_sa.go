@@ -154,6 +154,7 @@ var (
 )
 
 // Filter can be left nil.
+// Shows service account names with UUIDs as descriptions.
 func completeSAName(filter func(api.ServiceAccountDetails) bool) func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		conf, err := getToolConfig(cmd)
@@ -169,13 +170,51 @@ func completeSAName(filter func(api.ServiceAccountDetails) bool) func(cmd *cobra
 			return nil, cobra.ShellCompDirectiveError
 		}
 
-		var completions []cobra.Completion
+		// First, collect matching service accounts and detect duplicates
+		type saMatch struct {
+			sa      api.ServiceAccountDetails
+			byName  bool
+			byUUID  bool
+		}
+		var matches []saMatch
+		nameCount := make(map[string]int)
+
+		// Check if input looks like a UUID
+		looksLikeUUID := len(toComplete) > 0 && (strings.Contains(toComplete, "-") || len(toComplete) >= 8)
+
 		for _, sa := range svcaccts {
 			if filter != nil && !filter(sa) {
 				continue
 			}
+
+			match := saMatch{sa: sa}
 			if strings.HasPrefix(sa.Name, toComplete) {
-				completions = append(completions, cobra.Completion(sa.Name))
+				match.byName = true
+				nameCount[sa.Name]++
+			}
+			if looksLikeUUID && strings.HasPrefix(sa.Id.String(), toComplete) {
+				match.byUUID = true
+			}
+
+			if match.byName || match.byUUID {
+				matches = append(matches, match)
+			}
+		}
+
+		// Build completions based on matches and duplicates
+		var completions []cobra.Completion
+		for _, m := range matches {
+			if m.byUUID {
+				// User is typing a UUID, show UUID with name as description
+				completions = append(completions, cobra.Completion(m.sa.Id.String()+"\t"+m.sa.Name))
+			} else if m.byName {
+				if nameCount[m.sa.Name] > 1 {
+					// Duplicate name: show UUID with name as description
+					completions = append(completions, cobra.Completion(m.sa.Id.String()+"\t"+m.sa.Name))
+				} else {
+					// Unique name: show name with UUID as description
+					completions = append(completions, cobra.Completion(m.sa.Name+"\t"+m.sa.Id.String()))
+				}
 			}
 		}
 		return completions, cobra.ShellCompDirectiveNoFileComp

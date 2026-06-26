@@ -21,9 +21,10 @@ func attachSaCmd(groupID string) *cobra.Command {
 			vcpctl attach-sa "config-name" --sa "sa-name"
 			vcpctl attach-sa "config-name" --sa "03931ba6-3fc5-11f0-85b8-9ee29ab248f0"
 		`),
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		GroupID:       groupID,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		GroupID:           groupID,
+		ValidArgsFunction: completeWIMConfName,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("expected a single argument (the WIM configuration name), got %s", args)
@@ -48,5 +49,6 @@ func attachSaCmd(groupID string) *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&saName, "sa", "s", "", "Service account name or client ID to attach to the WIM configuration")
 	_ = cmd.MarkFlagRequired("sa")
+	cmd.RegisterFlagCompletionFunc("sa", completeSANameForFlag)
 	return cmd
 }

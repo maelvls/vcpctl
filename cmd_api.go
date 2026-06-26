@@ -104,7 +104,7 @@ Request body:
 		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return listEndpoints()
+				return listEndpoints(cmd)
 			}
 			return runAPI(cmd, opts, args[0])
 		},
@@ -134,13 +134,20 @@ Request body:
 
 // listEndpoints parses the embedded OpenAPI schema and lists all available
 // endpoints.
-func listEndpoints() error {
+func listEndpoints(cmd *cobra.Command) error {
 	var schema struct {
 		Paths map[string]map[string]any `json:"paths"`
 	}
 
 	if err := json.Unmarshal(openapiSchema, &schema); err != nil {
 		return fmt.Errorf("parsing OpenAPI schema: %w", err)
+	}
+
+	// Check if we're using NGTS (TSG) authentication to prepend /ngts
+	var pathPrefix string
+	conf, err := getToolConfig(cmd)
+	if err == nil && conf.AuthenticationType == "tsg" {
+		pathPrefix = "/ngts"
 	}
 
 	// Collect all endpoint paths with their methods.
@@ -151,7 +158,7 @@ func listEndpoints() error {
 
 	var endpoints []endpoint
 	for path, methods := range schema.Paths {
-		ep := endpoint{path: path}
+		ep := endpoint{path: pathPrefix + path}
 		for method := range methods {
 			// Filter out non-HTTP methods (OpenAPI can have extensions).
 			switch strings.ToUpper(method) {
