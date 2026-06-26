@@ -107,7 +107,7 @@ func (applyctx *manifestApplyContext) applyServiceAccount(ctx context.Context, i
 		desired.Id = createdResp.Id
 		applyctx.serviceAccounts[desired.Name] = desired
 
-		logutil.Infof("Created ServiceAccount '%s' with ID '%s'.", desired.Name, desired.Id.String())
+		logutil.Infof("Created ServiceAccount '%s'.", desired.Name)
 	case err != nil:
 		return fmt.Errorf("manifest #%d (ServiceAccount %q): while retrieving existing service account: %w", idx+1, desired.Name, err)
 	default:
@@ -152,7 +152,7 @@ func (applyctx *manifestApplyContext) applyPolicy(ctx context.Context, idx int, 
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while creating: %w", idx+1, desired.Name, err)
 		}
-		logutil.Infof("Created WIMIssuerPolicy '%s' with ID '%s'.", desired.Name, created.Id.String())
+		logutil.Infof("Created WIMIssuerPolicy '%s'.", desired.Name)
 		applyctx.refreshPolicyWithExisting(created)
 	case err != nil:
 		return fmt.Errorf("manifest #%d (WIMIssuerPolicy %q): while retrieving existing policy: %w", idx+1, desired.Name, err)
@@ -203,7 +203,7 @@ func (applyctx *manifestApplyContext) applySubCa(ctx context.Context, idx int, i
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while creating: %w", idx+1, desired.Name, err)
 		}
-		logutil.Infof("Created WIMSubCAProvider '%s' with ID '%s'.", desired.Name, created.Id.String())
+		logutil.Infof("Created WIMSubCAProvider '%s'.", desired.Name)
 		applyctx.refreshSubCaWithExisting(created)
 	case err != nil:
 		return fmt.Errorf("manifest #%d (WIMSubCAProvider %q): while retrieving existing SubCA provider: %w", idx+1, desired.Name, err)
@@ -271,11 +271,11 @@ func (applyctx *manifestApplyContext) applyConfig(ctx context.Context, idx int, 
 	existing, err := api.GetConfig(ctx, applyctx.client, in.Name)
 	switch {
 	case errors.As(err, &errutil.NotFound{}):
-		created, err := api.CreateConfig(ctx, applyctx.client, api.APIToAPIConfigurationCreateRequest(desired))
+		_, err := api.CreateConfig(ctx, applyctx.client, api.APIToAPIConfigurationCreateRequest(desired))
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while creating: %w", idx+1, in.Name, err)
 		}
-		logutil.Infof("Created WIMConfiguration '%s' with ID '%s'.", in.Name, created.Id.String())
+		logutil.Infof("Created WIMConfiguration '%s'.", in.Name)
 	case err != nil:
 		return fmt.Errorf("manifest #%d (WIMConfiguration %q): while retrieving existing configuration: %w", idx+1, in.Name, err)
 	default:
@@ -288,7 +288,7 @@ func (applyctx *manifestApplyContext) applyConfig(ctx context.Context, idx int, 
 			break
 		}
 
-		logutil.Infof("Updating WIMConfiguration '%s' (ID '%s').", in.Name, existing.Id.String())
+		logutil.Infof("Updating WIMConfiguration '%s'.", in.Name)
 		updated, err := api.PatchConfig(ctx, applyctx.client, existing.Id.String(), patch)
 		if err != nil {
 			return fmt.Errorf("manifest #%d (WIMConfiguration %q): while patching: %w", idx+1, in.Name, err)
