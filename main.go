@@ -98,6 +98,7 @@ func main() {
 		applyCmd("resources"),
 		deleteCmd("resources"),
 		attachSaCmd("resources"),
+		detachSaCmd("resources"),
 		confSubcmd("resources"),
 		saSubcmd("resources"),
 		subcaSubcmd("resources"),

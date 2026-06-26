@@ -257,6 +257,80 @@ func AttachSAToConf(ctx context.Context, cl *Client, confName, saName string) er
 	return nil
 }
 
+func DetachSAFromConf(ctx context.Context, cl *Client, confName, saName string) error {
+	// Get configuration name by ID.
+	existing, err := GetConfig(ctx, cl, confName)
+	if err != nil {
+		return fmt.Errorf("while fetching the ID of the Workload Identity Manager configuration '%s': %w", confName, err)
+	}
+
+	// Find service accounts.
+	knownSvcaccts, err := GetServiceAccounts(ctx, cl)
+	if err != nil {
+		return fmt.Errorf("while fetching service accounts: %w", err)
+	}
+
+	var sa *ServiceAccountDetails
+	// First, check if saName is actually a client ID (direct match with ID).
+	for _, knownSa := range knownSvcaccts {
+		if knownSa.Id.String() == saName {
+			sa = &knownSa
+			break
+		}
+	}
+
+	// If no client ID match, try looking up by name.
+	if sa == nil {
+		for _, knownSa := range knownSvcaccts {
+			if knownSa.Name == saName {
+				if sa != nil {
+					return fmt.Errorf("service account name '%s' is ambiguous, please use the client ID instead", saName)
+				}
+				sa = &knownSa
+			}
+		}
+	}
+
+	if sa == nil {
+		return errutil.Fixable(fmt.Errorf("service account '%s' not found (not a valid name or client ID)", saName))
+	}
+
+	// Is this SA in the configuration?
+	if !slices.Contains(existing.ServiceAccountIds, sa.Id) {
+		logutil.Debugf("Service account '%s' (ID: %s) is not in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), existing.Name)
+		return nil
+	}
+
+	// Remove the service account from the configuration.
+	desired := existing
+	var newSAIds []openapi_types.UUID
+	for _, id := range desired.ServiceAccountIds {
+		if id != sa.Id {
+			newSAIds = append(newSAIds, id)
+		}
+	}
+	desired.ServiceAccountIds = newSAIds
+	patch, changed, err := DiffToPatchConfig(existing, desired)
+	if err != nil {
+		return fmt.Errorf("while creating patch to detach service account '%s' from configuration '%s': %w", saName, confName, err)
+	}
+	if !changed {
+		logutil.Debugf("Service account '%s' (ID: %s) is not in the configuration '%s', doing nothing.", sa.Name, sa.Id.String(), existing.Name)
+		return nil
+	}
+	updated, err := PatchConfig(ctx, cl, existing.Id.String(), patch)
+	if err != nil {
+		return fmt.Errorf("while patching Workload Identity Manager configuration: %w", err)
+	}
+
+	if logutil.EnableDebug {
+		d := ANSIDiff(existing, updated)
+		logutil.Debugf("Service Account '%s' updated:\n%s", saName, d)
+	}
+
+	return nil
+}
+
 // DiffToPatchConfig computes the difference between existing and desired
 // configs and returns a patch with only the changed fields.
 func DiffToPatchConfig(existing, desired ExtendedConfigurationInformation) (ConfigurationUpdateRequest, bool, error) {
