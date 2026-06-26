@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	_ "embed"
 	"fmt"
 	"io"
@@ -124,6 +125,13 @@ func main() {
 	err := fang.Execute(ctx, rootCmd, fang.WithErrorHandler(errHandler))
 	switch {
 	case err != nil:
+		// Check if error has a custom exit code (e.g., ExitError from the api command)
+		var exitErr interface {
+			ExitCode() int
+		}
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.ExitCode())
+		}
 		os.Exit(1)
 	}
 }

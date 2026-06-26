@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -227,4 +228,30 @@ func TestParseFields_FileFromDisk(t *testing.T) {
 	expectedBytes, err := json.Marshal(expected)
 	require.NoError(t, err)
 	assert.JSONEq(t, string(expectedBytes), string(jsonBytes))
+}
+
+func TestExitError(t *testing.T) {
+	tests := []struct {
+		statusCode   int
+		expectedCode int
+	}{
+		{404, 104},  // 404 - 300 = 104
+		{500, 200},  // 500 - 300 = 200
+		{403, 103},  // 403 - 300 = 103
+		{401, 101},  // 401 - 300 = 101
+		{400, 100},  // 400 - 300 = 100
+		{502, 202},  // 502 - 300 = 202
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("status_%d", tt.statusCode), func(t *testing.T) {
+			errCode := tt.statusCode - 300
+			exitErr := ExitError{
+				Code:    errCode,
+				Message: fmt.Sprintf("HTTP %d", tt.statusCode),
+			}
+			assert.Equal(t, tt.expectedCode, exitErr.ExitCode())
+			assert.Equal(t, fmt.Sprintf("HTTP %d", tt.statusCode), exitErr.Error())
+		})
+	}
 }

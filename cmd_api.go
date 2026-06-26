@@ -22,6 +22,20 @@ import (
 //go:embed api/genschema/openapi.json
 var openapiSchema []byte
 
+// ExitError is an error type that carries an exit code for the process.
+type ExitError struct {
+	Code    int
+	Message string
+}
+
+func (e ExitError) Error() string {
+	return e.Message
+}
+
+func (e ExitError) ExitCode() int {
+	return e.Code
+}
+
 type apiOptions struct {
 	method              string
 	methodPassed        bool
@@ -44,6 +58,14 @@ Without a path argument, lists all available API endpoints.
 
 The path should start with a slash and can optionally include /v1/ prefix.
 If /v1/ is not present, it will be automatically prepended.
+
+Exit codes:
+  - 0 for 2xx responses
+  - (HTTP status code - 300) for 4xx and 5xx responses
+    - 404 → exit code 104
+    - 500 → exit code 200
+    - 403 → exit code 103
+    - 401 → exit code 101
 
 Field value conversions:
   - Numeric values are converted to integers: -F count=123
@@ -225,7 +247,15 @@ func runAPI(cmd *cobra.Command, opts *apiOptions, path string) error {
 
 	// Check for non-2xx status codes BEFORE consuming the body.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return api.HTTPErrorFrom(resp)
+		httpErr := api.HTTPErrorFrom(resp)
+		// For 4xx and 5xx responses, return exit code (status - 300)
+		if resp.StatusCode >= 400 {
+			return ExitError{
+				Code:    resp.StatusCode - 300,
+				Message: httpErr.Error(),
+			}
+		}
+		return httpErr
 	}
 
 	// Show response headers if requested.
